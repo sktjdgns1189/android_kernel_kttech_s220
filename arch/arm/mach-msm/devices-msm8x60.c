@@ -528,6 +528,29 @@ static struct resource gsbi9_qup_i2c_resources[] = {
 	},
 };
 
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_MAXIM
+static struct resource gsbi10_qup_i2c_resources[] = {
+	{
+		.name	= "qup_phys_addr",
+		.start	= MSM_GSBI10_QUP_PHYS,
+		.end	= MSM_GSBI10_QUP_PHYS + SZ_4K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name	= "gsbi_qup_i2c_addr",
+		.start	= MSM_GSBI10_PHYS,
+		.end	= MSM_GSBI10_PHYS + 4 - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name	= "qup_err_intr",
+		.start	= GSBI10_QUP_IRQ,
+		.end	= GSBI10_QUP_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+#endif
+
 #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
 static struct resource gsbi11_qup_i2c_resources[] = {
 	{
@@ -955,6 +978,16 @@ struct platform_device msm_gsbi7_qup_i2c_device = {
 	.resource	= gsbi7_qup_i2c_resources,
 };
 
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_MAXIM
+/* Use GSBI10 QUP for /dev/i2c-10 (battery gauge) */
+struct platform_device msm_gsbi10_qup_i2c_device = {
+	.name		= "qup_i2c",
+	.id		= MSM_GSBI10_QUP_I2C_BUS_ID,
+	.num_resources	= ARRAY_SIZE(gsbi10_qup_i2c_resources),
+	.resource	= gsbi10_qup_i2c_resources,
+};
+#endif /* #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) */
+
 #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
 /* Use GSBI11 QUP for /dev/i2c-11 (Capella or Avago sensor) */
 struct platform_device msm_gsbi11_qup_i2c_device = {
@@ -1135,6 +1168,7 @@ struct platform_device msm_gsbi3_qup_spi_device = {
 };
 #endif
 
+#ifndef CONFIG_KTTECH_BATTERY_GAUGE_MAXIM
 static struct resource gsbi10_qup_spi_resources[] = {
 	{
 		.name	= "spi_base",
@@ -1181,6 +1215,7 @@ struct platform_device msm_gsbi10_qup_spi_device = {
 	.num_resources	= ARRAY_SIZE(gsbi10_qup_spi_resources),
 	.resource	= gsbi10_qup_spi_resources,
 };
+#endif
 #define MSM_SDC1_BASE         0x12400000
 #define MSM_SDC1_DML_BASE     (MSM_SDC1_BASE + 0x800)
 #define MSM_SDC1_BAM_BASE     (MSM_SDC1_BASE + 0x2000)
@@ -2087,7 +2122,7 @@ struct platform_device msm_device_smd = {
 
 static struct msm_watchdog_pdata msm_watchdog_pdata = {
 	.pet_time = 10000,
-	.bark_time = 13000,
+	.bark_time = 11000,
 #ifdef CONFIG_MACH_KTTECH	
 	.has_secure = false,
 #else

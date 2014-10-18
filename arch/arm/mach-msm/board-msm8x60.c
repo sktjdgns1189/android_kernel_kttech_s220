@@ -118,16 +118,31 @@
 #endif
 #include <mach/msm_rtb.h>
 
+#ifdef CONFIG_KTTECH_RAM_CONSOLE
+#include <linux/memblock.h>
+#ifdef CONFIG_KTTECH_MODEL_O4
+#define MSM_RAM_CONSOLE_SIZE	(32 * SZ_4K)
+#else
+#define MSM_RAM_CONSOLE_SIZE	(256 * SZ_4K)
+#endif
+#endif
+
 #define MSM_SHARED_RAM_PHYS 0x40000000
 #define MDM2AP_SYNC 129
 
 #define GPIO_ETHERNET_RESET_N_DRAGON	30
 #define LCDC_SPI_GPIO_CLK				73
 #define LCDC_SPI_GPIO_CS				72
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA
+#define LCDC_SPI_GPIO_SDI				71
+#endif
 #define LCDC_SPI_GPIO_MOSI				70
 #define LCDC_AUO_PANEL_NAME				"lcdc_auo_wvga"
 #define LCDC_SAMSUNG_OLED_PANEL_NAME	"lcdc_samsung_oled"
 #define LCDC_SAMSUNG_WSVGA_PANEL_NAME	"lcdc_samsung_wsvga"
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA
+#define LCDC_SAMSUNG_WVGA_PANEL_NAME	"lcdc_samsung_wvga"
+#endif
 #define LCDC_SAMSUNG_SPI_DEVICE_NAME	"lcdc_samsung_ams367pe02"
 #define LCDC_AUO_SPI_DEVICE_NAME		"lcdc_auo_nt35582"
 #define LCDC_NT35582_PANEL_NAME			"lcdc_nt35582_wvga"
@@ -2954,14 +2969,10 @@ static int pn544_setup_gpio(int enable)
     return status;
   }
 
-#if 1    //kkong120413
-  gpio_set_value(PN544_RST_GPIO, 1);
-  gpio_set_value(PN544_FIRMUP_GPIO, 1);
-  msleep(20);
+#if CONFIG_KTTECH_PN544_NFC       //sungjin.lee 20111101
+    gpio_set_value(PN544_FIRMUP_GPIO, 0);
   gpio_set_value(PN544_RST_GPIO, 0);
-  msleep(60);
-  gpio_set_value(PN544_RST_GPIO, 1);
-  msleep(20);
+    //msleep(10);
 #endif
 
   return status;
@@ -3021,7 +3032,7 @@ static void gsbi_qup_i2c_gpio_config(int adap_id, int config_type)
 
 #ifdef CONFIG_KTTECH_TOUCHSCREEN
 static struct msm_i2c_platform_data msm_gsbi1_qup_i2c_pdata = {
-	.clk_freq = 300000,
+	.clk_freq = 400000,
 	.src_clk_rate = 24000000,
 	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
 };
@@ -3077,6 +3088,14 @@ static struct msm_spi_platform_data msm_gsbi10_qup_spi_pdata = {
 	.max_clock_speed = 24000000,
 };
 #endif
+#endif
+
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_MAXIM
+static struct msm_i2c_platform_data msm_gsbi10_qup_i2c_pdata = {
+	.clk_freq = 100000,
+	.src_clk_rate = 24000000,
+	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
+};
 #endif
 
 #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
@@ -3187,7 +3206,7 @@ static void __init msm8x60_init_dsps(void)
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #ifdef CONFIG_MACH_KTTECH
 #define MSM_FB_PRIM_BUF_SIZE \
-		(roundup((960 * 544 * 4), 4096) * 3) /* 4 bpp x 3 pages */
+		(roundup((800 * 480 * 4), 4096) * 3) /* 4 bpp x 3 pages */
 #else
 #define MSM_FB_PRIM_BUF_SIZE \
 		(roundup((1024 * 600 * 4), 4096) * 3) /* 4 bpp x 3 pages */
@@ -3236,9 +3255,13 @@ unsigned char hdmi_is_primary;
 #define MSM_FB_OVERLAY1_WRITEBACK_SIZE (0)
 #endif  /* CONFIG_FB_MSM_OVERLAY1_WRITEBACK */
 
-#define MSM_PMEM_KERNEL_EBI1_SIZE  0x3BC000
-#define MSM_PMEM_ADSP_SIZE         0x4200000
-#define MSM_PMEM_AUDIO_SIZE        0x4CF000
+#define MSM_PMEM_KERNEL_EBI1_SIZE  0x0
+#ifndef CONFIG_MSM_IOMMU
+#define MSM_PMEM_ADSP_SIZE         0xF00000
+#else
+#define MSM_PMEM_ADSP_SIZE         0x0
+#endif
+#define MSM_PMEM_AUDIO_SIZE        0x28B000
 
 #define MSM_SMI_BASE          0x38000000
 #define MSM_SMI_SIZE          0x4000000
@@ -3247,15 +3270,12 @@ unsigned char hdmi_is_primary;
 #if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
 #define KERNEL_SMI_SIZE       0x000000
 #else
-#define KERNEL_SMI_SIZE       0x600000
+#define KERNEL_SMI_SIZE       0x000000
 #endif
 
 #define USER_SMI_BASE         (KERNEL_SMI_BASE + KERNEL_SMI_SIZE)
 #define USER_SMI_SIZE         (MSM_SMI_SIZE - KERNEL_SMI_SIZE)
 #define MSM_PMEM_SMIPOOL_SIZE USER_SMI_SIZE
-#ifdef CONFIG_MACH_KTTECH
-#define KTTECH_RAM_CONSOLE
-#endif
 
 #ifdef CONFIG_MSM_CP
 #define MSM_ION_HOLE_SIZE	SZ_128K /* (128KB) */
@@ -3263,8 +3283,8 @@ unsigned char hdmi_is_primary;
 #define MSM_ION_HOLE_SIZE	0
 #endif
 
-#define MSM_MM_FW_SIZE		(0x200000 - MSM_ION_HOLE_SIZE) /*(2MB-128KB)*/
-#define MSM_ION_MM_SIZE		0x3800000  /* (56MB) */
+#define MSM_MM_FW_SIZE		0x200000 /*(2MB)*/
+#define MSM_ION_MM_SIZE		0x3e00000  /* (62MB) */
 #define MSM_ION_MFC_SIZE	SZ_8K
 
 #define MSM_MM_FW_BASE		MSM_SMI_BASE
@@ -3280,13 +3300,13 @@ unsigned char hdmi_is_primary;
 #define SECURE_SIZE	(MSM_ION_MM_SIZE + MSM_MM_FW_SIZE)
 #endif
 
-#define MSM_ION_SF_SIZE		0x4000000 /* 64MB */
+#define MSM_ION_SF_SIZE		0x2000000 /* 32MB */
 #define MSM_ION_CAMERA_SIZE     MSM_PMEM_ADSP_SIZE
 
 #ifdef CONFIG_FB_MSM_OVERLAY1_WRITEBACK
 #define MSM_ION_WB_SIZE		0xC00000 /* 12MB */
 #else
-#define MSM_ION_WB_SIZE		0x600000 /* 6MB */
+#define MSM_ION_WB_SIZE		0x800000 /* 8MB */
 #endif
 
 #define MSM_ION_QSECOM_SIZE	0x600000 /* (6MB) */
@@ -3352,35 +3372,15 @@ static struct resource msm_fb_resources[] = {
 
 static void set_mdp_clocks_for_wuxga(void);
 
+#ifdef CONFIG_FB_MSM_LCDC_AUTO_DETECT
 static int msm_fb_detect_panel(const char *name)
 {
-#ifdef CONFIG_KTTECH_MIPI_NOVATEK
-	if(get_kttech_ftm_mode() == 2) {
-		/* FTM Mode - Dummy device. */
-		pr_info("%s: dummy device selected for FTM mode.\n", __func__);
-		if (!strncmp(name, MIPI_VIDEO_DUMMY_VGA,
-			strnlen(MIPI_VIDEO_DUMMY_VGA, PANEL_NAME_MAX_LEN))) {
-			pr_info("%s: detected lcd panel : '%s'", __func__, name);
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA
+	if (!strncmp(name, LCDC_SAMSUNG_WVGA_PANEL_NAME,
+			strnlen(LCDC_SAMSUNG_WVGA_PANEL_NAME,
+				PANEL_NAME_MAX_LEN)))
 				return 0;
-		}
-	}
-        else if (get_kttech_recovery()) {
-		/* Recovery mode - MIPI-Video */
-                if (!strncmp(name, MIPI_VIDEO_NOVATEK_QHD_PANEL_NAME,
-                        strnlen(MIPI_VIDEO_NOVATEK_QHD_PANEL_NAME, PANEL_NAME_MAX_LEN))) {
-                        pr_info("%s: detected lcd panel : '%s'", __func__, name);
-                                return 0;
-                }
-        }
-	else {
-		/* Normal - MIPI-Command */
-		if (!strncmp(name, MIPI_CMD_NOVATEK_QHD_PANEL_NAME,
-			strnlen(MIPI_CMD_NOVATEK_QHD_PANEL_NAME, PANEL_NAME_MAX_LEN))) {
-			pr_info("%s: detected lcd panel : '%s'", __func__, name);
-				return 0;
-		}
-	}
-#else /* CONFIG_KTTECH_MIPI_NOVATEK */
+#else /* CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA */
 	if (machine_is_msm8x60_fluid()) {
 		uint32_t soc_platform_version = socinfo_get_platform_version();
 		if (SOCINFO_VERSION_MAJOR(soc_platform_version) < 3) {
@@ -3441,7 +3441,7 @@ static int msm_fb_detect_panel(const char *name)
 				PANEL_NAME_MAX_LEN)))
 		return 0;
 
-#endif /* CONFIG_KTTECH_MIPI_NOVATEK */
+#endif /* CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA */
 	pr_warning("%s: not supported '%s'", __func__, name);
 	return -ENODEV;
 }
@@ -3449,13 +3449,16 @@ static int msm_fb_detect_panel(const char *name)
 static struct msm_fb_platform_data msm_fb_pdata = {
 	.detect_client = msm_fb_detect_panel,
 };
+#endif
 
 static struct platform_device msm_fb_device = {
 	.name   = "msm_fb",
 	.id     = 0,
 	.num_resources     = ARRAY_SIZE(msm_fb_resources),
 	.resource          = msm_fb_resources,
+#ifdef CONFIG_FB_MSM_LCDC_AUTO_DETECT	
 	.dev.platform_data = &msm_fb_pdata,
+#endif	
 };
 
 #ifdef CONFIG_ANDROID_PMEM
@@ -3560,12 +3563,7 @@ static struct platform_device android_pmem_smipool_device = {
 #endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
 #endif /*CONFIG_ANDROID_PMEM*/
 
-#ifdef CONFIG_KTTECH_MIPI_NOVATEK
-static struct platform_device mipi_dsi_novatek_panel_device = {
-	.name = "mipi_novatek",
-	.id = 0,
-};
-#else
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WSVGA_PANEL
 #define GPIO_DONGLE_PWR_EN 258
 static void setup_display_power(void);
 static int lcdc_vga_enabled;
@@ -3597,6 +3595,7 @@ static struct platform_device lcdc_samsung_panel_device = {
 		.platform_data = &lcdc_samsung_panel_data,
 	}
 };
+#endif // CONFIG_FB_MSM_LCDC_SAMSUNG_WSVGA_PANEL
 #if (!defined(CONFIG_SPI_QUP)) && \
 	(defined(CONFIG_FB_MSM_LCDC_SAMSUNG_OLED_PT) || \
 	defined(CONFIG_FB_MSM_LCDC_AUO_WVGA))
@@ -3650,6 +3649,44 @@ static struct platform_device lcdc_samsung_oled_panel_device = {
 	.dev.platform_data = &lcdc_samsung_oled_panel_data,
 };
 #endif /*CONFIG_FB_MSM_LCDC_SAMSUNG_OLED_PT */
+
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA
+static int lcdc_spi_gpio_array_num[] = {
+	LCDC_SPI_GPIO_CLK,
+	LCDC_SPI_GPIO_CS,
+	LCDC_SPI_GPIO_SDI,
+	LCDC_SPI_GPIO_MOSI,
+};
+
+static uint32_t lcdc_spi_gpio_config_data[] = {//2012/07/10/kyuhak.choi/LCD&Backlight
+	GPIO_CFG(LCDC_SPI_GPIO_CLK, 0,
+			GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(LCDC_SPI_GPIO_CS, 0,
+			GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(LCDC_SPI_GPIO_SDI, 0,
+			GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),			
+	GPIO_CFG(LCDC_SPI_GPIO_MOSI, 0,
+			GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+};
+
+static void lcdc_config_spi_gpios(int enable)
+{
+	int n;
+	for (n = 0; n < ARRAY_SIZE(lcdc_spi_gpio_config_data); ++n)
+		gpio_tlmm_config(lcdc_spi_gpio_config_data[n], 0);
+}
+
+static struct msm_panel_common_pdata lcdc_samsung_panel_data = {
+	.panel_config_gpio = lcdc_config_spi_gpios,
+	.gpio_num          = lcdc_spi_gpio_array_num,
+};
+
+static struct platform_device lcdc_samsung_panel_device = {
+	.name   = LCDC_SAMSUNG_WVGA_PANEL_NAME,
+	.id     = 0,
+	.dev.platform_data = &lcdc_samsung_panel_data,
+};
+#endif /*CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA */
 
 #ifdef CONFIG_FB_MSM_LCDC_AUO_WVGA
 #ifdef CONFIG_SPI_QUP
@@ -3779,7 +3816,7 @@ static struct platform_device mipi_dsi_novatek_panel_device = {
 #endif
 #endif /* CONFIG_KTTECH_MIPI_NOVATEK */
 
-#ifdef KTTECH_RAM_CONSOLE
+#ifdef CONFIG_KTTECH_RAM_CONSOLE
 static struct resource ram_console_resources[] = {
 	{
 		.flags	= IORESOURCE_MEM,	},
@@ -3809,10 +3846,10 @@ static void __init msm8x60_allocate_memory_regions(void)
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
 
-#ifdef KTTECH_RAM_CONSOLE
+#ifdef CONFIG_KTTECH_RAM_CONSOLE
     ram_console_resources[0].start = MSM_RAM_CONSOLE_ADDR;
     ram_console_resources[0].end = ram_console_resources[0].start + MSM_RAM_CONSOLE_SIZE-1;
-#endif //ifdef KTTECH_RAM_CONSOLE
+#endif //ifdef CONFIG_KTTECH_RAM_CONSOLE
 
 }
 
@@ -3843,7 +3880,7 @@ void __init msm8x60_set_display_params(char *prim_panel, char *ext_panel)
 
 #ifdef CONFIG_KTTECH_TOUCHSCREEN
 /* TSP Mach. Configuration included */
-#include "devices-kttech-o6/devices-tsp-kttech-o6.c"
+#include "devices-kttech-o4/devices-tsp-kttech-o4.c"
 #else
 #if defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C_QC) || \
 		defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C_QC_MODULE)
@@ -4285,7 +4322,7 @@ static struct i2c_board_info cy8ctma340_dragon_board_info[] = {
 #ifdef CONFIG_SERIAL_MSM_HS
 static int configure_uart_gpios(int on)
 {
-#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+#ifdef CONFIG_KTTECH_WIFI_BCM4329
 	return 0;
 #else
 	int ret = 0, i;
@@ -4494,13 +4531,7 @@ static struct platform_device msm_rpm_log_device = {
 static struct msm_charger_platform_data msm_charger_data = {
 	.safety_time = 180,
 	.update_time = 1,
-	
-#if defined (CONFIG_KTTECH_BATTERY) && defined(CONFIG_BOARDREV_PP)
-	.max_voltage = 4350,
-#else	
 	.max_voltage = 4200,
-#endif	
-
 #ifdef CONFIG_KTTECH_BATTERY
 	.min_voltage = 3400,
 #else
@@ -4822,11 +4853,11 @@ static struct rpm_regulator_init_data rpm_regulator_init_data[] = {
 	/*	ID        a_on pd ss min_uV   max_uV   init_ip */
 	RPM_LDO(PM8058_L0,  0, 1, 0, 1200000, 1200000, LDO150HMIN),
 	RPM_LDO(PM8058_L1,  0, 1, 0, 1200000, 1200000, LDO300HMIN),
-#ifdef CONFIG_KTTECH_SENSOR_CAPELLA_O6
+#if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O3)|| defined(CONFIG_KTTECH_SENSOR_CAPELLA_O4)
 	RPM_LDO(PM8058_L2,  0, 1, 0, 2700000, 2700000, LDO300HMIN),
 #else
 	RPM_LDO(PM8058_L2,  0, 1, 0, 1800000, 2600000, LDO300HMIN),
-#endif /* CONFIG_KTTECH_SENSOR_CAPELLA_O6 */
+#endif /* CONFIG_KTTECH_SENSOR_CAPELLA_O6, CONFIG_KTTECH_SENSOR_CAPELLA_O3 || CONFIG_KTTECH_SENSOR_CAPELLA_O4 */
 #ifdef CONFIG_KTTECH_PN544_NFC
 	RPM_LDO(PM8058_L3,  0, 1, 0, 1800000, 2850000, LDO150HMIN),
 #else
@@ -4859,7 +4890,7 @@ static struct rpm_regulator_init_data rpm_regulator_init_data[] = {
 	RPM_LDO(PM8058_L16, 1, 1, 0, 1800000, 1800000, LDO300HMIN),
 	RPM_LDO(PM8058_L17, 0, 1, 0, 2600000, 2600000, LDO150HMIN),
 	RPM_LDO(PM8058_L18, 0, 1, 0, 2200000, 2200000, LDO150HMIN),
-  #ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+  #ifdef CONFIG_KTTECH_WIFI_BCM4329
 	RPM_LDO(PM8058_L19, 0, 1, 0, 1800000, 1800000, LDO150HMIN),
 	#else
   RPM_LDO(PM8058_L19, 0, 1, 0, 2500000, 2500000, LDO150HMIN), 
@@ -4877,7 +4908,11 @@ static struct rpm_regulator_init_data rpm_regulator_init_data[] = {
 	RPM_SMPS(PM8058_S4, 1, 1, 0, 2200000, 2200000, SMPS_HMIN, 1p60),
 
 	/*     ID         a_on pd ss */
+#ifdef CONFIG_KTTECH_SENSORS_BMC050
 	RPM_VS(PM8058_LVS0, 0, 1, 0),
+#else
+	RPM_VS(PM8058_LVS0, 0, 1, 0),
+#endif /* CONFIG_KTTECH_SENSORS_BMC050 */
 	RPM_VS(PM8058_LVS1, 0, 1, 0),
 
 	/*	ID        a_on pd ss min_uV   max_uV */
@@ -4887,11 +4922,11 @@ static struct rpm_regulator_init_data rpm_regulator_init_data[] = {
 	RPM_LDO(PM8901_L0,  0, 1, 0, 1200000, 1200000, LDO300HMIN),
 	RPM_LDO(PM8901_L1,  0, 1, 0, 3300000, 3300000, LDO300HMIN),
 	RPM_LDO(PM8901_L2,  0, 1, 0, 2850000, 3300000, LDO300HMIN),
-#if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
+#if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O3) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O4)
 	RPM_LDO(PM8901_L3,  0, 1, 0, 3000000, 3000000, LDO300HMIN),
 #else
 	RPM_LDO(PM8901_L3,  0, 1, 0, 3300000, 3300000, LDO300HMIN),
-#endif /* #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) */
+#endif /* #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O3) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O4)*/
 #if defined(CONFIG_KTTECH_TOUCHSCREEN)
 	RPM_LDO(PM8901_L4,  0, 1, 0, 2700000, 2800000, LDO300HMIN),
 #else
@@ -4902,12 +4937,16 @@ static struct rpm_regulator_init_data rpm_regulator_init_data[] = {
 
 	/*	 ID       a_on pd ss min_uV   max_uV   init_ip   freq */
 	RPM_SMPS(PM8901_S2, 0, 1, 0, 1300000, 1300000, FTS_HMIN, 1p60),
-	RPM_SMPS(PM8901_S3, 0, 1, 0, 1100000, 1100000, FTS_HMIN, 1p60),
+	RPM_SMPS(PM8901_S3, 1, 1, 0, 1200000, 1200000, FTS_HMIN, 1p60),
 	RPM_SMPS(PM8901_S4, 0, 1, 0, 1225000, 1225000, FTS_HMIN, 1p60),
 
 	/*	ID        a_on pd ss */
 	RPM_VS(PM8901_LVS0, 1, 1, 0),
+#if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O3) || defined(CONFIG_KTTECH_SENSOR_CAPELLA_O4)
 	RPM_VS(PM8901_LVS1, 0, 1, 0),
+#else
+	RPM_VS(PM8901_LVS1, 0, 1, 0),
+#endif /* CONFIG_KTTECH_SENSOR_CAPELLA_O6, CONFIG_KTTECH_SENSOR_CAPELLA_O3 || CONFIG_KTTECH_SENSOR_CAPELLA_O4*/
 	RPM_VS(PM8901_LVS2, 0, 1, 0),
 	RPM_VS(PM8901_LVS3, 0, 1, 0),
 	RPM_VS(PM8901_MVS0, 0, 1, 0),
@@ -5042,7 +5081,7 @@ static struct platform_device *early_devices[] __initdata = {
 	&msm_device_dmov_adm1,
 };
 
-#if defined(CONFIG_KTTECH_BT_BCM4329) || defined(CONFIG_KTTECH_BT_BCM4330)     //KTTECH_BT
+#ifdef CONFIG_KTTECH_BT_BCM4329     //KTTECH_BT
 static int bluetooth_power(int);
 static struct platform_device msm_bt_power_device = {
 	.name	 = "bt_power",
@@ -6083,7 +6122,7 @@ static struct platform_device qseecom_device = {
 };
 
 static struct platform_device *surf_devices[] __initdata = {
-#ifdef KTTECH_RAM_CONSOLE
+#ifdef CONFIG_KTTECH_RAM_CONSOLE
 	&ram_console_device,
 #endif	
 	&msm8x60_device_acpuclk,
@@ -6106,6 +6145,9 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_gsbi7_qup_i2c_device,
 	&msm_gsbi8_qup_i2c_device,
 	&msm_gsbi9_qup_i2c_device,
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_MAXIM
+	&msm_gsbi10_qup_i2c_device,
+#endif	
 #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
 	&msm_gsbi11_qup_i2c_device,
 #endif /* #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) */
@@ -6688,6 +6730,7 @@ static int pm8058_gpios_init(void)
 			},
 		},
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
+/*#ifndef CONFIG_KTTECH_BOARD_O4 //MO2 20120510 Yong SD Card Detection 
 		{
 			PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC3_DET - 1),
 			{
@@ -6698,6 +6741,7 @@ static int pm8058_gpios_init(void)
 				.inv_int_pol    = 0,
 			},
 		},
+#endif //yongTest */
 #endif
 		{ /* core&surf gpio expander */
 			PM8058_GPIO_PM_TO_SYS(UI_INT1_N),
@@ -6919,7 +6963,7 @@ static const unsigned int ffa_keymap[] = {
 #ifdef CONFIG_MACH_KTTECH
 	KEY(0, 1, KEY_VOLUMEUP),
 	KEY(0, 0, KEY_VOLUMEDOWN),
-	KEY(1, 0, KEY_CAMERA),
+	//KEY(1, 0, KEY_CAMERA),//kyuhak.choi/2012/0628/kt_tech require.
 #else
 	KEY(0, 0, KEY_FN_F1),	 /* LS - PUSH1 */
 	KEY(0, 1, KEY_UP),	 /* NAV - UP */
@@ -7408,7 +7452,7 @@ static struct pmic8058_led pmic8058_flash_leds[] = {
 	},
 	[2] = {
 		.name		= "keyboard-backlight",
-		.max_brightness = 3, /* 2mA * 6 = Max 12mA */
+		.max_brightness = 6, /* 2mA * 6 = Max 12mA */
 		.id		= PMIC8058_ID_LED_2,
 	},
 	[3] = {
@@ -8047,7 +8091,8 @@ static struct i2c_board_info msm_i2c_gsbi11_apds990x_info[] = {
 #endif /* CONFIG_KTTECH_SENSOR_AVAGO_O6 */
 
 #if defined(CONFIG_MARIMBA_CORE) && (defined(CONFIG_GPIO_SX150X) \
-	|| defined(CONFIG_GPIO_SX150X_MODULE))
+	|| defined(CONFIG_GPIO_SX150X_MODULE)) \
+	&& !defined(CONFIG_KTTECH_WIFI_BCM4329) && !defined(CONFIG_KTTECH_BT_BCM4329)
 
 static struct regulator *vreg_bahama;
 static int msm_bahama_sys_rst = GPIO_MS_SYS_RESET_N;
@@ -8494,7 +8539,8 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 	},
 #endif /* CONFIG_KTTECH_SENSOR_AVAGO_O6 */
 #if defined(CONFIG_MARIMBA_CORE) && (defined(CONFIG_GPIO_SX150X) \
-	|| defined(CONFIG_GPIO_SX150X_MODULE))
+	|| defined(CONFIG_GPIO_SX150X_MODULE)) \
+	&& !defined(CONFIG_KTTECH_WIFI_BCM4329) && !defined(CONFIG_KTTECH_BT_BCM4329)
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID | I2C_DRAGON,
 		MSM_GSBI7_QUP_I2C_BUS_ID,
@@ -8667,6 +8713,9 @@ static void __init msm8x60_init_buses(void)
 	}
 #endif
 	msm_gsbi9_qup_i2c_device.dev.platform_data = &msm_gsbi9_qup_i2c_pdata;
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_MAXIM
+	msm_gsbi10_qup_i2c_device.dev.platform_data = &msm_gsbi10_qup_i2c_pdata;
+#endif
 #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
 	msm_gsbi11_qup_i2c_device.dev.platform_data = &msm_gsbi11_qup_i2c_pdata;
 #endif /* #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) */
@@ -8934,10 +8983,11 @@ struct msm_sdcc_pad_drv_cfg {
 };
 
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
+#define GPIO_SDC3_DET 123 //MO2 Yong 20120510 SD Card Detection
 static struct msm_sdcc_pad_drv_cfg sdc3_pad_on_drv_cfg[] = {
-	{TLMM_HDRV_SDC3_CLK, GPIO_CFG_8MA},
-	{TLMM_HDRV_SDC3_CMD, GPIO_CFG_8MA},
-	{TLMM_HDRV_SDC3_DATA, GPIO_CFG_8MA}
+	{TLMM_HDRV_SDC3_CLK, GPIO_CFG_12MA},	//MO2 Yong 20120510 Sd Card Detection 8MA -> 12
+	{TLMM_HDRV_SDC3_CMD, GPIO_CFG_12MA},	//MO2 Yong 20120510 Sd Card Detection 8MA -> 12
+	{TLMM_HDRV_SDC3_DATA, GPIO_CFG_12MA}	//MO2 Yong 20120510 Sd Card Detection 8MA -> 12
 };
 
 static struct msm_sdcc_pad_pull_cfg sdc3_pad_on_pull_cfg[] = {
@@ -9429,7 +9479,7 @@ static u32 msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 
 	pdev = container_of(dv, struct platform_device, dev);
 
-#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+#ifdef CONFIG_KTTECH_WIFI_BCM4329
 	if(pdev->id == 4)
 		return 0;
 #endif
@@ -9474,6 +9524,8 @@ static void msm_sdcc_sdio_lpm_gpio(struct device *dv, unsigned int active)
 	curr_pin_cfg->sdio_lpm_gpio_cfg = 0;
 }
 #endif
+
+#ifndef CONFIG_MACH_KTTECH //[Begin]MO2 20120510 Yong Sd Card Detection remove this function
 static int msm_sdc3_get_wpswitch(struct device *dev)
 {
 	struct platform_device *pdev;
@@ -9495,6 +9547,7 @@ static int msm_sdc3_get_wpswitch(struct device *dev)
 	}
 	return status;
 }
+#endif
 
 #ifdef CONFIG_MMC_MSM_SDC5_SUPPORT
 int sdc5_register_status_notify(void (*callback)(int, void *),
@@ -9515,7 +9568,7 @@ int sdc2_register_status_notify(void (*callback)(int, void *),
 	return 0;
 }
 #endif
-#ifndef CONFIG_MACH_KTTECH
+
 /* Interrupt handler for SDC2 and SDC5 detection
  * This function uses dual-edge interrputs settings in order
  * to get SDIO detection when the GPIO is rising and SDIO removal
@@ -9554,6 +9607,10 @@ static int msm8x60_multi_sdio_init(void)
 {
 	int ret, irq_num;
 
+#ifdef CONFIG_KTTECH_MODEL_O4
+	return 0;
+#endif
+
 	if (!machine_is_msm8x60_fusion() &&
 	    !machine_is_msm8x60_fusn_ffa())
 		return 0;
@@ -9580,13 +9637,24 @@ static int msm8x60_multi_sdio_init(void)
 
 	return ret;
 }
-#endif
+
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 static unsigned int msm8x60_sdcc_slot_status(struct device *dev)
 {
 	int status;
 
+#ifdef CONFIG_KTTECH_MODEL_O4  //[Begin]MO2 20120510 Yong Sd Card Detection
+	status = gpio_request(GPIO_SDC3_DET, "SD_HW_Detect");
+	if (status) {
+		pr_err("%s:Failed to request GPIO %d\n", __func__, GPIO_SDC3_DET);
+	} else {
+		status = gpio_direction_input(GPIO_SDC3_DET);
+		if (!status)
+			status = !(gpio_get_value(GPIO_SDC3_DET));
+		gpio_free(GPIO_SDC3_DET);
+	}
+#else  // 20120510 SD Card Detection
 	status = gpio_request(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC3_DET - 1)
 				, "SD_HW_Detect");
 	if (status) {
@@ -9600,7 +9668,48 @@ static unsigned int msm8x60_sdcc_slot_status(struct device *dev)
 				PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC3_DET - 1)));
 		gpio_free(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC3_DET - 1));
 	}
+#endif  //[End] 20120510 SD Card Detection
+
 	return (unsigned int) status;
+}
+#endif
+#endif
+
+#ifndef CONFIG_KTTECH_WIFI_BCM4329
+#ifdef	CONFIG_MMC_MSM_SDC4_SUPPORT
+static int msm_sdcc_cfg_mpm_sdiowakeup(struct device *dev, unsigned mode)
+{
+	struct platform_device *pdev;
+	enum msm_mpm_pin pin;
+	int ret = 0;
+
+	pdev = container_of(dev, struct platform_device, dev);
+
+	/* Only SDCC4 slot connected to WLAN chip has wakeup capability */
+	if (pdev->id == 4)
+		pin = MSM_MPM_PIN_SDC4_DAT1;
+	else
+		return -EINVAL;
+
+	switch (mode) {
+	case SDC_DAT1_DISABLE:
+		ret = msm_mpm_enable_pin(pin, 0);
+		break;
+	case SDC_DAT1_ENABLE:
+		ret = msm_mpm_set_pin_type(pin, IRQ_TYPE_LEVEL_LOW);
+		ret = msm_mpm_enable_pin(pin, 1);
+		break;
+	case SDC_DAT1_ENWAKE:
+		ret = msm_mpm_set_pin_wake(pin, 1);
+		break;
+	case SDC_DAT1_DISWAKE:
+		ret = msm_mpm_set_pin_wake(pin, 0);
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+	return ret;
 }
 #endif
 #endif
@@ -9649,11 +9758,17 @@ static struct mmc_platform_data msm8x60_sdc3_data = {
 	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd  = msm_sdcc_setup_power,
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
+#ifndef CONFIG_MACH_KTTECH  //MO2 Yong 20120510 Sd Card Detection
 	.wpswitch  	= msm_sdc3_get_wpswitch,
+#endif //MO2 Yong Sd Card Detection
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 	.status      = msm8x60_sdcc_slot_status,
+#ifdef CONFIG_KTTECH_MODEL_O4  //Mo2 Yong 20120510 Sd Card Detection
+	.status_irq  = MSM_GPIO_TO_INT(GPIO_SDC3_DET),  //Mo2 Yong 20120510 Sd Card Detection
+#else
 	.status_irq  = PM8058_GPIO_IRQ(PM8058_IRQ_BASE,
 				       PMIC_GPIO_SDC3_DET - 1),
+#endif //Mo2 Yong 20120510 Sd Card Detection
 	.irq_flags   = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 #endif
 	.msmsdcc_fmin	= 400000,
@@ -9678,6 +9793,7 @@ static struct mmc_platform_data msm8x60_sdc4_data = {
 	.nonremovable	= 0,
 #ifndef CONFIG_MACH_KTTECH
 	.mpm_sdiowakeup_int = MSM_MPM_PIN_SDC4_DAT1,
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 #endif
 	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 };
@@ -9701,7 +9817,7 @@ static struct mmc_platform_data msm8x60_sdc5_data = {
 };
 #endif
 
-#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT
+#if defined(CONFIG_KTTECH_BT_BCM4329) || defined(CONFIG_KTTECH_BT_BCM4330)    //MO2 niceyom 120410 - For BCM4329 chipset
 static struct msm_gpio bt_config_power_off[] = {
 	{ GPIO_CFG(56, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),
 		"UART1DM_RFR" },
@@ -9794,12 +9910,9 @@ static void __init msm8x60_init_mmc(void)
     // BT REG ON 49 (From O6, WIFI / BT REG ON Separated...)
     gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BT_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
     gpio_set_value(KTTECH_GPIO_BT_REG_ON, 0);
-
-    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BT_RESET_N, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-    gpio_set_value(KTTECH_GPIO_BT_RESET_N, 1);     // For sleep current
 #endif
 
-#ifdef CONFIG_KTTECH_WIRELESS_BCM4330 // BCM4330(WI-FI/BT) REG_ON/WIFI_RST_N/BT_RST_N
+#ifdef CONFIG_KTTECH_WIFI_BCM4329 // BCM4330(WI-FI/BT) REG_ON/WIFI_RST_N/BT_RST_N
     // wlan rst 51 
     gpio_tlmm_config(GPIO_CFG(51, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
     gpio_set_value(51, 0);
@@ -9820,12 +9933,11 @@ static void __init msm8x60_init_mmc(void)
     gpio_tlmm_config(GPIO_CFG(45, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 #endif
 
-#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT
+#if defined(CONFIG_KTTECH_BT_BCM4329) || defined(CONFIG_KTTECH_BT_BCM4330)   //MO2 niceyom 120410 - For BCM4329 chipset
     // bt uart init
     configure_kttech_bt_uart_gpios(0);
 #endif
-
-#if 1//def CONFIG_MACH_KTTECH  //sleep current
+#if defined(CONFIG_KTTECH_BT_BCM4329)  //sleep current//MO2 niceyom 120410 - For BCM4329 chipset
     // boot config
     gpio_tlmm_config(GPIO_CFG(74, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
     gpio_set_value(74, 0);
@@ -9903,10 +10015,13 @@ static void __init msm8x60_init_mmc(void)
 
 	if (machine_is_msm8x60_fluid())
 		msm8x60_sdc3_data.wpswitch = NULL;
+#ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION  //[Begin] MO2 Yong 20120510 SD Card Detection
+	gpio_tlmm_config(GPIO_CFG(GPIO_SDC3_DET, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE); //yongTest
+#endif //[End] MO2 Yong 20120510 SD Card Detection
 	msm_add_sdcc(3, &msm8x60_sdc3_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
-#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+#ifdef CONFIG_KTTECH_WIFI_BCM4329
     /* SDCC4 : WLAN BCM4330 chip is connected */
     sdcc_vreg_data[3].vdd_data = &sdcc_vdd_reg_data[3];
     sdcc_vreg_data[3].vdd_data->reg_name = "8058_l19";
@@ -10480,7 +10595,10 @@ error:
 
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 
-#ifdef CONFIG_FB_MSM_LCDC_DSUB
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA
+/* KT Tech O4 LCDC pdata */
+#include "devices-kttech-o4/devices-lcdc-samsung-kttech.c"
+#else /* CONFIG_FB_MSM_LCDC_SAMSUNG_WVGA */
 static int lcdc_panel_power(int on)
 {
 	int flag_on = !!on;
@@ -11195,14 +11313,14 @@ static void set_mdp_clocks_for_wuxga(void)
 	mdp_pdata.mdp_max_clk = 200000000;
 }
 
-#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+#ifdef CONFIG_KTTECH_WIFI_BCM4329
 #define KTTECH_GPIO_WIFI_REG_ON      (51)
 #define KTTECH_GPIO_BCM4330_WOW      (50)
-//#define KTTECH_GPIO_WIFI_RESET       (52)
+#define KTTECH_GPIO_WIFI_RESET       (52)//MO2 niceyom 120410 - For BCM4329 chipset
 
 #define PMIC_GPIO_SLEEP_CLK          (37) /* PMIC PM8058  GPIO 38 */
 
-#ifdef CONFIG_BCM4330_MEM_PREALLOC
+#ifdef CONFIG_BCM4329_MEM_PREALLOC //MO2 niceyom 120525 Apply static buf for BRCM DHD
 #define PREALLOC_WLAN_NUMBER_OF_SECTIONS                  4
 #define PREALLOC_WLAN_NUMBER_OF_BUFFERS                 160
 #define PREALLOC_WLAN_SECTION_HEADER                     24
@@ -11251,7 +11369,7 @@ static struct pm_gpio pmic_sleep_clk_off_gpio = {
 };
 
 
-#ifdef CONFIG_BCM4330_MEM_PREALLOC
+#ifdef CONFIG_BCM4329_MEM_PREALLOC////MO2 niceyom 120525 Apply static buf for BRCM DHD
 /******************************************************************************
 * FUNCTION
 *   s200_wifi_mem_preallocint section, unsigned long size)
@@ -11264,7 +11382,7 @@ static struct pm_gpio pmic_sleep_clk_off_gpio = {
 * RETURN VALUE  
 *
 ******************************************************************************/
-void *bcm4330_wifi_mem_prealloc(int section, unsigned long size)
+void *bcm4329_wifi_mem_prealloc(int section, unsigned long size)//MO2 niceyom 120525 Apply static buf for BRCM DHD
 {
 
     if (section == PREALLOC_WLAN_NUMBER_OF_SECTIONS)
@@ -11278,7 +11396,7 @@ void *bcm4330_wifi_mem_prealloc(int section, unsigned long size)
     return wifi_mem_array[section].mem_ptr;
 }
 
-static int __init bcm4330_init_wifi_mem (void)
+static int __init bcm4329_init_wifi_mem (void)//MO2 niceyom 120525 Apply static buf for BRCM DHD
 {
 	int i;
 		   
@@ -11304,7 +11422,7 @@ static int __init bcm4330_init_wifi_mem (void)
     return 0;
 }
 
-EXPORT_SYMBOL(bcm4330_wifi_mem_prealloc);
+EXPORT_SYMBOL(bcm4329_wifi_mem_prealloc);//MO2 niceyom 120525 Apply static buf for BRCM DHD
 
 #endif 
 /******************************************************************************
@@ -11380,11 +11498,13 @@ static int bcm4330_pwr_control(int on)
 			return rc;
 		}
 
-		if(vreg_wlan_1_8v)
-		{
+		//MO2 niceyom When disabling Wi-Fi Hostspot, kernel panic happened
+		if(vreg_wlan_1_8v == NULL)
+			return 0;
 			msleep(1);
 			rc = regulator_disable(vreg_wlan_1_8v);
 			regulator_put(vreg_wlan_1_8v);
+		vreg_wlan_1_8v = NULL;//MO2 niceyom When disabling Wi-Fi Hostspot, kernel panic happened
 
 			if (rc) {
 				pr_err("%s: vreg_disable failed %d\n",
@@ -11392,7 +11512,6 @@ static int bcm4330_pwr_control(int on)
 				goto vreg_fail;
 			}
 		}
-	}
 
 	return 0;
 
@@ -11424,43 +11543,6 @@ vreg_fail:
 int bcm4330_device = 0;
 int bcm4330_powered = 0;
 
-int bcm4330_wifi_reset(int on)
-{
-    printk("%s\n, power = %d\n", __func__,on);
-
-    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_WIFI_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-    if(on)
-    {
-      gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on);
-      msleep(100);
-    }
-    else
-    {
-      gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on);
-    }
-
-    return 0;
-}
-
-EXPORT_SYMBOL(bcm4330_wifi_reset);
-
-int bcm4330_wifi_wow_en(int on)
-{
-    if(on)
-    {
-      gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BCM4330_WOW, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-    }
-    else
-    {
-      gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BCM4330_WOW, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-    }
-    return 0;
-
-}
-
-EXPORT_SYMBOL(bcm4330_wifi_wow_en);
-
 void bcm4330_set_ldo_pwr_state(int power)
 {
   bcm4330_powered = power;
@@ -11471,11 +11553,6 @@ int bcm4330_get_ldo_pwr_state(void)
   return bcm4330_powered;
 }
 
-// =====================================
-// [Important Caution]
-// Because This function is also controlled in WIFI,
-// Don't add Bluetooth GPIO Control codes.
-// =====================================
 int bcm4330_ldo_pwr(int device, int on)
 {
     printk("%s() : start...  device = %d, power = %d\n", __func__, device, on);
@@ -11485,8 +11562,11 @@ int bcm4330_ldo_pwr(int device, int on)
     else
         bcm4330_device &=~ device;
 
-#if 0//def CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT (BT_REG_ON Control)
+//MO2 niceyom 120410 - For BCM4329 chipset
+#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT (BT_REG_ON Control)
     gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BT_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+#elif defined(CONFIG_KTTECH_BT_BCM4329)//KTTECH_BT (BT_REG_ON Control)
+    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_WIFI_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 #endif
 
     if((bcm4330_device & bcm4330_wifi) || (bcm4330_device & bcm4330_bluetooth))
@@ -11495,13 +11575,20 @@ int bcm4330_ldo_pwr(int device, int on)
         {
             bcm4330_pwr_control(on);
 
-#if 0//def CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT (BT_REG_ON Control)
+#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT (BT_REG_ON Control)
             if(bcm4330_device & bcm4330_bluetooth)
             {
                 msleep(1);
                 gpio_set_value(KTTECH_GPIO_BT_REG_ON, on);
                 msleep(5);
             }
+#elif defined(CONFIG_KTTECH_BT_BCM4329)//MO2 niceyom 120410 - For BCM4329 chipset
+            msleep(60);
+            gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on);     // WIFI_BT_REG_ON
+            msleep(1);
+            gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, 0);
+            msleep(1);
+            gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on); 
 #endif
 
             bcm4330_set_ldo_pwr_state(on);
@@ -11513,12 +11600,14 @@ int bcm4330_ldo_pwr(int device, int on)
     }
     else
     {
-#if 0//def CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT (BT_REG_ON Control)
+#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT (BT_REG_ON Control)
         gpio_set_value(KTTECH_GPIO_BT_REG_ON, on);
         msleep(5);
+#elif defined(CONFIG_KTTECH_BT_BCM4329)//MO2 niceyom 120410 - For BCM4329 chipset
+        gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on);     // WIFI_BT_REG_ON
+        msleep(1);
 #endif
 
-        msleep(5);
         bcm4330_pwr_control(on);
         bcm4330_set_ldo_pwr_state(on);
         printk("   %s() : Power OFF, bcm4329_powered = %d\n", __func__, bcm4330_get_ldo_pwr_state());
@@ -11532,15 +11621,70 @@ int bcm4330_ldo_pwr(int device, int on)
 EXPORT_SYMBOL(bcm4330_ldo_pwr);
 EXPORT_SYMBOL(bcm4330_get_ldo_pwr_state);
 
-#endif /* CONFIG_KTTECH_WIRELESS_BCM4330 */ 
-
-#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT
-int bcm4330_bt_reset(int on)
+int bcm4330_wifi_reset(int on)
 {
+    printk("%s\n, power = %d\n", __func__,on);
+
+#ifdef CONFIG_KTTECH_BT_BCM4330//MO2 niceyom 120410 - For BCM4329 chipset
+    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_WIFI_REG_ON, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
     if(on)
     {
-       gpio_set_value(KTTECH_GPIO_BT_REG_ON, on);
-       msleep(10);    
+      gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on);
+      msleep(130);
+    }
+    else
+    {
+      gpio_set_value(KTTECH_GPIO_WIFI_REG_ON, on);
+    }
+#elif defined(CONFIG_KTTECH_BT_BCM4329)
+    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_WIFI_RESET, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+    if(on)
+    {
+	  gpio_set_value(KTTECH_GPIO_WIFI_RESET, on); 
+	  msleep(1);
+      gpio_set_value(KTTECH_GPIO_WIFI_RESET, 0); 
+	  msleep(1);
+      gpio_set_value(KTTECH_GPIO_WIFI_RESET, on); 
+    }
+    else
+    {
+      gpio_set_value(KTTECH_GPIO_WIFI_RESET, on); 
+    }
+#endif
+    return 0;
+}
+
+EXPORT_SYMBOL(bcm4330_wifi_reset);
+
+int bcm4330_wifi_wow_en(int on)
+{
+	
+#if 1
+    if(on)
+    {
+      gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BCM4330_WOW, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+    }
+    else
+    {
+      gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BCM4330_WOW, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+    }
+#endif
+    return 0;
+
+}
+
+EXPORT_SYMBOL(bcm4330_wifi_wow_en);
+#endif /* CONFIG_KTTECH_WIFI_BCM4329 */ 
+
+#ifdef CONFIG_KTTECH_BT_BCM4329     //MO2 niceyom 120410 - For BCM4329 chipset
+int bcm4329_bt_reset(int on)
+{
+    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BT_RESET_N, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+    if(on)
+    {
        gpio_set_value(KTTECH_GPIO_BT_RESET_N, on); 
        msleep(10);
        gpio_set_value(KTTECH_GPIO_BT_RESET_N, 0); 
@@ -11549,8 +11693,30 @@ int bcm4330_bt_reset(int on)
     }
     else
     {
-      gpio_set_value(KTTECH_GPIO_BT_REG_ON, on);
-	  msleep(1);
+      gpio_set_value(KTTECH_GPIO_BT_RESET_N, on); 
+    }
+
+    return 0;
+}
+
+EXPORT_SYMBOL(bcm4329_bt_reset);
+#endif
+
+#ifdef CONFIG_KTTECH_BT_BCM4330     //KTTECH_BT
+int bcm4330_bt_reset(int on)
+{
+    gpio_tlmm_config(GPIO_CFG(KTTECH_GPIO_BT_RESET_N, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+    if(on)
+    {
+       gpio_set_value(KTTECH_GPIO_BT_RESET_N, on); 
+       msleep(10);
+       gpio_set_value(KTTECH_GPIO_BT_RESET_N, 0); 
+       msleep(10);
+       gpio_set_value(KTTECH_GPIO_BT_RESET_N, on);
+    }
+    else
+    {
       gpio_set_value(KTTECH_GPIO_BT_RESET_N, on); 
     }
 
@@ -11560,7 +11726,7 @@ int bcm4330_bt_reset(int on)
 EXPORT_SYMBOL(bcm4330_bt_reset);
 #endif
 
-#if (defined(CONFIG_KTTECH_BT_BCM4330) && defined(CONFIG_MSM_BT_POWER))
+#ifdef CONFIG_KTTECH_BT_BCM4329     //MO2 niceyom 120410 - For BCM4329 chipset
 static int bluetooth_power(int on)
 {
     int rc = 0;
@@ -11568,355 +11734,31 @@ static int bluetooth_power(int on)
     printk("%s() : start...  on = %d\n", __func__, on);
 
     configure_kttech_bt_uart_gpios(on);
-    bcm4330_ldo_pwr(bcm4330_bluetooth, on);   
-    bcm4330_bt_reset(on);        
+    bcm4330_ldo_pwr(bcm4330_bluetooth, on);
+    bcm4329_bt_reset(on);
 
     printk("%s() : end...\n", __func__);
 
     return rc;
 }
 #endif
-#ifndef CONFIG_MACH_KTTECH
-#if (defined(CONFIG_MARIMBA_CORE)) && \
-	(defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 
-static const struct {
-	char *name;
-	int vmin;
-	int vmax;
-} bt_regs_info[] = {
-	{ "8058_s3", 1800000, 1800000 },
-	{ "8058_s2", 1300000, 1300000 },
-	{ "8058_l8", 2900000, 3050000 },
-};
-
-static struct {
-	bool enabled;
-} bt_regs_status[] = {
-	{ false },
-	{ false },
-	{ false },
-};
-static struct regulator *bt_regs[ARRAY_SIZE(bt_regs_info)];
-
-static int bahama_bt(int on)
-{
-	int rc;
-	int i;
-	struct marimba config = { .mod_id =  SLAVE_ID_BAHAMA};
-
-	struct bahama_variant_register {
-		const size_t size;
-		const struct bahama_config_register *set;
-	};
-
-	const struct bahama_config_register *p;
-
-	u8 version;
-
-	const struct bahama_config_register v10_bt_on[] = {
-		{ 0xE9, 0x00, 0xFF },
-		{ 0xF4, 0x80, 0xFF },
-		{ 0xE4, 0x00, 0xFF },
-		{ 0xE5, 0x00, 0x0F },
-#ifdef CONFIG_WLAN
-		{ 0xE6, 0x38, 0x7F },
-		{ 0xE7, 0x06, 0xFF },
-#endif
-		{ 0xE9, 0x21, 0xFF },
-		{ 0x01, 0x0C, 0x1F },
-		{ 0x01, 0x08, 0x1F },
-	};
-
-	const struct bahama_config_register v20_bt_on_fm_off[] = {
-		{ 0x11, 0x0C, 0xFF },
-		{ 0x13, 0x01, 0xFF },
-		{ 0xF4, 0x80, 0xFF },
-		{ 0xF0, 0x00, 0xFF },
-		{ 0xE9, 0x00, 0xFF },
-#ifdef CONFIG_WLAN
-		{ 0x81, 0x00, 0x7F },
-		{ 0x82, 0x00, 0xFF },
-		{ 0xE6, 0x38, 0x7F },
-		{ 0xE7, 0x06, 0xFF },
-#endif
-		{ 0xE9, 0x21, 0xFF },
-	};
-
-	const struct bahama_config_register v20_bt_on_fm_on[] = {
-		{ 0x11, 0x0C, 0xFF },
-		{ 0x13, 0x01, 0xFF },
-		{ 0xF4, 0x86, 0xFF },
-		{ 0xF0, 0x06, 0xFF },
-		{ 0xE9, 0x00, 0xFF },
-#ifdef CONFIG_WLAN
-		{ 0x81, 0x00, 0x7F },
-		{ 0x82, 0x00, 0xFF },
-		{ 0xE6, 0x38, 0x7F },
-		{ 0xE7, 0x06, 0xFF },
-#endif
-		{ 0xE9, 0x21, 0xFF },
-	};
-
-	const struct bahama_config_register v10_bt_off[] = {
-		{ 0xE9, 0x00, 0xFF },
-	};
-
-	const struct bahama_config_register v20_bt_off_fm_off[] = {
-		{ 0xF4, 0x84, 0xFF },
-		{ 0xF0, 0x04, 0xFF },
-		{ 0xE9, 0x00, 0xFF }
-	};
-
-	const struct bahama_config_register v20_bt_off_fm_on[] = {
-		{ 0xF4, 0x86, 0xFF },
-		{ 0xF0, 0x06, 0xFF },
-		{ 0xE9, 0x00, 0xFF }
-	};
-	const struct bahama_variant_register bt_bahama[2][3] = {
-		{
-			{ ARRAY_SIZE(v10_bt_off), v10_bt_off },
-			{ ARRAY_SIZE(v20_bt_off_fm_off), v20_bt_off_fm_off },
-			{ ARRAY_SIZE(v20_bt_off_fm_on), v20_bt_off_fm_on }
-		},
-		{
-			{ ARRAY_SIZE(v10_bt_on), v10_bt_on },
-			{ ARRAY_SIZE(v20_bt_on_fm_off), v20_bt_on_fm_off },
-			{ ARRAY_SIZE(v20_bt_on_fm_on), v20_bt_on_fm_on }
-		}
-	};
-
-	u8 offset = 0; /* index into bahama configs */
-
-	on = on ? 1 : 0;
-	version = read_bahama_ver();
-
-	if (version ==  VER_UNSUPPORTED) {
-		dev_err(&msm_bt_power_device.dev,
-			"%s: unsupported version\n",
-			__func__);
-		return -EIO;
-	}
-
-	if (version == VER_2_0) {
-		if (marimba_get_fm_status(&config))
-			offset = 0x01;
-	}
-
-	/* Voting off 1.3V S2 Regulator,BahamaV2 used in Normal mode */
-	if (on && (version == VER_2_0)) {
-		for (i = 0; i < ARRAY_SIZE(bt_regs_info); i++) {
-			if ((!strcmp(bt_regs_info[i].name, "8058_s2"))
-				&& (bt_regs_status[i].enabled == true)) {
-				if (regulator_disable(bt_regs[i])) {
-					dev_err(&msm_bt_power_device.dev,
-						"%s: regulator disable failed",
-						__func__);
-				}
-				bt_regs_status[i].enabled = false;
-				break;
-			}
-		}
-	}
-
-	p = bt_bahama[on][version + offset].set;
-
-	dev_info(&msm_bt_power_device.dev,
-		"%s: found version %d\n", __func__, version);
-
-	for (i = 0; i < bt_bahama[on][version + offset].size; i++) {
-		u8 value = (p+i)->value;
-		rc = marimba_write_bit_mask(&config,
-			(p+i)->reg,
-			&value,
-			sizeof((p+i)->value),
-			(p+i)->mask);
-		if (rc < 0) {
-			dev_err(&msm_bt_power_device.dev,
-				"%s: reg %d write failed: %d\n",
-				__func__, (p+i)->reg, rc);
-			return rc;
-		}
-		dev_dbg(&msm_bt_power_device.dev,
-			"%s: reg 0x%02x write value 0x%02x mask 0x%02x\n",
-				__func__, (p+i)->reg,
-				value, (p+i)->mask);
-	}
-	/* Update BT Status */
-	if (on)
-		marimba_set_bt_status(&config, true);
-	else
-		marimba_set_bt_status(&config, false);
-
-	return 0;
-}
-
-static int bluetooth_use_regulators(int on)
-{
-	int i, recover = -1, rc = 0;
-
-	for (i = 0; i < ARRAY_SIZE(bt_regs_info); i++) {
-		bt_regs[i] = on ? regulator_get(&msm_bt_power_device.dev,
-						bt_regs_info[i].name) :
-				(regulator_put(bt_regs[i]), NULL);
-		if (IS_ERR(bt_regs[i])) {
-			rc = PTR_ERR(bt_regs[i]);
-			dev_err(&msm_bt_power_device.dev,
-				"regulator %s get failed (%d)\n",
-				bt_regs_info[i].name, rc);
-			recover = i - 1;
-			bt_regs[i] = NULL;
-			break;
-		}
-
-		if (!on)
-			continue;
-
-		rc = regulator_set_voltage(bt_regs[i],
-					  bt_regs_info[i].vmin,
-					  bt_regs_info[i].vmax);
-		if (rc < 0) {
-			dev_err(&msm_bt_power_device.dev,
-				"regulator %s voltage set (%d)\n",
-				bt_regs_info[i].name, rc);
-			recover = i;
-			break;
-		}
-	}
-
-	if (on && (recover > -1))
-		for (i = recover; i >= 0; i--) {
-			regulator_put(bt_regs[i]);
-			bt_regs[i] = NULL;
-		}
-
-	return rc;
-}
-
-static int bluetooth_switch_regulators(int on)
-{
-	int i, rc = 0;
-
-	for (i = 0; i < ARRAY_SIZE(bt_regs_info); i++) {
-		if (on && (bt_regs_status[i].enabled == false)) {
-			rc = regulator_enable(bt_regs[i]);
-			if (rc < 0) {
-				dev_err(&msm_bt_power_device.dev,
-					"regulator %s %s failed (%d)\n",
-					bt_regs_info[i].name,
-					"enable", rc);
-				if (i > 0) {
-					while (--i) {
-						regulator_disable(bt_regs[i]);
-						bt_regs_status[i].enabled
-								 = false;
-					}
-					break;
-				}
-			}
-			bt_regs_status[i].enabled = true;
-		} else if (!on && (bt_regs_status[i].enabled == true)) {
-			rc = regulator_disable(bt_regs[i]);
-			if (rc < 0) {
-				dev_err(&msm_bt_power_device.dev,
-					"regulator %s %s failed (%d)\n",
-					bt_regs_info[i].name,
-					"disable", rc);
-				break;
-			}
-			bt_regs_status[i].enabled = false;
-		}
-	}
-	return rc;
-}
-
-static struct msm_xo_voter *bt_clock;
-
+#ifdef CONFIG_KTTECH_BT_BCM4330
 static int bluetooth_power(int on)
 {
-	int rc = 0;
-	int id;
+    int rc = 0;
 
-	/* In case probe function fails, cur_connv_type would be -1 */
-	id = adie_get_detected_connectivity_type();
-	if (id != BAHAMA_ID) {
-		pr_err("%s: unexpected adie connectivity type: %d\n",
-			__func__, id);
-		return -ENODEV;
-	}
+    printk("%s() : start...  on = %d\n", __func__, on);
 
-	if (on) {
+    configure_kttech_bt_uart_gpios(on);
+    bcm4330_ldo_pwr(bcm4330_bluetooth, on);
+    bcm4330_bt_reset(on);
 
-		rc = bluetooth_use_regulators(1);
-		if (rc < 0)
-			goto out;
+    printk("%s() : end...\n", __func__);
 
-		rc = bluetooth_switch_regulators(1);
-
-		if (rc < 0)
-			goto fail_put;
-
-		bt_clock = msm_xo_get(MSM_XO_TCXO_D0, "bt_power");
-
-		if (IS_ERR(bt_clock)) {
-			pr_err("Couldn't get TCXO_D0 voter\n");
-			goto fail_switch;
-		}
-
-		rc = msm_xo_mode_vote(bt_clock, MSM_XO_MODE_ON);
-
-		if (rc < 0) {
-			pr_err("Failed to vote for TCXO_DO ON\n");
-			goto fail_vote;
-		}
-
-		rc = bahama_bt(1);
-
-		if (rc < 0)
-			goto fail_clock;
-
-		msleep(10);
-
-		rc = msm_xo_mode_vote(bt_clock, MSM_XO_MODE_PIN_CTRL);
-
-		if (rc < 0) {
-			pr_err("Failed to vote for TCXO_DO pin control\n");
-			goto fail_vote;
-		}
-	} else {
-		/* check for initial RFKILL block (power off) */
-		/* some RFKILL versions/configurations rfkill_register */
-		/* calls here for an initial set_block */
-		/* avoid calling i2c and regulator before unblock (on) */
-		if (platform_get_drvdata(&msm_bt_power_device) == NULL) {
-			dev_info(&msm_bt_power_device.dev,
-				"%s: initialized OFF/blocked\n", __func__);
-			goto out;
-		}
-
-		bahama_bt(0);
-
-fail_clock:
-		msm_xo_mode_vote(bt_clock, MSM_XO_MODE_OFF);
-fail_vote:
-		msm_xo_put(bt_clock);
-fail_switch:
-		bluetooth_switch_regulators(0);
-fail_put:
-		bluetooth_use_regulators(0);
-	}
-
-out:
-	if (rc < 0)
-		on = 0;
-	dev_info(&msm_bt_power_device.dev,
-		"Bluetooth power switch: state %d result %d\n", on, rc);
-
-	return rc;
+    return rc;
 }
-
-#endif /*CONFIG_MARIMBA_CORE, CONFIG_MSM_BT_POWER, CONFIG_MSM_BT_POWER_MODULE*/
-#endif /* CONFIG_MACH_KTTECH */
+#endif
 
 static void __init msm8x60_cfg_smsc911x(void)
 {
@@ -11953,9 +11795,15 @@ static struct msm_board_data msm8x60_sim_board_data __initdata = {
 	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
 };
 
+#ifdef CONFIG_KTTECH_MODEL_O4
+static struct msm_board_data msm8x60_kttech_o4_board_data __initdata = {
+	.gpiomux_cfgs = msm8x60_kttech_o4_gpiomux_cfgs,
+};
+#else
 static struct msm_board_data msm8x60_surf_board_data __initdata = {
 	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
 };
+#endif
 
 static struct msm_board_data msm8x60_ffa_board_data __initdata = {
 	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
@@ -12259,14 +12107,13 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 		platform_device_register(&gpio_leds);
 #endif
 
-#ifndef CONFIG_MACH_KTTECH
 	msm8x60_multi_sdio_init();
-#endif
 
 	if (machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa())
 		msm_fusion_setup_pinctrl();
-#ifdef CONFIG_BCM4330_MEM_PREALLOC 
-    bcm4330_init_wifi_mem();
+
+#ifdef CONFIG_BCM4329_MEM_PREALLOC //MO2 niceyom 120525 Apply static buf for BRCM DHD
+        bcm4329_init_wifi_mem();
 #endif	
 }
 
@@ -12282,7 +12129,11 @@ static void __init msm8x60_sim_init(void)
 
 static void __init msm8x60_surf_init(void)
 {
+#ifdef CONFIG_KTTECH_MODEL_O4
+	msm8x60_init(&msm8x60_kttech_o4_board_data);
+#else
 	msm8x60_init(&msm8x60_surf_board_data);
+#endif
 }
 
 static void __init msm8x60_ffa_init(void)

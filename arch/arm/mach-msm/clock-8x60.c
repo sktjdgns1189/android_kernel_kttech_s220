@@ -2510,7 +2510,11 @@ static struct rcg_clk mdp_vsync_clk = {
 		.ctl_val = CC(6, n), \
 	}
 static struct clk_freq_tbl clk_tbl_pixel_mdp[] = {
+#ifdef CONFIG_FB_MSM_LCDC_PANEL	
+	F_PIXEL_MDP( 24700000, pll8, 1,   2,   31), // lcdc driverÀÇ pinfo->clk_rate ¿Í °°ÀÌ ¼öÁ¤ /* 24.7MHz - DMB ¼º´É ÀúÇÏ·Î pclk ¼öÁ¤ */ 
+#else
 	F_PIXEL_MDP(        0, gnd,  1,   0,    0),
+#endif	
 	F_PIXEL_MDP( 25600000, pll8, 3,   1,    5),
 	F_PIXEL_MDP( 42667000, pll8, 1,   1,    9),
 	F_PIXEL_MDP( 43192000, pll8, 1,  64,  569),
@@ -3837,7 +3841,11 @@ static void __init msm8660_clock_pre_init(void)
 	rmwreg(0x80FF0000, IJPEG_CC_REG,  0xE0FF0018);
 	rmwreg(0x80FF0000, JPEGD_CC_REG,  0xE0FF0018);
 	rmwreg(0x80FF0000, MDP_CC_REG,    0xE1FF0010);
+#ifdef CONFIG_FB_MSM_LCDC_PANEL	
+	rmwreg(0x80FF0200, PIXEL_CC_REG,  0xE1FF0010 | BIT(9));
+#else
 	rmwreg(0x80FF0000, PIXEL_CC_REG,  0xE1FF0010);
+#endif
 	rmwreg(0x000004FF, PIXEL_CC2_REG, 0x000007FF);
 	rmwreg(0x80FF0000, ROT_CC_REG,    0xE0FF0010);
 	rmwreg(0x80FF0000, TV_CC_REG,     0xE1FFC010);
