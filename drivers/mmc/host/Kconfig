@@ -458,19 +458,6 @@ config MMC_SDRICOH_CS
 config MMC_TMIO_CORE
 	tristate
 
-config MMC_SDHCI_MSM
-	tristate "Qualcomm SDHCI Controller Support"
-	depends on ARCH_MSM
-	depends on MMC_SDHCI_PLTFM
-	help
-	  This selects the Secure Digital Host Controller Interface (SDHCI)
-	  support present in MSM SOCs from Qualcomm. The controller
-	  supports SD/MMC/SDIO devices.
-
-	  If you have a controller with this interface, say Y or M here.
-
-	  If unsure, say N.
-
 config MMC_MSM
 	tristate "Qualcomm SDCC Controller Support"
 	depends on MMC && ARCH_MSM
@@ -495,7 +482,7 @@ config MMC_MSM_SDC1_8_BIT_SUPPORT
 config MMC_MSM_SDC2_SUPPORT
 	boolean "Qualcomm SDC2 support"
 	depends on MMC_MSM
-	default y
+	default n
 	help
 	  Select Y to enable Slot 2.
 
@@ -512,10 +499,6 @@ config MMC_MSM_SDC3_SUPPORT
 	default n
 	help
 	  Select Y to enable Slot 3.
-
-config MMC_MSM_SDC3_POLLING
-	boolean "Qualcomm SDC3 support"
-	depends on MMC_MSM
 
 config MMC_MSM_SDC3_8_BIT_SUPPORT
 	boolean "Qualcomm SDC3 8bit support"

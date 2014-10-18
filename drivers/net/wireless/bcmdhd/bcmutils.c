@@ -1118,6 +1118,11 @@ pktsetprio(void *pkt, bool update_vtag)
 		uint8 *ip_body = pktdata + sizeof(struct ether_header);
 		uint8 tos_tc = IP_TOS46(ip_body);
 		priority = (int)(tos_tc >> IPV4_TOS_PREC_SHIFT);
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330 //knseo@kttech.co.kr 2012.02.21
+		if(priority == 5) // out of spec. just kt request
+		  priority =6;
+#endif      
+   
 		rc |= PKTPRIO_DSCP;
 	}
 
@@ -1699,9 +1704,6 @@ static const char *crypto_algo_names[] = {
 	"UNDEF",
 	"UNDEF",
 	"UNDEF",
-#ifdef BCMWAPI_WPI
-	"WAPI",
-#endif /* BCMWAPI_WPI */
 	"UNDEF"
 };
 

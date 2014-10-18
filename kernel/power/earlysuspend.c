@@ -17,9 +17,12 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/rtc.h>
-#include <linux/syscalls.h> /* sys_sync */
 #include <linux/wakelock.h>
 #include <linux/workqueue.h>
+
+#ifdef CONFIG_MACH_KTTECH
+#include <linux/kallsyms.h>
+#endif
 
 #include "power.h"
 
@@ -28,7 +31,11 @@ enum {
 	DEBUG_SUSPEND = 1U << 2,
 	DEBUG_VERBOSE = 1U << 3,
 };
+#ifdef CONFIG_MACH_KTTECH
+static int debug_mask = DEBUG_USER_STATE | DEBUG_SUSPEND | DEBUG_VERBOSE;
+#else
 static int debug_mask = DEBUG_USER_STATE;
+#endif
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
 static DEFINE_MUTEX(early_suspend_lock);
@@ -76,8 +83,9 @@ static void early_suspend(struct work_struct *work)
 	struct early_suspend *pos;
 	unsigned long irqflags;
 	int abort = 0;
-
+	printk("### Enter : %s \n",__func__);
 	mutex_lock(&early_suspend_lock);
+	printk("### Enter : %s in mutex_lock\n",__func__);
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPEND_REQUESTED)
 		state |= SUSPENDED;
@@ -103,10 +111,7 @@ static void early_suspend(struct work_struct *work)
 	}
 	mutex_unlock(&early_suspend_lock);
 
-	if (debug_mask & DEBUG_SUSPEND)
-		pr_info("early_suspend: sync\n");
-
-	sys_sync();
+	suspend_sys_sync_queue();
 abort:
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPEND_REQUESTED_AND_SUSPENDED)
@@ -119,8 +124,10 @@ static void late_resume(struct work_struct *work)
 	struct early_suspend *pos;
 	unsigned long irqflags;
 	int abort = 0;
-
+	
+	printk("### Enter : %s \n",__func__);	
 	mutex_lock(&early_suspend_lock);
+	printk("### Enter : %s in mutex_lock\n",__func__);
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPENDED)
 		state &= ~SUSPENDED;
@@ -171,11 +178,19 @@ void request_suspend_state(suspend_state_t new_state)
 	}
 	if (!old_sleep && new_state != PM_SUSPEND_ON) {
 		state |= SUSPEND_REQUESTED;
+#ifdef CONFIG_MACH_KTTECH
+		queue_work(early_suspend_work_queue, &early_suspend_work);
+#else
 		queue_work(suspend_work_queue, &early_suspend_work);
+#endif
 	} else if (old_sleep && new_state == PM_SUSPEND_ON) {
 		state &= ~SUSPEND_REQUESTED;
 		wake_lock(&main_wake_lock);
+#ifdef CONFIG_MACH_KTTECH
+		queue_work(early_suspend_work_queue, &late_resume_work);
+#else
 		queue_work(suspend_work_queue, &late_resume_work);
+#endif
 	}
 	requested_suspend_state = new_state;
 	spin_unlock_irqrestore(&state_lock, irqflags);

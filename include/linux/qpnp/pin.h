@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -131,7 +131,7 @@
  *			the input is interpreted as a logical 1.
  * @out_strength:	the amount of current supplied for an output gpio,
  *			should be of the type QPNP_PIN_STRENGTH_*.
- * @src_sel:		select alternate function for the pin. Certain pins
+ * @select:		select alternate function for the pin. Certain pins
  *			can be paired (shorted) with each other. Some pins
  *			can act as alternate functions. In the context of
  *			gpio, this acts as a source select. For mpps,
@@ -159,7 +159,7 @@ struct qpnp_pin_cfg {
 	int pull;
 	int vin_sel;
 	int out_strength;
-	int src_sel;
+	int select;
 	int master_en;
 	int aout_ref;
 	int ain_route;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012 Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,6 +12,7 @@
  */
 #ifndef _VCD_DDL_H_
 #define _VCD_DDL_H_
+#include <mach/msm_subsystem_map.h>
 #include "vcd_ddl_api.h"
 #include "vcd_ddl_utils.h"
 #include "vcd_ddl_firmware.h"

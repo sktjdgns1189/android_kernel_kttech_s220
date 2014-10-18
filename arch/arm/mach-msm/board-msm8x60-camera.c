@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012 Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,12 +15,28 @@
 #include <linux/gpio.h>
 #include <linux/i2c.h>
 #include <linux/mfd/pmic8901.h>
-#include <mach/camera.h>
+#include <mach/board.h>
 #include <mach/board-msm8660.h>
 #include <mach/gpiomux.h>
 #include <mach/msm_bus_board.h>
 #include "devices-msm8x60.h"
 #include "devices.h"
+
+/* Begin - jaemoon.hwang@kttech.co.kr */
+/* bring up camera */
+#ifdef CONFIG_MACH_KTTECH
+//#include <linux/board_kttech.h>
+#define CAM_FRONT_RST_N     98
+#define CAM_BACK_RST_N    100
+#endif
+/* End - jaemoon.hwang@kttech.co.kr */
+
+/* Begin - jaemoon.hwang@kttech.co.kr */
+/* implement camera flash led by PMIC */
+#ifdef CONFIG_KTTECH_FLASH_PMIC
+#include <linux/leds-pm8xxx.h>
+#endif
+/* End - jaemoon.hwang@kttech.co.kr */
 
 #define GPIO_EXT_CAMIF_PWR_EN1 (PM8901_MPP_BASE + PM8901_MPPS + 13)
 #define GPIO_WEB_CAMIF_STANDBY1 (PM8901_MPP_BASE + PM8901_MPPS + 60)
@@ -29,6 +45,7 @@
 #define VFE_CAMIF_TIMER2_GPIO 30
 #define VFE_CAMIF_TIMER3_GPIO_INT 31
 #define FUSION_VFE_CAMIF_TIMER1_GPIO 42
+
 
 static struct msm_camera_sensor_flash_src msm_flash_src = {
 	.flash_sr_type = MSM_CAMERA_FLASH_SRC_PMIC,
@@ -39,6 +56,7 @@ static struct msm_camera_sensor_flash_src msm_flash_src = {
 	._fsrc.pmic_src.led_src_2 = PMIC8058_ID_FLASH_LED_1,
 	._fsrc.pmic_src.pmic_set_current = pm8058_set_flash_led_current,
 };
+#if 0
 static struct msm_camera_sensor_strobe_flash_data strobe_flash_xenon = {
 	.flash_trigger = VFE_CAMIF_TIMER2_GPIO,
 	.flash_charge = VFE_CAMIF_TIMER1_GPIO,
@@ -46,6 +64,8 @@ static struct msm_camera_sensor_strobe_flash_data strobe_flash_xenon = {
 	.flash_recharge_duration = 50000,
 	.irq = MSM_GPIO_TO_INT(VFE_CAMIF_TIMER3_GPIO_INT),
 };
+#endif
+
 #endif
 
 static struct msm_bus_vectors cam_init_vectors[] = {
@@ -324,7 +344,7 @@ static struct msm_bus_vectors cam_stereo_snapshot_vectors[] = {
 static struct msm_bus_paths cam_bus_client_config[] = {
 	{
 		ARRAY_SIZE(cam_init_vectors),
-		cam_zsl_vectors,
+		cam_init_vectors,
 	},
 	{
 		ARRAY_SIZE(cam_preview_vectors),
@@ -360,16 +380,14 @@ static struct msm_bus_scale_pdata cam_bus_client_pdata = {
 
 static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
 	{
-		.csiphy_core = 0,
 		.csid_core = 0,
 		.is_vpe    = 1,
 		.cam_bus_scale_table = &cam_bus_client_pdata,
 		.ioclk = {
-			.vfe_clk_rate =	228570000,
+			.vfe_clk_rate =	266667000,
 		},
 	},
 	{
-		.csiphy_core = 1,
 		.csid_core = 1,
 		.is_vpe    = 1,
 		.cam_bus_scale_table = &cam_bus_client_pdata,
@@ -388,9 +406,27 @@ static struct gpio msm8x60_common_cam_gpio[] = {
 	{32, GPIOF_DIR_IN, "CAMIF_MCLK"},
 	{47, GPIOF_DIR_IN, "CAMIF_I2C_DATA"},
 	{48, GPIOF_DIR_IN, "CAMIF_I2C_CLK"},
-	{105, GPIOF_DIR_IN, "STANDBY"},
 };
 
+static struct gpio msm8x60_front_cam_gpio_kttech[] = {
+	{CAM_FRONT_RST_N, GPIOF_DIR_OUT, "CAM_RESET"},
+};
+
+static struct gpio msm8x60_back_cam_gpio_kttech[] = {
+	{CAM_BACK_RST_N, GPIOF_DIR_OUT, "CAM_RESET"},
+};
+
+static struct msm_gpio_set_tbl msm8x60_front_cam_gpio_set_tbl_kttech[] = {
+	{CAM_FRONT_RST_N, GPIOF_OUT_INIT_LOW, 1000},
+	{CAM_FRONT_RST_N, GPIOF_OUT_INIT_HIGH, 4000},
+};
+
+static struct msm_gpio_set_tbl msm8x60_back_cam_gpio_set_tbl_kttech[] = {
+	{CAM_BACK_RST_N, GPIOF_OUT_INIT_LOW, 1000},
+	{CAM_BACK_RST_N, GPIOF_OUT_INIT_HIGH, 4000},
+};
+
+#ifndef CONFIG_MACH_KTTECH
 static struct gpio msm8x60_back_cam_gpio[] = {
 	{GPIO_EXT_CAMIF_PWR_EN1, GPIOF_DIR_OUT, "CAMIF_PWR_EN"},
 	{106, GPIOF_DIR_OUT, "CAM_RESET"},
@@ -402,17 +438,27 @@ static struct msm_gpio_set_tbl msm8x60_back_cam_gpio_set_tbl[] = {
 	{106, GPIOF_OUT_INIT_LOW, 1000},
 	{106, GPIOF_OUT_INIT_HIGH, 4000},
 };
+#endif
+
+static struct msm_camera_gpio_conf msm_8x60_front_cam_gpio_conf = {
+	.cam_gpio_common_tbl = msm8x60_common_cam_gpio,
+	.cam_gpio_common_tbl_size = ARRAY_SIZE(msm8x60_common_cam_gpio),
+	.cam_gpio_req_tbl = msm8x60_front_cam_gpio_kttech,
+	.cam_gpio_req_tbl_size = ARRAY_SIZE(msm8x60_front_cam_gpio_kttech),
+	.cam_gpio_set_tbl = msm8x60_front_cam_gpio_set_tbl_kttech,
+	.cam_gpio_set_tbl_size = ARRAY_SIZE(msm8x60_front_cam_gpio_set_tbl_kttech),
+};
 
 static struct msm_camera_gpio_conf msm_8x60_back_cam_gpio_conf = {
 	.cam_gpio_common_tbl = msm8x60_common_cam_gpio,
 	.cam_gpio_common_tbl_size = ARRAY_SIZE(msm8x60_common_cam_gpio),
-	.cam_gpio_req_tbl = msm8x60_back_cam_gpio,
-	.cam_gpio_req_tbl_size = ARRAY_SIZE(msm8x60_back_cam_gpio),
-	.cam_gpio_set_tbl = msm8x60_back_cam_gpio_set_tbl,
-	.cam_gpio_set_tbl_size = ARRAY_SIZE(msm8x60_back_cam_gpio_set_tbl),
+	.cam_gpio_req_tbl = msm8x60_back_cam_gpio_kttech,
+	.cam_gpio_req_tbl_size = ARRAY_SIZE(msm8x60_back_cam_gpio_kttech),
+	.cam_gpio_set_tbl = msm8x60_back_cam_gpio_set_tbl_kttech,
+	.cam_gpio_set_tbl_size = ARRAY_SIZE(msm8x60_back_cam_gpio_set_tbl_kttech),
 };
 
-
+#ifndef CONFIG_MACH_KTTECH
 static struct i2c_board_info imx074_actuator_i2c_info = {
 	I2C_BOARD_INFO("msm_actuator", 0x11),
 };
@@ -505,6 +551,120 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov7692_data = {
 	.csi_if	= 1,
 	.camera_type = FRONT_CAMERA_2D,
 };
+#endif // __ifndef KTTECH
+
+#ifdef CONFIG_MACH_KTTECH
+static struct camera_vreg_t msm_8960_mt9m114_vreg[] = {
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vaf", REG_LDO, 2800000, 2800000, 300000},
+};
+
+static struct msm_camera_sensor_flash_data flash_mt9m114 = {
+	.flash_type = MSM_CAMERA_FLASH_NONE
+};
+
+#if 1 // kuzuri_jb test
+static struct i2c_board_info s5k4e5_actuator_i2c_info = {
+	//I2C_BOARD_INFO("msm_actuator", 0x11),
+	I2C_BOARD_INFO("msm_actuator", 0x18),  // kuzuri_jb // O7 copy
+};
+
+static struct msm_actuator_info s5k4e5_actuator_info = {
+	.board_info     = &s5k4e5_actuator_i2c_info,
+	.cam_name       = MSM_ACTUATOR_MAIN_CAM_1,  // kuzuri_jb O7: CAM_1 , O6: CAM_0
+	.bus_id         = MSM_GSBI4_QUP_I2C_BUS_ID,
+	.vcm_pwd        = 0,
+	.vcm_enable     = 0,  // kuzuri_jb O7: 0, O6: 1
+};
+#endif
+
+#if 1
+static struct msm_camera_csi_lane_params mt9m114_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0x1,
+};
+#endif
+
+static struct msm_camera_sensor_platform_info sensor_board_info_mt9m114 = {
+/* Begin - jaemoon.hwang@kttech.co.kr */
+/* CONFIG_CAMERA_ROTATION */
+#if 1
+	.mount_angle = 270,
+#else
+	.mount_angle = 90,
+#endif
+/* End - jaemoon.hwang@kttech.co.kr */
+	.cam_vreg = msm_8960_mt9m114_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_mt9m114_vreg),
+	.gpio_conf = &msm_8x60_front_cam_gpio_conf,
+// kuzuri_jb 8960 //	    
+    .csi_lane_params = &mt9m114_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_mt9m114_data = {
+	.sensor_name = "mt9m114",
+	.pdata = &msm_camera_csi_device_data[1],
+	.flash_data = &flash_mt9m114,
+	.sensor_platform_info = &sensor_board_info_mt9m114,
+	.csi_if = 1,
+	.camera_type = FRONT_CAMERA_2D,
+	.sensor_type = YUV_SENSOR,
+};
+
+#ifdef CONFIG_KTTECH_CAMERA_S5K4E5
+/* Begin - jaemoon.hwang@kttech.co.kr */
+
+static struct msm_camera_sensor_flash_data flash_s5k4e5 = {
+	.flash_type	= MSM_CAMERA_FLASH_LED,
+#ifdef CONFIG_MSM_CAMERA_FLASH
+	.flash_src	= &msm_flash_src
+#endif
+};
+
+static struct msm_camera_csi_lane_params s5k4e5_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0xF,
+};
+
+
+static struct msm_camera_sensor_platform_info sensor_board_info_s5k4e5 = {
+/* Begin - jaemoon.hwang@kttech.co.kr */
+/* CONFIG_CAMERA_ROTATION */
+#if 1
+	.mount_angle	= 0, 
+#else
+	.mount_angle	= 90,
+#endif
+/* End - jaemoon.hwang@kttech.co.kr */
+	.cam_vreg = msm_8x60_back_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8x60_back_cam_vreg),
+	.gpio_conf = &msm_8x60_back_cam_gpio_conf,
+	.csi_lane_params = &s5k4e5_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_s5k4e5_data = {
+	.sensor_name	= "s5k4e5",
+	.pdata	= &msm_camera_csi_device_data[0],
+	.flash_data	= &flash_s5k4e5,
+	//.strobe_flash_data = &strobe_flash_xenon,
+	.sensor_platform_info = &sensor_board_info_s5k4e5,
+	.csi_if	= 1,
+	.camera_type = BACK_CAMERA_2D,
+   .sensor_type = BAYER_SENSOR,
+#if 1 //def CONFIG_KTTECH_CAMERA_S5K4E5_ACT
+//#if defined(CONFIG_S5K4E5_ACT) && !defined(CONFIG_KTTECH_CAMERA)
+// kuzuri_jbtest 	.actuator_info = &s5k4e5_actuator_info
+#endif
+  	.actuator_info = &s5k4e5_actuator_info,
+};
+/* End - jaemoon.hwang@kttech.co.kr */
+#endif //#ifdef CONFIG_KTTECH_CAMERA_S5K4E5
+
+
+#endif // __ifdef KTTECH
+
 
 static struct platform_device msm_camera_server = {
 	.name = "msm_cam_server",
@@ -522,6 +682,7 @@ void __init msm8x60_init_cam(void)
 
 #ifdef CONFIG_I2C
 static struct i2c_board_info msm8x60_camera_i2c_boardinfo[] = {
+  #ifndef CONFIG_KTTECH_CAMERA
 	{
 	I2C_BOARD_INFO("imx074", 0x1A),
 	.platform_data = &msm_camera_sensor_imx074_data,
@@ -533,6 +694,28 @@ static struct i2c_board_info msm8x60_camera_i2c_boardinfo[] = {
 	{
 	I2C_BOARD_INFO("ov7692", 0x78),
 	.platform_data = &msm_camera_sensor_ov7692_data,
+	},
+	#endif
+
+	#ifdef CONFIG_KTTECH_CAMERA_S5K4E5
+	{
+	//I2C_BOARD_INFO("s5k4e5", 0x20 >> 1),
+	I2C_BOARD_INFO("s5k4e5", 0x20),
+	.platform_data = &msm_camera_sensor_s5k4e5_data,
+	},
+  /* Begin - jaemoon.hwang@kttech.co.kr */
+  /* CONFIG_CAMERA_CALIBRATION_EEPROM */
+  #if 1
+  	{
+  	I2C_BOARD_INFO("s5k4e5_eeprom", 0xA0 >> 1),
+  	},
+  #endif
+  /* End - jaemoon.hwang@kttech.co.kr */
+  #endif
+
+	{
+	I2C_BOARD_INFO("mt9m114", 0x48),
+	.platform_data = &msm_camera_sensor_mt9m114_data,
 	},
 };
 

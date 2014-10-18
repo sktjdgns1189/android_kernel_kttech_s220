@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -520,6 +520,53 @@ static void krait_pmu_reset(void *info)
 	armv7_pmnc_write(ARMV7_PMNC_P | ARMV7_PMNC_C);
 }
 
+static void enable_irq_callback(void *info)
+{
+        int irq = *(unsigned int *)info;
+
+        enable_percpu_irq(irq, IRQ_TYPE_EDGE_RISING);
+}
+
+static void disable_irq_callback(void *info)
+{
+        int irq = *(unsigned int *)info;
+
+        disable_percpu_irq(irq);
+}
+
+static int
+msm_request_irq(int irq, irq_handler_t *handle_irq)
+{
+        int err = 0;
+        int cpu;
+
+        err = request_percpu_irq(irq, *handle_irq, "krait-l1-armpmu",
+                        &cpu_hw_events);
+
+        if (!err) {
+                for_each_cpu(cpu, cpu_online_mask) {
+                        smp_call_function_single(cpu,
+                                        enable_irq_callback, &irq, 1);
+                }
+        }
+
+        return err;
+}
+
+static void
+msm_free_irq(int irq)
+{
+        int cpu;
+
+        if (irq >= 0) {
+                for_each_cpu(cpu, cpu_online_mask) {
+                        smp_call_function_single(cpu,
+                                        disable_irq_callback, &irq, 1);
+                }
+                free_percpu_irq(irq, &cpu_hw_events);
+        }
+}
+
 /*
  * We check for column exclusion constraints here.
  * Two events cant have same reg and same group.
@@ -572,35 +619,10 @@ static int msm_clear_ev_constraint(struct perf_event *event)
 	return 1;
 }
 
-static DEFINE_PER_CPU(u32, krait_pm_pmactlr);
-
-static void krait_save_pm_registers(void *hcpu)
-{
-	u32 val;
-	u32 cpu = (int)hcpu;
-
-	/* Read PMACTLR */
-	asm volatile("mrc p15, 0, %0, c9, c15, 5" : "=r" (val));
-	per_cpu(krait_pm_pmactlr, cpu) = val;
-
-	armv7pmu_save_pm_registers(hcpu);
-}
-
-static void krait_restore_pm_registers(void *hcpu)
-{
-	u32 val;
-	u32 cpu = (int)hcpu;
-
-	val = per_cpu(krait_pm_pmactlr, cpu);
-	if (val != 0)
-		/* Restore PMACTLR */
-		asm volatile("mcr p15, 0, %0, c9, c15, 5" : : "r" (val));
-
-	armv7pmu_restore_pm_registers(hcpu);
-}
-
 static struct arm_pmu krait_pmu = {
 	.handle_irq		= armv7pmu_handle_irq,
+	.request_pmu_irq	= msm_request_irq,
+	.free_pmu_irq		= msm_free_irq,
 	.enable			= krait_pmu_enable_event,
 	.disable		= krait_pmu_disable_event,
 	.read_counter		= armv7pmu_read_counter,
@@ -612,8 +634,6 @@ static struct arm_pmu krait_pmu = {
 	.test_set_event_constraints	= msm_test_set_ev_constraint,
 	.clear_event_constraints	= msm_clear_ev_constraint,
 	.max_period		= (1LLU << 32) - 1,
-	.save_pm_registers	= krait_save_pm_registers,
-	.restore_pm_registers	= krait_restore_pm_registers,
 };
 
 /* NRCCG format for perf RAW codes. */

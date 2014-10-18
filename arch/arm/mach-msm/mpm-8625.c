@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -92,7 +92,6 @@ static uint8_t msm_gic_irq_to_smsm[NR_IRQS] = {
 	[MSM8625_INT_GPIO_GROUP2]	= SMSM_FAKE_IRQ,
 	[MSM8625_INT_A9_M2A_0]		= SMSM_FAKE_IRQ,
 	[MSM8625_INT_A9_M2A_1]		= SMSM_FAKE_IRQ,
-	[MSM8625_INT_A9_M2A_2]          = SMSM_FAKE_IRQ,
 	[MSM8625_INT_A9_M2A_5]		= SMSM_FAKE_IRQ,
 	[MSM8625_INT_GP_TIMER_EXP]	= SMSM_FAKE_IRQ,
 	[MSM8625_INT_DEBUG_TIMER_EXP]	= SMSM_FAKE_IRQ,
@@ -101,7 +100,6 @@ static uint8_t msm_gic_irq_to_smsm[NR_IRQS] = {
 
 static uint16_t msm_bypassed_apps_irqs[] = {
 	MSM8625_INT_CPR_IRQ0,
-	MSM8625_INT_SC_SICL2PERFMONIRPTREQ,
 };
 
 /* Check IRQ falls into bypassed list are not */

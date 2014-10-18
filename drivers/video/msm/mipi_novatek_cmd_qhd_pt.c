@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,8 +17,59 @@
 
 static struct msm_panel_info pinfo;
 
+#undef DSI_BIT_CLK_500MHZ // 64 FPS Calculated
+#undef DSI_BIT_CLK_480MHZ // 60 FPS
+#undef DSI_BIT_CLK_470MHZ // 60 FPS Calculated
+#define DSI_BIT_CLK_454MHZ // Original Setting
+#undef DSI_BIT_CLK_400MHZ // 64 FPS Under, Vsync OFF
+#undef DSI_BIT_CLK_380MHZ // 60 FPS Under, Vsync OFF
+
 static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
-/* DSI_BIT_CLK at 500MHz, 2 lane, RGB888 */
+/* DSI_BIT_CLK at 500Mhz, 2 lane, RGB888 */
+#if defined(DSI_BIT_CLK_500MHZ)
+		{0x03, 0x01, 0x01, 0x00},       /* regulator */
+		/* timing   */
+		{0xB9, 0x8E, 0x20, 0x00, 0x23, 0x96, 0x23,
+		0x90, 0x23, 0x03, 0x04},
+		{0x7f, 0x00, 0x00, 0x00},       /* phy ctrl */
+		{0xee, 0x02, 0x86, 0x00},       /* strength */
+		/* pll control */
+		{0x41, 0xE0, 0x31, 0xd9, 0x00, 0x50, 0x48, 0x63,
+		0x30, 0x07, 0x03,
+		0x05, 0x14, 0x03, 0x0, 0x0, 0x54, 0x06, 0x10, 0x04, 0x0},
+#endif
+
+/* DSI_BIT_CLK at 480MHz, 2 lane, RGB888 */
+#if defined(DSI_BIT_CLK_480MHZ)
+		{0x03, 0x01, 0x01, 0x00},       /* regulator */
+		/* timing   */
+		{0xB4, 0x8D, 0x1D, 0x00, 0x20, 0x94, 0x20,
+		0x8F, 0x20, 0x03, 0x04},
+		{0x7f, 0x00, 0x00, 0x00},       /* phy ctrl */
+		{0xee, 0x02, 0x86, 0x00},       /* strength */
+		/* pll control */
+		{0x41, 0xDF, 0x31, 0xda, 0x00, 0x50, 0x48, 0x63,
+		0x30, 0x07, 0x03,
+		0x05, 0x14, 0x03, 0x0, 0x0, 0x54, 0x06, 0x10, 0x04, 0x0},
+#endif
+
+/* DSI_BIT_CLK at 470MHz, 2 lane, RGB888 */
+#if defined(DSI_BIT_CLK_470MHZ)
+		{0x03, 0x01, 0x01, 0x00},       /* regulator */
+		/* timing   */
+		{0xB5, 0x8D, 0x1E, 0x00, 0x21, 0x94, 0x21,
+		0x8F, 0x21, 0x03, 0x04},
+		{0x7f, 0x00, 0x00, 0x00},       /* phy ctrl */
+		{0xee, 0x02, 0x86, 0x00},       /* strength */
+		/* pll control */
+		{0x41, 0xc2, 0x31, 0xd9, 0x00, 0x50, 0x48, 0x63,
+		0x30, 0x07, 0x03,
+		0x05, 0x14, 0x03, 0x0, 0x0, 0x54, 0x06, 0x10, 0x04, 0x0},
+#endif
+
+
+/* DSI_BIT_CLK at 454MHz, 2 lane, RGB888 */
+#if defined(DSI_BIT_CLK_454MHZ)
 		{0x03, 0x01, 0x01, 0x00},	/* regulator */
 		/* timing   */
 		{0xB4, 0x8D, 0x1D, 0x00, 0x20, 0x94, 0x20,
@@ -33,6 +84,34 @@ static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
 		0x30, 0x07, 0x07,
 #endif
 		0x05, 0x14, 0x03, 0x0, 0x0, 0x54, 0x06, 0x10, 0x04, 0x0},
+#endif
+
+/* DSI_BIT_CLK at 400MHz, 2 lane, RGB888 */
+#if defined(DSI_BIT_CLK_400MHZ)
+		{0x03, 0x01, 0x01, 0x00},	/* regulator */
+		/* timing   */
+		{0x64, 0x1e, 0x14, 0x00, 0x2d, 0x23, 0x1e, 0x1c,
+		0x0b, 0x13, 0x04},
+		{0x7f, 0x00, 0x00, 0x00},	/* phy ctrl */
+		{0xee, 0x03, 0x86, 0x03},	/* strength */
+		{0x41, 0x8f, 0xb1, 0xda, 0x00, 0x50, 0x48, 0x63,
+		0x31, 0x0f, 0x07,
+		0x05, 0x14, 0x03, 0x03, 0x03, 0x54, 0x06, 0x10, 0x04, 0x03 },		
+#endif
+		
+/* DSI_BIT_CLK at 380MHz, 2 lane, RGB888 */
+#if defined(DSI_BIT_CLK_380MHZ)
+		{0x03, 0x01, 0x01, 0x00},	/* regulator */
+		/* timing   */
+		{0x79, 0x25, 0x1F, 0x00, 0x4C, 0x34, 0x25, 0x25,
+		0x1C, 0x03, 0x04},
+		{0x7f, 0x00, 0x00, 0x00},	/* phy ctrl */
+		{0xee, 0x03, 0x86, 0x03},	/* strength */
+		/* pll control */
+		{0x41, 0xf7, 0xb2, 0xf5, 0x00, 0x50, 0x48, 0x63,
+		0x31, 0x0f, 0x07,
+		0x05, 0x14, 0x03, 0x03, 0x03, 0x54, 0x06, 0x10, 0x04, 0x03 },
+#endif		
 };
 
 static int __init mipi_cmd_novatek_blue_qhd_pt_init(void)
@@ -57,21 +136,41 @@ static int __init mipi_cmd_novatek_blue_qhd_pt_init(void)
 	pinfo.lcdc.border_clr = 0;	/* blk */
 	pinfo.lcdc.underflow_clr = 0xff;	/* blue */
 	pinfo.lcdc.hsync_skew = 0;
-	pinfo.bl_max = 255;
+#ifdef CONFIG_KTTECH_NOVATEK_BACKLIGHT
+	pinfo.bl_max = 31; //31;
+#else
+	pinfo.bl_max = 28;
+#endif
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
+#if defined(DSI_BIT_CLK_500MHZ)
+	pinfo.clk_rate = 500000000;
+#elif defined(DSI_BIT_CLK_480MHZ)
+	pinfo.clk_rate = 480000000;
+#elif defined(DSI_BIT_CLK_470MHZ)
+	pinfo.clk_rate = 468000000;
+#elif defined(DSI_BIT_CLK_454MHZ)
 	pinfo.clk_rate = 454000000;
-	pinfo.is_3d_panel = FB_TYPE_3D_PANEL;
+#elif defined(DSI_BIT_CLK_400MHZ)
+	pinfo.clk_rate = 400000000;
+#elif defined(DSI_BIT_CLK_380MHZ)
+	pinfo.clk_rate = 380000000;
+#endif
+	pinfo.is_3d_panel = FALSE;
 	pinfo.lcd.vsync_enable = TRUE;
 	pinfo.lcd.hw_vsync_mode = TRUE;
-	pinfo.lcd.refx100 = 6200; /* adjust refx100 to prevent tearing */
+#if defined(DSI_BIT_CLK_454MHZ)
+	pinfo.lcd.refx100 = 6000; /* adjust refx100 to prevent tearing */
+#else
+	pinfo.lcd.refx100 = 6400; /* adjust refx100 to prevent tearing */
+#endif
 	pinfo.lcd.v_back_porch = 11;
 	pinfo.lcd.v_front_porch = 10;
 	pinfo.lcd.v_pulse_width = 5;
-
 	pinfo.mipi.mode = DSI_CMD_MODE;
 	pinfo.mipi.dst_format = DSI_CMD_DST_FORMAT_RGB888;
 	pinfo.mipi.vc = 0;
+	pinfo.mipi.rgb_swap = DSI_RGB_SWAP_BGR;
 	pinfo.mipi.data_lane0 = TRUE;
 	pinfo.mipi.esc_byte_ratio = 4;
 #if defined(NOVATEK_TWO_LANE)

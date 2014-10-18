@@ -358,6 +358,22 @@ CFLAGS_KERNEL	=
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
+ifeq ($(KTTECH_BUILD_FINAL),true)
+CFLAGS_KERNEL += -DKTTECH_FINAL_BUILD
+endif
+
+# Definded KTTech board type.
+ifeq ($(KTTECH_BOARD),pt)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_PT
+else ifeq ($(KTTECH_BOARD),es1)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_ES1
+else ifeq ($(KTTECH_BOARD),es2)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_ES2
+else ifeq ($(KTTECH_BOARD),pp)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_PP
+else
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_PP
+endif
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
@@ -563,7 +579,7 @@ endif # $(dot-config)
 all: vmlinux
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -Os
 else
 KBUILD_CFLAGS	+= -O2
 endif
@@ -864,7 +880,6 @@ endef
 # Generate .S file with all kernel symbols
 quiet_cmd_kallsyms = KSYM    $@
       cmd_kallsyms = $(NM) -n $< | $(KALLSYMS) \
-                     --page-offset=$(CONFIG_PAGE_OFFSET) \
                      $(if $(CONFIG_KALLSYMS_ALL),--all-symbols) > $@
 
 .tmp_kallsyms1.o .tmp_kallsyms2.o .tmp_kallsyms3.o: %.o: %.S scripts FORCE

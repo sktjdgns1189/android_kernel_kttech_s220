@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,7 +22,6 @@ int of_register_slim_devices(struct slim_controller *ctrl)
 {
 	struct device_node *node;
 	struct slim_boardinfo *binfo = NULL;
-	struct slim_boardinfo *temp;
 	int n = 0;
 	int ret = 0;
 
@@ -59,32 +58,26 @@ int of_register_slim_devices(struct slim_controller *ctrl)
 		}
 		memcpy(slim->e_addr, prop->value, 6);
 
-		temp = krealloc(binfo, (n + 1) * sizeof(struct slim_boardinfo),
+		binfo = krealloc(binfo, (n + 1) * sizeof(struct slim_boardinfo),
 					GFP_KERNEL);
-		if (!temp) {
+		if (!binfo) {
 			dev_err(&ctrl->dev, "out of memory");
 			kfree(name);
 			kfree(slim);
-			ret = -ENOMEM;
-			goto of_slim_err;
+			return -ENOMEM;
 		}
-		binfo = temp;
-
-		slim->dev.of_node = of_node_get(node);
 		slim->name = (const char *)name;
 		binfo[n].bus_num = ctrl->nr;
 		binfo[n].slim_slave = slim;
 		n++;
 	}
-	ret = slim_register_board_info(binfo, n);
-	if (!ret)
-		goto of_slim_ret;
+	return slim_register_board_info(binfo, n);
 of_slim_err:
-	while (n-- > 0) {
+	n--;
+	while (n >= 0) {
 		kfree(binfo[n].slim_slave->name);
 		kfree(binfo[n].slim_slave);
 	}
-of_slim_ret:
 	kfree(binfo);
 	return ret;
 }

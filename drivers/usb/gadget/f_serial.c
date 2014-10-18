@@ -225,56 +225,27 @@ static struct usb_descriptor_header *gser_hs_function[] = {
 	NULL,
 };
 
-static struct usb_endpoint_descriptor gser_ss_in_desc = {
+static struct usb_endpoint_descriptor gser_ss_in_desc __initdata = {
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 	.wMaxPacketSize =	cpu_to_le16(1024),
 };
 
-static struct usb_endpoint_descriptor gser_ss_out_desc = {
+static struct usb_endpoint_descriptor gser_ss_out_desc __initdata = {
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 	.wMaxPacketSize =	cpu_to_le16(1024),
 };
 
-static struct usb_ss_ep_comp_descriptor gser_ss_bulk_comp_desc = {
+static struct usb_ss_ep_comp_descriptor gser_ss_bulk_comp_desc __initdata = {
 	.bLength =              sizeof gser_ss_bulk_comp_desc,
 	.bDescriptorType =      USB_DT_SS_ENDPOINT_COMP,
 };
 
-#ifdef CONFIG_MODEM_SUPPORT
-static struct usb_endpoint_descriptor gser_ss_notify_desc  = {
-	.bLength =		USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType =	USB_DT_ENDPOINT,
-	.bEndpointAddress =	USB_DIR_IN,
-	.bmAttributes =		USB_ENDPOINT_XFER_INT,
-	.wMaxPacketSize =	__constant_cpu_to_le16(GS_NOTIFY_MAXPACKET),
-	.bInterval =		GS_LOG2_NOTIFY_INTERVAL+4,
-};
-
-static struct usb_ss_ep_comp_descriptor gser_ss_notify_comp_desc = {
-	.bLength =		sizeof gser_ss_notify_comp_desc,
-	.bDescriptorType =	USB_DT_SS_ENDPOINT_COMP,
-
-	/* the following 2 values can be tweaked if necessary */
-	/* .bMaxBurst =		0, */
-	/* .bmAttributes =	0, */
-	.wBytesPerInterval =	cpu_to_le16(GS_NOTIFY_MAXPACKET),
-};
-#endif
-
-static struct usb_descriptor_header *gser_ss_function[] = {
+static struct usb_descriptor_header *gser_ss_function[] __initdata = {
 	(struct usb_descriptor_header *) &gser_interface_desc,
-#ifdef CONFIG_MODEM_SUPPORT
-	(struct usb_descriptor_header *) &gser_header_desc,
-	(struct usb_descriptor_header *) &gser_call_mgmt_descriptor,
-	(struct usb_descriptor_header *) &gser_descriptor,
-	(struct usb_descriptor_header *) &gser_union_desc,
-	(struct usb_descriptor_header *) &gser_ss_notify_desc,
-	(struct usb_descriptor_header *) &gser_ss_notify_comp_desc,
-#endif
 	(struct usb_descriptor_header *) &gser_ss_in_desc,
 	(struct usb_descriptor_header *) &gser_ss_bulk_comp_desc,
 	(struct usb_descriptor_header *) &gser_ss_out_desc,
@@ -333,6 +304,7 @@ static int gport_setup(struct usb_configuration *c)
 		ret = ghsic_ctrl_setup(no_hsic_sports, USB_GADGET_SERIAL);
 		if (ret < 0)
 			return ret;
+		return 0;
 	}
 	if (no_hsuart_sports) {
 		port_idx = ghsuart_data_setup(no_hsuart_sports,
@@ -347,6 +319,8 @@ static int gport_setup(struct usb_configuration *c)
 				port_idx++;
 			}
 		}
+
+		return 0;
 	}
 	return ret;
 }
@@ -598,7 +572,6 @@ static void gser_disable(struct usb_function *f)
 #ifdef CONFIG_MODEM_SUPPORT
 	usb_ep_fifo_flush(gser->notify);
 	usb_ep_disable(gser->notify);
-	gser->notify->driver_data = NULL;
 #endif
 	gser->online = 0;
 }
@@ -850,10 +823,6 @@ gser_bind(struct usb_configuration *c, struct usb_function *f)
 			gser_fs_in_desc.bEndpointAddress;
 		gser_ss_out_desc.bEndpointAddress =
 			gser_fs_out_desc.bEndpointAddress;
-#ifdef CONFIG_MODEM_SUPPORT
-		gser_ss_notify_desc.bEndpointAddress =
-				gser_fs_notify_desc.bEndpointAddress;
-#endif
 
 		/* copy descriptors, and track endpoint copies */
 		f->ss_descriptors = usb_copy_descriptors(gser_ss_function);
@@ -869,10 +838,6 @@ gser_bind(struct usb_configuration *c, struct usb_function *f)
 	return 0;
 
 fail:
-	if (f->ss_descriptors)
-		usb_free_descriptors(f->ss_descriptors);
-	if (f->hs_descriptors)
-		usb_free_descriptors(f->hs_descriptors);
 	if (f->descriptors)
 		usb_free_descriptors(f->descriptors);
 #ifdef CONFIG_MODEM_SUPPORT
@@ -985,11 +950,9 @@ int gser_bind_config(struct usb_configuration *c, u8 port_num)
 /**
  * gserial_init_port - bind a gserial_port to its transport
  */
-static int gserial_init_port(int port_num, const char *name,
-		const char *port_name)
+static int gserial_init_port(int port_num, const char *name)
 {
 	enum transport_type transport;
-	int ret = 0;
 
 	if (port_num >= GSERIAL_NO_PORTS)
 		return -ENODEV;
@@ -1015,9 +978,6 @@ static int gserial_init_port(int port_num, const char *name,
 		no_smd_ports++;
 		break;
 	case USB_GADGET_XPORT_HSIC:
-		ghsic_ctrl_set_port_name(port_name, name);
-		ghsic_data_set_port_name(port_name, name);
-
 		/*client port number will be updated in gport_setup*/
 		no_hsic_sports++;
 		break;
@@ -1033,5 +993,5 @@ static int gserial_init_port(int port_num, const char *name,
 
 	nr_ports++;
 
-	return ret;
+	return 0;
 }

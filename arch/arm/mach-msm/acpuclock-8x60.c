@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -451,6 +451,51 @@ static unsigned long acpuclk_8x60_get_rate(int cpu)
 {
 	return drv_state.current_speed[cpu]->acpuclk_khz;
 }
+
+#ifdef CONFIG_MACH_KTTECH
+static int kttech_recovery = 0;
+static int kttech_hw_ver = 0;
+static int kttech_is_ftm = 0;
+
+static int __init kttech_recovery_setup(char *support)
+{
+    kttech_recovery = support[0]-'0';
+
+	return 1;
+}
+__setup("kttech_recovery=", kttech_recovery_setup);
+int get_kttech_recovery(void)
+{
+  return kttech_recovery;
+}
+EXPORT_SYMBOL(get_kttech_recovery);
+
+static int __init kttech_hw_ver_setup(char *support)
+{
+    kttech_hw_ver = support[0]-'0';
+
+	return 1;
+}
+__setup("kttech_hw_ver=", kttech_hw_ver_setup);
+int get_kttech_hw_version(void)
+{
+  return kttech_hw_ver;
+}
+EXPORT_SYMBOL(get_kttech_hw_version);
+
+static int __init kttech_ftm_mode_setup(char *support)
+{
+    kttech_is_ftm = support[0]-'0';
+
+	return 1;
+}
+__setup("kttech_ftm=", kttech_ftm_mode_setup);
+int get_kttech_ftm_mode(void)
+{
+  return (kttech_is_ftm&0x03); // Remove Factory nFAT Reset Flags
+}
+EXPORT_SYMBOL(get_kttech_ftm_mode);
+#endif
 
 static void select_core_source(unsigned int id, unsigned int src)
 {
@@ -1047,6 +1092,9 @@ static __init struct clkctl_acpu_speed *select_freq_plan(void)
 		acpu_freq_tbl = acpu_freq_tbl_1188mhz;
 	}
 
+#ifdef CONFIG_MACH_KTTECH
+	acpu_freq_tbl = acpu_freq_tbl_1512mhz_fast;
+#endif
 	for (f = acpu_freq_tbl; f->acpuclk_khz != 0; f++)
 		;
 	f--;

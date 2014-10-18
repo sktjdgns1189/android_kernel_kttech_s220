@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -11,7 +11,6 @@
  *
  */
 
-#include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/irq.h>
@@ -35,7 +34,6 @@
 #include <mach/dma.h>
 #include "pm.h"
 #include "devices.h"
-#include <mach/gpio.h>
 #include <mach/mpm.h>
 #include "spm.h"
 #include "rpm_resources.h"
@@ -66,22 +64,12 @@
 
 #define MSM_GPIO_I2C_CLK 16
 #define MSM_GPIO_I2C_SDA 17
-#define MSM9615_RPM_MASTER_STATS_BASE	0x10A700
 
 static struct msm_watchdog_pdata msm_watchdog_pdata = {
 	.pet_time = 10000,
 	.bark_time = 11000,
 	.has_secure = false,
 	.use_kernel_fiq = true,
-	.base = MSM_TMR_BASE + WDT0_OFFSET,
-};
-
-static struct resource msm_watchdog_resources[] = {
-	{
-		.start	= WDT0_ACCSCSSNBARK_INT,
-		.end	= WDT0_ACCSCSSNBARK_INT,
-		.flags	= IORESOURCE_IRQ,
-	},
 };
 
 struct platform_device msm9615_device_watchdog = {
@@ -90,8 +78,6 @@ struct platform_device msm9615_device_watchdog = {
 	.dev = {
 		.platform_data = &msm_watchdog_pdata,
 	},
-	.num_resources	= ARRAY_SIZE(msm_watchdog_resources),
-	.resource	= msm_watchdog_resources,
 };
 
 static struct resource msm_dmov_resource[] = {
@@ -177,25 +163,25 @@ static struct resource resources_hsusb[] = {
 
 static struct resource resources_usb_bam[] = {
 	{
-		.name	= "hsusb",
+		.name	= "usb_bam_addr",
 		.start	= MSM_USB_BAM_BASE,
 		.end	= MSM_USB_BAM_BASE + MSM_USB_BAM_SIZE - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "hsusb",
+		.name	= "usb_bam_irq",
 		.start	= USB1_HS_BAM_IRQ,
 		.end	= USB1_HS_BAM_IRQ,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "hsic",
+		.name	= "hsic_bam_addr",
 		.start	= MSM_HSIC_BAM_BASE,
 		.end	= MSM_HSIC_BAM_BASE + MSM_HSIC_BAM_SIZE - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "hsic",
+		.name	= "hsic_bam_irq",
 		.start	= USB_HSIC_BAM_IRQ,
 		.end	= USB_HSIC_BAM_IRQ,
 		.flags	= IORESOURCE_IRQ,
@@ -564,21 +550,6 @@ struct platform_device msm_voice = {
 	.id	= -1,
 };
 
-struct platform_device msm_cpudai_incall_music_rx = {
-	.name   = "msm-dai-q6",
-	.id     = 0x8005,
-};
-
-struct platform_device msm_cpudai_incall_record_rx = {
-	.name   = "msm-dai-q6",
-	.id     = 0x8004,
-};
-
-struct platform_device msm_cpudai_incall_record_tx = {
-	.name   = "msm-dai-q6",
-	.id     = 0x8003,
-};
-
 struct platform_device msm_i2s_cpudai0 = {
 	.name   = "msm-dai-q6",
 	.id     = PRIMARY_I2S_RX,
@@ -588,31 +559,11 @@ struct platform_device msm_i2s_cpudai1 = {
 	.name   = "msm-dai-q6",
 	.id     = PRIMARY_I2S_TX,
 };
-struct platform_device msm_i2s_cpudai4 = {
-	.name   = "msm-dai-q6",
-	.id     = SECONDARY_I2S_RX,
-};
-
-struct platform_device msm_i2s_cpudai5 = {
-	.name   = "msm-dai-q6",
-	.id     = SECONDARY_I2S_TX,
-};
 struct platform_device msm_voip = {
 	.name	= "msm-voip-dsp",
 	.id	= -1,
 };
-struct platform_device msm_cpudai_stub = {
-	.name = "msm-dai-stub",
-	.id = -1,
-};
-struct platform_device msm_dtmf = {
-	.name	= "msm-pcm-dtmf",
-	.id	= -1,
-};
-struct platform_device msm_host_pcm_voice = {
-	.name	= "msm-host-pcm-voice",
-	.id	= -1,
-};
+
 struct platform_device msm_compr_dsp = {
 	.name	= "msm-compr-dsp",
 	.id	= -1,
@@ -740,41 +691,6 @@ struct platform_device msm_device_smd = {
 struct platform_device msm_device_bam_dmux = {
 	.name		= "BAM_RMNT",
 	.id		= -1,
-};
-
-static struct resource msm_9615_q6_lpass_resources[] = {
-	{
-		.start  = LPASS_Q6SS_WDOG_EXPIRED,
-		.end    = LPASS_Q6SS_WDOG_EXPIRED,
-		.flags  = IORESOURCE_IRQ,
-	},
-};
-
-struct platform_device msm_9615_q6_lpass = {
-	.name = "pil-q6v4-lpass",
-	.id = -1,
-	.num_resources  = ARRAY_SIZE(msm_9615_q6_lpass_resources),
-	.resource       = msm_9615_q6_lpass_resources,
-};
-
-static struct resource msm_9615_q6_mss_resources[] = {
-	{
-		.start  = Q6FW_WDOG_EXPIRED_IRQ,
-		.end    = Q6FW_WDOG_EXPIRED_IRQ,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.start  = Q6SW_WDOG_EXPIRED_IRQ,
-		.end    = Q6SW_WDOG_EXPIRED_IRQ,
-		.flags  = IORESOURCE_IRQ,
-	},
-};
-
-struct platform_device msm_9615_q6_mss = {
-	.name = "pil-q6v4-modem",
-	.id = -1,
-	.num_resources  = ARRAY_SIZE(msm_9615_q6_mss_resources),
-	.resource       = msm_9615_q6_mss_resources,
 };
 
 #ifdef CONFIG_HW_RANDOM_MSM
@@ -929,19 +845,19 @@ static struct resource resources_sdc1[] = {
 	},
 #ifdef CONFIG_MMC_MSM_SPS_SUPPORT
 	{
-		.name   = "dml_mem",
+		.name   = "sdcc_dml_addr",
 		.start  = MSM_SDC1_DML_BASE,
 		.end    = MSM_SDC1_BAM_BASE - 1,
 		.flags  = IORESOURCE_MEM,
 	},
 	{
-		.name   = "bam_mem",
+		.name   = "sdcc_bam_addr",
 		.start  = MSM_SDC1_BAM_BASE,
 		.end    = MSM_SDC1_BAM_BASE + (2 * SZ_4K) - 1,
 		.flags  = IORESOURCE_MEM,
 	},
 	{
-		.name   = "bam_irq",
+		.name   = "sdcc_bam_irq",
 		.start  = SDC1_BAM_IRQ,
 		.end    = SDC1_BAM_IRQ,
 		.flags  = IORESOURCE_IRQ,
@@ -964,19 +880,19 @@ static struct resource resources_sdc2[] = {
 	},
 #ifdef CONFIG_MMC_MSM_SPS_SUPPORT
 	{
-		.name   = "dml_mem",
+		.name   = "sdcc_dml_addr",
 		.start  = MSM_SDC2_DML_BASE,
 		.end    = MSM_SDC2_BAM_BASE - 1,
 		.flags  = IORESOURCE_MEM,
 	},
 	{
-		.name   = "bam_mem",
+		.name   = "sdcc_bam_addr",
 		.start  = MSM_SDC2_BAM_BASE,
 		.end    = MSM_SDC2_BAM_BASE + (2 * SZ_4K) - 1,
 		.flags  = IORESOURCE_MEM,
 	},
 	{
-		.name   = "bam_irq",
+		.name   = "sdcc_bam_irq",
 		.start  = SDC2_BAM_IRQ,
 		.end    = SDC2_BAM_IRQ,
 		.flags  = IORESOURCE_IRQ,
@@ -1270,7 +1186,6 @@ static uint16_t msm_mpm_bypassed_apps_irqs[] __initdata = {
 	LPASS_SCSS_GP_HIGH_IRQ,
 	SPS_MTI_31,
 	A2_BAM_IRQ,
-	USB1_HS_BAM_IRQ,
 };
 
 struct msm_mpm_device_data msm9615_mpm_dev_data __initdata = {
@@ -1390,58 +1305,15 @@ static struct msm_rpmrs_platform_data msm_rpmrs_data __initdata = {
 };
 
 static struct msm_rpmstats_platform_data msm_rpm_stat_pdata = {
-	.version = 1,
+	.phys_addr_base = 0x0010D204,
+	.phys_size = SZ_8K,
 };
-
-
-static struct resource msm_rpm_stat_resource[] = {
-	{
-		.start	= 0x0010D204,
-		.end	= 0x0010D204 + SZ_8K,
-		.flags	= IORESOURCE_MEM,
-		.name	= "phys_addr_base"
-	},
-};
-
-
 
 struct platform_device msm9615_rpm_stat_device = {
 	.name = "msm_rpm_stat",
 	.id = -1,
-	.resource = msm_rpm_stat_resource,
-	.num_resources	= ARRAY_SIZE(msm_rpm_stat_resource),
-	.dev	= {
-		.platform_data = &msm_rpm_stat_pdata,
-	}
-};
-
-static struct resource resources_rpm_master_stats[] = {
-	{
-		.start	= MSM9615_RPM_MASTER_STATS_BASE,
-		.end	= MSM9615_RPM_MASTER_STATS_BASE + SZ_256,
-		.flags	= IORESOURCE_MEM,
-	},
-};
-
-static char *master_names[] = {
-	"KPSS",
-	"MPSS",
-	"LPASS",
-};
-
-static struct msm_rpm_master_stats_platform_data msm_rpm_master_stat_pdata = {
-	.masters = master_names,
-	.num_masters = ARRAY_SIZE(master_names),
-	.master_offset = 32,
-};
-
-struct platform_device msm9615_rpm_master_stat_device = {
-	.name = "msm_rpm_master_stats",
-	.id = -1,
-	.num_resources	= ARRAY_SIZE(resources_rpm_master_stats),
-	.resource	= resources_rpm_master_stats,
 	.dev = {
-		.platform_data = &msm_rpm_master_stat_pdata,
+		.platform_data = &msm_rpm_stat_pdata,
 	},
 };
 
@@ -1461,19 +1333,6 @@ struct platform_device msm9615_rpm_log_device = {
 	.id	= -1,
 	.dev	= {
 		.platform_data = &msm_rpm_log_pdata,
-	},
-};
-
-static struct msm_pm_init_data_type msm_pm_data = {
-	.use_sync_timer = false,
-	.pc_mode = MSM_PM_PC_NOTZ_L2_EXT,
-};
-
-struct platform_device msm9615_pm_8x60 = {
-	.name	= "pm-8x60",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &msm_pm_data,
 	},
 };
 
@@ -1513,26 +1372,6 @@ struct platform_device msm_android_usb_hsic_device = {
 	},
 };
 
-static struct resource msm_gpio_resources[] = {
-	{
-		.start	= TLMM_MSM_SUMMARY_IRQ,
-		.end	= TLMM_MSM_SUMMARY_IRQ,
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
-static struct msm_gpio_pdata msm9615_gpio_pdata = {
-	.ngpio = 88,
-	.direct_connect_irqs = 8,
-};
-
-struct platform_device msm_gpio_device = {
-	.name			= "msmgpio",
-	.id			= -1,
-	.num_resources		= ARRAY_SIZE(msm_gpio_resources),
-	.resource		= msm_gpio_resources,
-	.dev.platform_data	= &msm9615_gpio_pdata,
-};
 
 void __init msm9615_device_init(void)
 {
@@ -1543,6 +1382,7 @@ void __init msm9615_device_init(void)
 		msm_rpmrs_levels[0].latency_us;
 	msm_android_usb_hsic_pdata.swfi_latency =
 		msm_rpmrs_levels[0].latency_us;
+
 }
 
 #define MSM_SHARED_RAM_PHYS 0x40000000

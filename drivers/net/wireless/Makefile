@@ -59,8 +59,12 @@ obj-$(CONFIG_IWM)	+= iwmc3200wifi/
 
 obj-$(CONFIG_MWIFIEX)	+= mwifiex/
 
+ifdef CONFIG_MACH_KTTECH
+obj-$(CONFIG_KTTECH_WIFI_BCM4329)	+= bcm4329-kttech/
+obj-$(CONFIG_KTTECH_WIRELESS_BCM4330)	+= bcmdhd/
+else
 obj-$(CONFIG_BCMDHD)	+= bcmdhd/
-
+endif
 obj-$(CONFIG_BRCMFMAC)	+= brcm80211/
 obj-$(CONFIG_BRCMSMAC)	+= brcm80211/
 

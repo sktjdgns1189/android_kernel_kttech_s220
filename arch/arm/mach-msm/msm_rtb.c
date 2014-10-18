@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,13 +16,11 @@
 #include <linux/kernel.h>
 #include <linux/memory_alloc.h>
 #include <linux/module.h>
-#include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/atomic.h>
-#include <linux/of.h>
 #include <asm/io.h>
 #include <asm-generic/sizes.h>
 #include <mach/memory.h>
@@ -32,8 +30,6 @@
 #define SENTINEL_BYTE_1 0xFF
 #define SENTINEL_BYTE_2 0xAA
 #define SENTINEL_BYTE_3 0xFF
-
-#define RTB_COMPAT_STR	"qcom,msm-rtb"
 
 /* Write
  * 1) 3 bytes sentinel
@@ -55,7 +51,7 @@ struct msm_rtb_layout {
 
 struct msm_rtb_state {
 	struct msm_rtb_layout *rtb;
-	phys_addr_t phys;
+	unsigned long phys;
 	int nentries;
 	int size;
 	int enabled;
@@ -89,7 +85,7 @@ static struct notifier_block msm_rtb_panic_blk = {
 	.notifier_call  = msm_rtb_panic_notifier,
 };
 
-int notrace msm_rtb_event_should_log(enum logk_event_type log_type)
+int msm_rtb_event_should_log(enum logk_event_type log_type)
 {
 	return msm_rtb.initialized && msm_rtb.enabled &&
 		((1 << (log_type & ~LOGTYPE_NOPC)) & msm_rtb.filter);
@@ -203,7 +199,7 @@ static int msm_rtb_get_idx(void)
 }
 #endif
 
-int notrace uncached_logk_pc(enum logk_event_type log_type, void *caller,
+int uncached_logk_pc(enum logk_event_type log_type, void *caller,
 				void *data)
 {
 	int i;
@@ -219,7 +215,7 @@ int notrace uncached_logk_pc(enum logk_event_type log_type, void *caller,
 }
 EXPORT_SYMBOL(uncached_logk_pc);
 
-noinline int notrace uncached_logk(enum logk_event_type log_type, void *data)
+noinline int uncached_logk(enum logk_event_type log_type, void *data)
 {
 	return uncached_logk_pc(log_type, __builtin_return_address(0), data);
 }
@@ -231,22 +227,8 @@ int msm_rtb_probe(struct platform_device *pdev)
 #if defined(CONFIG_MSM_RTB_SEPARATE_CPUS)
 	unsigned int cpu;
 #endif
-	int ret;
 
-	if (!pdev->dev.of_node) {
-		msm_rtb.size = d->size;
-	} else {
-		int size;
-
-		ret = of_property_read_u32((&pdev->dev)->of_node,
-					"qcom,memory-reservation-size",
-					&size);
-
-		if (ret < 0)
-			return ret;
-
-		msm_rtb.size = size;
-	}
+	msm_rtb.size = d->size;
 
 	if (msm_rtb.size <= 0 || msm_rtb.size > SZ_1M)
 		return -EINVAL;
@@ -293,17 +275,10 @@ int msm_rtb_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id msm_match_table[] = {
-	{.compatible = RTB_COMPAT_STR},
-	{},
-};
-EXPORT_COMPAT(RTB_COMPAT_STR);
-
 static struct platform_driver msm_rtb_driver = {
 	.driver         = {
 		.name = "msm_rtb",
-		.owner = THIS_MODULE,
-		.of_match_table = msm_match_table
+		.owner = THIS_MODULE
 	},
 };
 

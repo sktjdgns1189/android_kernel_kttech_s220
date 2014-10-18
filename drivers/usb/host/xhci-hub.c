@@ -21,7 +21,6 @@
  */
 
 #include <linux/gfp.h>
-#include <linux/slab.h>
 #include <asm/unaligned.h>
 
 #include "xhci.h"
@@ -473,149 +472,6 @@ void xhci_test_and_clear_bit(struct xhci_hcd *xhci, __le32 __iomem **port_array,
 	}
 }
 
-static void xhci_single_step_completion(struct urb *urb)
-{
-	struct completion *done = urb->context;
-
-	complete(done);
-}
-
-/*
- * Allocate a URB and initialize the various fields of it.
- * This API is used by the single_step_set_feature test of
- * EHSET where IN packet of the GetDescriptor request is
- * sent 15secs after the SETUP packet.
- * Return NULL if failed.
- */
-static struct urb *xhci_request_single_step_set_feature_urb(
-		struct usb_device *udev,
-		void *dr,
-		void *buf,
-		struct completion *done)
-{
-	struct urb *urb;
-	struct usb_hcd *hcd = bus_to_hcd(udev->bus);
-	struct usb_host_endpoint *ep;
-
-	urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!urb)
-		return NULL;
-
-	urb->pipe = usb_rcvctrlpipe(udev, 0);
-	ep = udev->ep_in[usb_pipeendpoint(urb->pipe)];
-	if (!ep) {
-		usb_free_urb(urb);
-		return NULL;
-	}
-
-	/*
-	 * Initialize the various URB fields as these are used by the HCD
-	 * driver to queue it and as well as when completion happens.
-	 */
-	urb->ep = ep;
-	urb->dev = udev;
-	urb->setup_packet = dr;
-	urb->transfer_buffer = buf;
-	urb->transfer_buffer_length = USB_DT_DEVICE_SIZE;
-	urb->complete = xhci_single_step_completion;
-	urb->status = -EINPROGRESS;
-	urb->actual_length = 0;
-	urb->transfer_flags = URB_DIR_IN;
-	usb_get_urb(urb);
-	atomic_inc(&urb->use_count);
-	atomic_inc(&urb->dev->urbnum);
-	usb_hcd_map_urb_for_dma(hcd, urb, GFP_KERNEL);
-	urb->context = done;
-	return urb;
-}
-
-/*
- * This function implements the USB_PORT_FEAT_TEST handling of the
- * SINGLE_STEP_SET_FEATURE test mode as defined in the Embedded
- * High-Speed Electrical Test (EHSET) specification. This simply
- * issues a GetDescriptor control transfer, with an inserted 15-second
- * delay after the end of the SETUP stage and before the IN token of
- * the DATA stage is set. The idea is that this gives the test operator
- * enough time to configure the oscilloscope to perform a measurement
- * of the response time between the DATA and ACK packets that follow.
- */
-static int xhci_ehset_single_step_set_feature(struct usb_hcd *hcd, int port)
-{
-	int retval = -ENOMEM;
-	struct usb_ctrlrequest *dr;
-	struct urb *urb;
-	struct usb_device *udev;
-	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
-	struct usb_device_descriptor *buf;
-	unsigned long flags;
-	DECLARE_COMPLETION_ONSTACK(done);
-
-	/* Obtain udev of the rhub's child port */
-	udev = hcd->self.root_hub->children[port];
-	if (!udev) {
-		xhci_err(xhci, "No device attached to the RootHub\n");
-		return -ENODEV;
-	}
-	buf = kmalloc(USB_DT_DEVICE_SIZE, GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
-
-	dr = kmalloc(sizeof(struct usb_ctrlrequest), GFP_KERNEL);
-	if (!dr) {
-		kfree(buf);
-		return -ENOMEM;
-	}
-
-	/* Fill Setup packet for GetDescriptor */
-	dr->bRequestType = USB_DIR_IN;
-	dr->bRequest = USB_REQ_GET_DESCRIPTOR;
-	dr->wValue = cpu_to_le16(USB_DT_DEVICE << 8);
-	dr->wIndex = 0;
-	dr->wLength = cpu_to_le16(USB_DT_DEVICE_SIZE);
-	urb = xhci_request_single_step_set_feature_urb(udev, dr, buf, &done);
-	if (!urb)
-		goto cleanup;
-
-	/* Now complete just the SETUP stage */
-	spin_lock_irqsave(&xhci->lock, flags);
-	retval = xhci_submit_single_step_set_feature(hcd, urb, 1);
-	spin_unlock_irqrestore(&xhci->lock, flags);
-	if (retval)
-		goto out1;
-
-	if (!wait_for_completion_timeout(&done, msecs_to_jiffies(2000))) {
-		usb_kill_urb(urb);
-		retval = -ETIMEDOUT;
-		xhci_err(xhci, "%s SETUP stage timed out on ep0\n", __func__);
-		goto out1;
-	}
-
-	/* Sleep for 15 seconds; HC will send SOFs during this period */
-	msleep(15 * 1000);
-
-	/* Complete remaining DATA and status stages. Re-use same URB */
-	urb->status = -EINPROGRESS;
-	usb_get_urb(urb);
-	atomic_inc(&urb->use_count);
-	atomic_inc(&urb->dev->urbnum);
-
-	spin_lock_irqsave(&xhci->lock, flags);
-	retval = xhci_submit_single_step_set_feature(hcd, urb, 0);
-	spin_unlock_irqrestore(&xhci->lock, flags);
-	if (!retval && !wait_for_completion_timeout(&done,
-						msecs_to_jiffies(2000))) {
-		usb_kill_urb(urb);
-		retval = -ETIMEDOUT;
-		xhci_err(xhci, "%s IN stage timed out on ep0\n", __func__);
-	}
-out1:
-	usb_free_urb(urb);
-cleanup:
-	kfree(dr);
-	kfree(buf);
-	return retval;
-}
-
 int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		u16 wIndex, char *buf, u16 wLength)
 {
@@ -629,7 +485,6 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 	struct xhci_bus_state *bus_state;
 	u16 link_state = 0;
 	u16 wake_mask = 0;
-	u16 test_mode = 0;
 
 	max_ports = xhci_get_ports(hcd, &port_array);
 	bus_state = &xhci->bus_state[hcd_index(hcd)];
@@ -773,8 +628,6 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		put_unaligned(cpu_to_le32(status), (__le32 *) buf);
 		break;
 	case SetPortFeature:
-		/* The MSB of wIndex is the TEST Mode */
-		test_mode = (wIndex & 0xff00) >> 8;
 		if (wValue == USB_PORT_FEAT_LINK_STATE)
 			link_state = (wIndex & 0xff00) >> 3;
 		if (wValue == USB_PORT_FEAT_REMOTE_WAKE_MASK)
@@ -908,28 +761,6 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 				ndelay(100);
 
 			temp = xhci_readl(xhci, port_array[wIndex]);
-			break;
-		case USB_PORT_FEAT_TEST:
-			slot_id = xhci_find_slot_id_by_port(hcd, xhci,
-					wIndex + 1);
-			if (test_mode && test_mode <= 5) {
-				/* unlock to execute stop endpoint commands */
-				spin_unlock_irqrestore(&xhci->lock, flags);
-				xhci_stop_device(xhci, slot_id, 1);
-				spin_lock_irqsave(&xhci->lock, flags);
-				xhci_halt(xhci);
-
-				temp = xhci_readl(xhci, port_array[wIndex] + 1);
-				temp |= test_mode << 28;
-				xhci_writel(xhci, temp, port_array[wIndex] + 1);
-			} else if (test_mode == 6) {
-				spin_unlock_irqrestore(&xhci->lock, flags);
-				retval = xhci_ehset_single_step_set_feature(hcd,
-									wIndex);
-				spin_lock_irqsave(&xhci->lock, flags);
-			} else {
-				goto error;
-			}
 			break;
 		default:
 			goto error;

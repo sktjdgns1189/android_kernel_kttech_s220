@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,6 +34,9 @@
 #include <sound/q6afe.h>
 #include <sound/apr_audio.h>
 #include "snddev_icodec.h"
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+#include <mach/qdsp6v2/audio_amp_ctl.h>
+#endif
 
 #define SNDDEV_ICODEC_PCM_SZ 32 /* 16 bit / sample stereo mode */
 #define SNDDEV_ICODEC_MUL_FACTOR 3 /* Multi by 8 Shift by 3  */
@@ -1083,6 +1086,12 @@ static int __init snddev_icodec_init(void)
 	icodec_drv->tx_active = 0;
 	icodec_drv->snddev_vreg = vreg_init();
 
+#ifdef CONFIG_KTTECH_SOUND_AMP
+#if defined(CONFIG_KTTECH_SOUND_YDA165)
+	audio_amp_init(AMP_YDA165);
+#endif
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+
 	pm_qos_add_request(&icodec_drv->tx_pm_qos_req, PM_QOS_CPU_DMA_LATENCY,
 				PM_QOS_DEFAULT_VALUE);
 	pm_qos_add_request(&icodec_drv->rx_pm_qos_req, PM_QOS_CPU_DMA_LATENCY,
@@ -1099,6 +1108,10 @@ error_snddev_icodec_driver:
 static void __exit snddev_icodec_exit(void)
 {
 	struct snddev_icodec_drv_state *icodec_drv = &snddev_icodec_drv;
+
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+	audio_amp_exit();
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
 
 	platform_driver_unregister(&snddev_icodec_driver);
 	platform_driver_unregister(&msm_cdcclk_ctl_driver);

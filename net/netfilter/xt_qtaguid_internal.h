@@ -33,12 +33,19 @@
  * (Un)Define these *DEBUG to compile out/in the pr_debug calls.
  * All undef: text size ~ 0x3030; all def: ~ 0x4404.
  */
+ #ifndef KTTECH_FINAL_BUILD
 #define IDEBUG
 #define MDEBUG
 #define RDEBUG
 #define CDEBUG
 #define DDEBUG
-
+#else
+#undef IDEBUG
+#undef MDEBUG
+#undef RDEBUG
+#undef CDEBUG
+#undef DDEBUG
+#endif
 #define MSK_DEBUG(mask, ...) do {                           \
 		if (unlikely(qtaguid_debug_mask & (mask)))  \
 			pr_debug(__VA_ARGS__);              \
@@ -179,25 +186,6 @@ struct data_counters {
 	struct byte_packet_counters bpc[IFS_MAX_COUNTER_SETS][IFS_MAX_DIRECTIONS][IFS_MAX_PROTOS];
 };
 
-static inline uint64_t dc_sum_bytes(struct data_counters *counters,
-				    int set,
-				    enum ifs_tx_rx direction)
-{
-	return counters->bpc[set][direction][IFS_TCP].bytes
-		+ counters->bpc[set][direction][IFS_UDP].bytes
-		+ counters->bpc[set][direction][IFS_PROTO_OTHER].bytes;
-}
-
-static inline uint64_t dc_sum_packets(struct data_counters *counters,
-				      int set,
-				      enum ifs_tx_rx direction)
-{
-	return counters->bpc[set][direction][IFS_TCP].packets
-		+ counters->bpc[set][direction][IFS_UDP].packets
-		+ counters->bpc[set][direction][IFS_PROTO_OTHER].packets;
-}
-
-
 /* Generic X based nodes used as a base for rb_tree ops */
 struct tag_node {
 	struct rb_node node;
@@ -222,7 +210,7 @@ struct iface_stat {
 	struct net_device *net_dev;
 
 	struct byte_packet_counters totals_via_dev[IFS_MAX_DIRECTIONS];
-	struct data_counters totals_via_skb;
+	struct byte_packet_counters totals_via_skb[IFS_MAX_DIRECTIONS];
 	/*
 	 * We keep the last_known, because some devices reset their counters
 	 * just before NETDEV_UP, while some will reset just before

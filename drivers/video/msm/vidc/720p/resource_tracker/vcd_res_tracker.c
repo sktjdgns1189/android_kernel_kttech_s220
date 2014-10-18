@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -681,10 +681,6 @@ static struct ion_client *res_trk_create_ion_client(void){
 	struct ion_client *video_client;
 	VCDRES_MSG_LOW("%s", __func__);
 	video_client = msm_ion_client_create(-1, "video_client");
-	if (IS_ERR_OR_NULL(video_client)) {
-		VCDRES_MSG_ERROR("%s: Unable to create ION client\n", __func__);
-		video_client = NULL;
-	}
 	return video_client;
 }
 
@@ -707,7 +703,7 @@ void res_trk_init(struct device *device, u32 irq)
 		(struct msm_vidc_platform_data *) device->platform_data;
 	if (resource_context.vidc_platform_data) {
 		resource_context.memtype =
-			resource_context.vidc_platform_data->memtype;
+		resource_context.vidc_platform_data->memtype;
 		VCDRES_MSG_LOW("%s(): resource_context.memtype = 0x%x",
 			__func__, (u32)resource_context.memtype);
 		if (resource_context.vidc_platform_data->enable_ion) {
@@ -740,7 +736,7 @@ u32 res_trk_get_enable_ion(void)
 	if (resource_context.vidc_platform_data->enable_ion)
 		return 1;
 	else
-		return 0;
+	return 0;
 }
 
 struct ion_client *res_trk_get_ion_client(void)
@@ -760,11 +756,6 @@ void res_trk_set_mem_type(enum ddl_mem_area mem_type)
 }
 
 u32 res_trk_get_disable_fullhd(void)
-{
-	return 0;
-}
-
-u32 res_trk_get_ion_flags(void)
 {
 	return 0;
 }

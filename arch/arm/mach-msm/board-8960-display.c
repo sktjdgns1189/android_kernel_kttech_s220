@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +15,7 @@
 #include <linux/ioport.h>
 #include <linux/platform_device.h>
 #include <linux/bootmem.h>
-#include <linux/msm_ion.h>
+#include <linux/ion.h>
 #include <linux/gpio.h>
 #include <asm/mach-types.h>
 #include <mach/msm_bus_board.h>
@@ -586,8 +586,6 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mem_hid = MEMTYPE_EBI1,
 #endif
 	.cont_splash_enabled = 0x01,
-	.splash_screen_addr = 0x00,
-	.splash_screen_size = 0x00,
 	.mdp_iommu_split_domain = 0,
 };
 
@@ -607,6 +605,16 @@ static char mipi_dsi_splash_is_enabled(void)
 {
 	return mdp_pdata.cont_splash_enabled;
 }
+
+static struct platform_device mipi_dsi_renesas_panel_device = {
+	.name = "mipi_renesas",
+	.id = 0,
+};
+
+static struct platform_device mipi_dsi_simulator_panel_device = {
+	.name = "mipi_simulator",
+	.id = 0,
+};
 
 #define LPM_CHANNEL0 0
 static int toshiba_gpio[] = {LPM_CHANNEL0};
@@ -988,15 +996,6 @@ error:
 
 void __init msm8960_init_fb(void)
 {
-	uint32_t soc_platform_version = socinfo_get_version();
-
-
-	if (SOCINFO_VERSION_MAJOR(soc_platform_version) >= 3)
-		mdp_pdata.mdp_rev = MDP_REV_43;
-
-	if (cpu_is_msm8960ab())
-		mdp_pdata.mdp_rev = MDP_REV_44;
-
 	platform_device_register(&msm_fb_device);
 
 #ifdef CONFIG_FB_MSM_WRITEBACK_MSM_PANEL
@@ -1004,19 +1003,31 @@ void __init msm8960_init_fb(void)
 	platform_device_register(&wfd_device);
 #endif
 
-	platform_device_register(&mipi_dsi_novatek_panel_device);
-	platform_device_register(&mipi_dsi_orise_panel_device);
+	if (machine_is_msm8960_sim())
+		platform_device_register(&mipi_dsi_simulator_panel_device);
+
+	if (machine_is_msm8960_rumi3())
+		platform_device_register(&mipi_dsi_renesas_panel_device);
+
+	if (!machine_is_msm8960_sim() && !machine_is_msm8960_rumi3()) {
+		platform_device_register(&mipi_dsi_novatek_panel_device);
+		platform_device_register(&mipi_dsi_orise_panel_device);
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-	platform_device_register(&hdmi_msm_device);
+		platform_device_register(&hdmi_msm_device);
 #endif
+	}
 
 	if (machine_is_msm8960_liquid())
 		platform_device_register(&mipi_dsi2lvds_bridge_device);
 	else
 		platform_device_register(&mipi_dsi_toshiba_panel_device);
 
-	msm_fb_register_device("mdp", &mdp_pdata);
+	if (machine_is_msm8x60_rumi3()) {
+		msm_fb_register_device("mdp", NULL);
+		mipi_dsi_pdata.target_type = 1;
+	} else
+		msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
 #ifdef CONFIG_MSM_BUS_SCALING
 	msm_fb_register_device("dtv", &dtv_pdata);

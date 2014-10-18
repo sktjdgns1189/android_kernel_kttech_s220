@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,13 +24,13 @@
 #include <linux/uaccess.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
-
+#include <linux/android_pmem.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/debugfs.h>
 #include <mach/clk.h>
 #include <linux/pm_runtime.h>
-#include <mach/iommu_domains.h>
+#include <mach/msm_subsystem_map.h>
 #include <media/msm/vcd_api.h>
 #include <media/msm/vidc_init.h>
 #include "vidc_init_internal.h"
@@ -49,6 +49,7 @@
 static struct vidc_dev *vidc_device_p;
 static dev_t vidc_dev_num;
 static struct class *vidc_class;
+static unsigned int vidc_mmu_subsystem[] = {MSM_SUBSYSTEM_VIDEO};
 
 static const struct file_operations vidc_fops = {
 	.owner = THIS_MODULE,
@@ -420,6 +421,12 @@ void vidc_cleanup_addr_table(struct video_client_ctx *client_ctx,
 	if (!client_ctx->user_ion_client)
 		goto bail_out_cleanup;
 	for (i = 0; i < *num_of_buffers; ++i) {
+		if (buf_addr_table[i].client_data) {
+			msm_subsystem_unmap_buffer(
+			(struct msm_mapped_buffer *)
+			buf_addr_table[i].client_data);
+			buf_addr_table[i].client_data = NULL;
+		}
 		if (!IS_ERR_OR_NULL(buf_addr_table[i].buff_ion_handle)) {
 			if (!IS_ERR_OR_NULL(client_ctx->user_ion_client)) {
 				ion_unmap_kernel(client_ctx->user_ion_client,
@@ -441,6 +448,11 @@ void vidc_cleanup_addr_table(struct video_client_ctx *client_ctx,
 				buf_addr_table[i].buff_ion_handle = NULL;
 			}
 		}
+	}
+	if (client_ctx->vcd_h264_mv_buffer.client_data) {
+		msm_subsystem_unmap_buffer((struct msm_mapped_buffer *)
+		client_ctx->vcd_h264_mv_buffer.client_data);
+		client_ctx->vcd_h264_mv_buffer.client_data = NULL;
 	}
 	if (!IS_ERR_OR_NULL(client_ctx->h264_mv_ion_handle)) {
 		if (!IS_ERR_OR_NULL(client_ctx->user_ion_client)) {
@@ -553,8 +565,9 @@ u32 vidc_insert_addr_table(struct video_client_ctx *client_ctx,
 	unsigned long len, phys_addr;
 	struct file *file = NULL;
 	u32 *num_of_buffers = NULL;
-	u32 i;
+	u32 i, flags;
 	struct buf_addr_table *buf_addr_table;
+	struct msm_mapped_buffer *mapped_buffer = NULL;
 	struct ion_handle *buff_ion_handle = NULL;
 	unsigned long ionflag = 0;
 	unsigned long iova = 0;
@@ -596,8 +609,26 @@ u32 vidc_insert_addr_table(struct video_client_ctx *client_ctx,
 		goto bail_out_add;
 	} else {
 		if (!vcd_get_ion_status()) {
-			pr_err("PMEM not available\n");
-			goto bail_out_add;
+			if (get_pmem_file(pmem_fd, &phys_addr,
+					kernel_vaddr, &len, &file)) {
+				ERR("%s(): get_pmem_file failed\n", __func__);
+				goto bail_out_add;
+			}
+			put_pmem_file(file);
+			flags = (buffer == BUFFER_TYPE_INPUT)
+			? MSM_SUBSYSTEM_MAP_IOVA :
+			MSM_SUBSYSTEM_MAP_IOVA|MSM_SUBSYSTEM_ALIGN_IOVA_8K;
+			mapped_buffer = msm_subsystem_map_buffer(phys_addr,
+			length, flags, vidc_mmu_subsystem,
+			sizeof(vidc_mmu_subsystem)/sizeof(unsigned int));
+			if (IS_ERR(mapped_buffer)) {
+				pr_err("buffer map failed");
+				goto bail_out_add;
+			}
+			buf_addr_table[*num_of_buffers].client_data = (void *)
+				mapped_buffer;
+			buf_addr_table[*num_of_buffers].dev_addr =
+				mapped_buffer->iova[0];
 		} else {
 			buff_ion_handle = ion_import_dma_buf(
 				client_ctx->user_ion_client, pmem_fd);
@@ -616,7 +647,8 @@ u32 vidc_insert_addr_table(struct video_client_ctx *client_ctx,
 			*kernel_vaddr = (unsigned long)
 				ion_map_kernel(
 				client_ctx->user_ion_client,
-				buff_ion_handle);
+				buff_ion_handle,
+				ionflag);
 			if (IS_ERR_OR_NULL((void *)*kernel_vaddr)) {
 				ERR("%s():ION virtual addr fail\n",
 				 __func__);
@@ -646,7 +678,7 @@ u32 vidc_insert_addr_table(struct video_client_ctx *client_ctx,
 						length,
 						(unsigned long *) &iova,
 						(unsigned long *) &buffer_size,
-						0,
+						UNCACHED,
 						ION_IOMMU_UNMAP_DELAYED);
 				if (ret || !iova) {
 					ERR(
@@ -796,6 +828,11 @@ u32 vidc_delete_addr_table(struct video_client_ctx *client_ctx,
 			" user_virt_addr = 0x%08lx NOT found",
 			__func__, client_ctx, user_vaddr);
 		goto bail_out_del;
+	}
+	if (buf_addr_table[i].client_data) {
+		msm_subsystem_unmap_buffer(
+		(struct msm_mapped_buffer *)buf_addr_table[i].client_data);
+		buf_addr_table[i].client_data = NULL;
 	}
 	*kernel_vaddr = buf_addr_table[i].kernel_vaddr;
 	if (buf_addr_table[i].buff_ion_handle) {

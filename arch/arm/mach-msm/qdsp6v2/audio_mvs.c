@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -338,7 +338,7 @@ static void audio_mvs_process_ul_pkt(uint8_t *voc_pkt,
 		}
 		}
 	} else {
-		pr_err("%s: UL data dropped, read is slow\n", __func__);
+		pr_debug("%s: UL data dropped, read is slow\n", __func__);
 	}
 
 	spin_unlock_irqrestore(&audio->dsp_lock, dsp_flags);
@@ -689,13 +689,21 @@ static uint32_t audio_mvs_get_network_type(uint32_t mvs_mode)
 	case MVS_MODE_PCM:
 	case MVS_MODE_G729A:
 	case MVS_MODE_G711A:
+#ifndef CONFIG_KTTECH_SOUND // 20110329 by ssgun - qualcomm bug
 		network_type = VSS_NETWORK_ID_VOIP_NB;
+#else
+		network_type = VSS_NETWORK_ID_CDMA_NB;
+#endif /*CONFIG_KTTECH_SOUND*/
 		break;
 
 	case MVS_MODE_4GV_WB:
 	case MVS_MODE_AMR_WB:
 	case MVS_MODE_PCM_WB:
+#ifndef CONFIG_KTTECH_SOUND // 20110329 by ssgun - qualcomm bug
 		network_type = VSS_NETWORK_ID_VOIP_WB;
+#else
+		network_type = VSS_NETWORK_ID_CDMA_WB;
+#endif /*CONFIG_KTTECH_SOUND*/
 		break;
 
 	default:

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,19 +14,15 @@
 #define _AUDIO_ACDB_H
 
 #include <linux/msm_audio_acdb.h>
+#ifdef CONFIG_ARCH_MSM8974
+#include <sound/q6adm-v2.h>
+#else
 #include <sound/q6adm.h>
-
+#endif
 enum {
 	RX_CAL,
 	TX_CAL,
 	MAX_AUDPROC_TYPES
-};
-
-enum {
-	VOCPROC_CAL,
-	VOCSTRM_CAL,
-	VOCVOL_CAL,
-	MAX_VOCPROC_TYPES
 };
 
 struct acdb_cal_block {
@@ -51,7 +47,6 @@ uint32_t get_voice_tx_topology(void);
 uint32_t get_adm_rx_topology(void);
 uint32_t get_adm_tx_topology(void);
 uint32_t get_asm_topology(void);
-void get_voice_cal_allocation(struct acdb_cal_block *cal_block);
 void get_all_voice_cal(struct acdb_cal_block *cal_block);
 void get_all_cvp_cal(struct acdb_cal_block *cal_block);
 void get_all_vocproc_cal(struct acdb_cal_block *cal_block);

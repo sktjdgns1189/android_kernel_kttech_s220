@@ -113,7 +113,13 @@ ifndef CONFIG_ARCH_USES_GETTIMEOFFSET
 obj-y				+= clocksource/
 endif
 obj-$(CONFIG_DCA)		+= dca/
+#/****************** KT tech ******************/
+#// Begin : 2012.02.03 : joengyoon.kim@kttech.co.kr 
+#// Update HID drivers
 obj-$(CONFIG_HID)		+= hid/
+#obj-$(CONFIG_HID)		+= hid_v322/
+#// End : 2012.02.03 : jeongyoon.kim@kttech.co.kr
+#/*******************************************/
 obj-$(CONFIG_PPC_PS3)		+= ps3/
 obj-$(CONFIG_OF)		+= of/
 obj-$(CONFIG_SSB)		+= ssb/
@@ -128,6 +134,7 @@ obj-y				+= clk/
 
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_NFC)		+= nfc/
+obj-$(CONFIG_KTTECH_PN544_NFC)		+= nfc/
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
 obj-$(CONFIG_REMOTEPROC)	+= remoteproc/
 obj-$(CONFIG_RPMSG)		+= rpmsg/
@@ -141,7 +148,4 @@ obj-$(CONFIG_PM_DEVFREQ)	+= devfreq/
 #MobiCore
 obj-$(CONFIG_MOBICORE_SUPPORT)  += gud/
 
-obj-$(CONFIG_CORESIGHT)		+= coresight/
-
-obj-$(CONFIG_BIF)		+= bif/
-obj-$(CONFIG_SENSORS)		+= sensors/
+obj-$(CONFIG_MSM_QDSS)		+= coresight/

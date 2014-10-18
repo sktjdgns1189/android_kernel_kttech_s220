@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -171,8 +171,6 @@ int mdp4_lcdc_pipe_commit(int cndx, int wait)
 	vp = &vctrl->vlist[undx];
 	pipe = vctrl->base_pipe;
 	mixer = pipe->mixer_num;
-
-	mdp_update_pm(vctrl->mfd, vctrl->vsync_time);
 
 	if (vp->update_cnt == 0) {
 		mutex_unlock(&vctrl->update_lock);
@@ -549,7 +547,6 @@ int mdp4_lcdc_on(struct platform_device *pdev)
 	pipe->bpp = bpp;
 
 	mdp4_overlay_mdp_pipe_req(pipe, mfd);
-	mdp4_calc_blt_mdp_bw(mfd, pipe);
 
 	atomic_set(&vctrl->suspend, 0);
 
@@ -822,8 +819,6 @@ void mdp4_dmap_done_lcdc(int cndx)
 	}
 	vctrl = &vsync_ctrl_db[cndx];
 	pipe = vctrl->base_pipe;
-	if (pipe == NULL)
-		return;
 
 	spin_lock(&vctrl->spin_lock);
 	vsync_irq_disable(INTR_DMA_P_DONE, MDP_DMAP_TERM);
@@ -862,8 +857,6 @@ void mdp4_overlay0_done_lcdc(int cndx)
 
 	vctrl = &vsync_ctrl_db[cndx];
 	pipe = vctrl->base_pipe;
-	if (pipe == NULL)
-		return;
 
 	spin_lock(&vctrl->spin_lock);
 	vsync_irq_disable(INTR_OVERLAY0_DONE, MDP_OVERLAY0_TERM);
@@ -951,15 +944,12 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	struct vsycn_ctrl *vctrl;
 	struct mdp4_overlay_pipe *pipe;
 
-	mutex_lock(&mfd->dma->ov_mutex);
 
 	vctrl = &vsync_ctrl_db[cndx];
 	pipe = vctrl->base_pipe;
 
-	if (!pipe || !mfd->panel_power_on) {
-		mutex_unlock(&mfd->dma->ov_mutex);
+	if (!pipe || !mfd->panel_power_on)
 		return;
-	}
 
 	pr_debug("%s: cpu=%d pid=%d\n", __func__,
 			smp_processor_id(), current->pid);
@@ -978,7 +968,10 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 
 	mdp4_overlay_mdp_perf_upd(mfd, 1);
 
+	cnt = 0;
+	mutex_lock(&mfd->dma->ov_mutex);
 	cnt = mdp4_lcdc_pipe_commit(cndx, 0);
+
 	if (cnt) {
 		if (pipe->ov_blt_addr)
 			mdp4_lcdc_wait4ov(cndx);

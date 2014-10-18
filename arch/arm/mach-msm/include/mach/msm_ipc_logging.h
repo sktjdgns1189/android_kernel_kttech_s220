@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -113,21 +113,7 @@ void ipc_log_write(void *ctxt, struct encode_context *ectxt);
  * @ilctxt: Debug Log Context created using ipc_log_context_create()
  * @fmt:    Data specified using format specifiers
  */
-int ipc_log_string(void *ilctxt, const char *fmt, ...) __printf(2, 3);
-
-/**
- * ipc_log_extract - Reads and deserializes log
- *
- * @ilctxt:  logging context
- * @buff:    buffer to receive the data
- * @size:    size of the buffer
- * @returns: 0 if no data read; >0 number of bytes read; < 0 error
- *
- * If no data is available to be read, then the ilctxt::read_avail
- * completion is reinitialized.  This allows clients to block
- * until new log data is save.
- */
-int ipc_log_extract(void *ilctxt, char *buff, int size);
+int ipc_log_string(void *ilctxt, const char *fmt, ...);
 
 /*
  * Print a string to decode context.
@@ -197,67 +183,51 @@ void tsv_byte_array_read(struct encode_context *ectxt,
 int add_deserialization_func(void *ctxt, int type,
 			void (*dfunc)(struct encode_context *,
 				      struct decode_context *));
-
-/*
- * ipc_log_context_destroy: Destroy debug log context
- *
- * @ctxt: debug log context created by calling ipc_log_context_create API.
- */
-int ipc_log_context_destroy(void *ctxt);
-
 #else
 
-static inline void *ipc_log_context_create(int max_num_pages,
-	const char *modname)
+void *ipc_log_context_create(int max_num_pages, const char *modname)
 { return NULL; }
 
-static inline void msg_encode_start(struct encode_context *ectxt,
-	uint32_t type) { }
+void msg_encode_start(struct encode_context *ectxt, uint32_t type) { }
 
-static inline int tsv_timestamp_write(struct encode_context *ectxt)
+int tsv_timestamp_write(struct encode_context *ectxt)
 { return -EINVAL; }
 
-static inline int tsv_pointer_write(struct encode_context *ectxt, void *pointer)
+int tsv_pointer_write(struct encode_context *ectxt, void *pointer)
 { return -EINVAL; }
 
-static inline int tsv_int32_write(struct encode_context *ectxt, int32_t n)
+int tsv_int32_write(struct encode_context *ectxt, int32_t n)
 { return -EINVAL; }
 
-static inline int tsv_byte_array_write(struct encode_context *ectxt,
+int tsv_byte_array_write(struct encode_context *ectxt,
 			 void *data, int data_size)
 { return -EINVAL; }
 
-static inline void msg_encode_end(struct encode_context *ectxt) { }
+void msg_encode_end(struct encode_context *ectxt) { }
 
-static inline void ipc_log_write(void *ctxt, struct encode_context *ectxt) { }
+void ipc_log_write(void *ctxt, struct encode_context *ectxt) { }
 
-static inline int ipc_log_string(void *ilctxt, const char *fmt, ...)
-{ return -EINVAL; }
-
-static inline int ipc_log_extract(void *ilctxt, char *buff, int size)
+int ipc_log_string(void *ilctxt, const char *fmt, ...)
 { return -EINVAL; }
 
 #define IPC_SPRINTF_DECODE(dctxt, args...) do { } while (0)
 
-static inline void tsv_timestamp_read(struct encode_context *ectxt,
+void tsv_timestamp_read(struct encode_context *ectxt,
 			struct decode_context *dctxt, const char *format) { }
 
-static inline void tsv_pointer_read(struct encode_context *ectxt,
+void tsv_pointer_read(struct encode_context *ectxt,
 		      struct decode_context *dctxt, const char *format) { }
 
-static inline int32_t tsv_int32_read(struct encode_context *ectxt,
+int32_t tsv_int32_read(struct encode_context *ectxt,
 		       struct decode_context *dctxt, const char *format)
 { return 0; }
 
-static inline void tsv_byte_array_read(struct encode_context *ectxt,
+void tsv_byte_array_read(struct encode_context *ectxt,
 			 struct decode_context *dctxt, const char *format) { }
 
-static inline int add_deserialization_func(void *ctxt, int type,
+int add_deserialization_func(void *ctxt, int type,
 			void (*dfunc)(struct encode_context *,
 				      struct decode_context *))
-{ return 0; }
-
-static inline int ipc_log_context_destroy(void *ctxt)
 { return 0; }
 
 #endif

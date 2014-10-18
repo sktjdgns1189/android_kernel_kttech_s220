@@ -1,7 +1,7 @@
 /* linux/arch/arm/mach-msm/dma.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2010, 2012 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2010, 2012 Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -373,8 +373,9 @@ static void __msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)
 
 	spin_lock_irqsave(&dmov_conf[adm].list_lock, flags);
 	list_add_tail(&cmd->list, &dmov_conf[adm].staged_commands[ch]);
-	queue_work(dmov_conf[adm].cmd_wq, &cmd->work);
 	spin_unlock_irqrestore(&dmov_conf[adm].list_lock, flags);
+
+	queue_work(dmov_conf[adm].cmd_wq, &cmd->work);
 }
 
 void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,27 +46,14 @@ struct grmnet {
 	void (*connect)(struct grmnet *g);
 };
 
-enum ctrl_client {
-	FRMNET_CTRL_CLIENT,
-	GPS_CTRL_CLIENT,
-
-	NR_CTRL_CLIENTS
-};
-
 int gbam_setup(unsigned int no_bam_port, unsigned int no_bam2bam_port);
-void gbam_cleanup(void);
 int gbam_connect(struct grmnet *gr, u8 port_num,
-	enum transport_type trans, u8 src_connection_idx,
-	u8 dst_connection_idx);
-void gbam_disconnect(struct grmnet *gr, u8 port_num,
-	enum transport_type trans);
+				 enum transport_type trans, u8 connection_idx);
+void gbam_disconnect(struct grmnet *gr, u8 port_num, enum transport_type trans);
 void gbam_suspend(struct grmnet *gr, u8 port_num, enum transport_type trans);
 void gbam_resume(struct grmnet *gr, u8 port_num, enum transport_type trans);
 int gsmd_ctrl_connect(struct grmnet *gr, int port_num);
 void gsmd_ctrl_disconnect(struct grmnet *gr, u8 port_num);
-int gsmd_ctrl_setup(enum ctrl_client client_num, unsigned int count,
-					u8 *first_port_idx);
-int gqti_ctrl_connect(struct grmnet *gr);
-void gqti_ctrl_disconnect(struct grmnet *gr);
+int gsmd_ctrl_setup(unsigned int count);
 
 #endif /* __U_RMNET_H*/

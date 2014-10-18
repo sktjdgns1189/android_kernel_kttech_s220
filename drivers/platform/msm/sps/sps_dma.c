@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -274,6 +274,7 @@ int sps_dma_device_init(u32 h)
 {
 	struct bamdma_device *dev;
 	struct sps_bam_props *props;
+	u32 chan;
 	int result = SPS_ERROR;
 
 	mutex_lock(&bam_dma_lock);
@@ -341,6 +342,14 @@ int sps_dma_device_init(u32 h)
 		goto exit_err;
 
 	dev->num_pipes = dev->bam->props.num_pipes;
+
+	/* Disable all channels */
+	if (dev->local)
+		for (chan = 0; chan < (dev->num_pipes / 2); chan++) {
+			dma_write_reg_field(dev->virt_addr,
+					    DMA_CHNL_CONFIG(chan),
+					    DMA_CHNL_ENABLE, 0);
+		}
 
 	result = 0;
 exit_err:

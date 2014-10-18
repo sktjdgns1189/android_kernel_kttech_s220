@@ -54,8 +54,8 @@ static ssize_t power_supply_show_property(struct device *dev,
 		"Unknown", "N/A", "Trickle", "Fast"
 	};
 	static char *health_text[] = {
-		"Unknown", "Good", "Overheat", "Warm", "Dead", "Over voltage",
-		"Unspecified failure", "Cold", "Cool"
+		"Unknown", "Good", "Overheat", "Dead", "Over voltage",
+		"Unspecified failure", "Cold",
 	};
 	static char *technology_text[] = {
 		"Unknown", "NiMH", "Li-ion", "Li-poly", "LiFe", "NiCd",
@@ -138,7 +138,6 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(health),
 	POWER_SUPPLY_ATTR(present),
 	POWER_SUPPLY_ATTR(online),
-	POWER_SUPPLY_ATTR(charging_enabled),
 	POWER_SUPPLY_ATTR(technology),
 	POWER_SUPPLY_ATTR(cycle_count),
 	POWER_SUPPLY_ATTR(voltage_max),
@@ -147,12 +146,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(voltage_min_design),
 	POWER_SUPPLY_ATTR(voltage_now),
 	POWER_SUPPLY_ATTR(voltage_avg),
-	POWER_SUPPLY_ATTR(input_voltage_regulation),
-	POWER_SUPPLY_ATTR(voltage_ocv),
 	POWER_SUPPLY_ATTR(current_max),
-	POWER_SUPPLY_ATTR(input_current_max),
-	POWER_SUPPLY_ATTR(input_current_trim),
-	POWER_SUPPLY_ATTR(input_current_settled),
 	POWER_SUPPLY_ATTR(current_now),
 	POWER_SUPPLY_ATTR(current_avg),
 	POWER_SUPPLY_ATTR(power_now),
@@ -164,7 +158,6 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(charge_now),
 	POWER_SUPPLY_ATTR(charge_avg),
 	POWER_SUPPLY_ATTR(charge_counter),
-	POWER_SUPPLY_ATTR(charge_counter_shadow),
 	POWER_SUPPLY_ATTR(energy_full_design),
 	POWER_SUPPLY_ATTR(energy_empty_design),
 	POWER_SUPPLY_ATTR(energy_full),
@@ -174,8 +167,6 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(capacity),
 	POWER_SUPPLY_ATTR(capacity_level),
 	POWER_SUPPLY_ATTR(temp),
-	POWER_SUPPLY_ATTR(temp_cool),
-	POWER_SUPPLY_ATTR(temp_warm),
 	POWER_SUPPLY_ATTR(temp_ambient),
 	POWER_SUPPLY_ATTR(time_to_empty_now),
 	POWER_SUPPLY_ATTR(time_to_empty_avg),
@@ -183,8 +174,6 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(time_to_full_avg),
 	POWER_SUPPLY_ATTR(type),
 	POWER_SUPPLY_ATTR(scope),
-	POWER_SUPPLY_ATTR(system_temp_level),
-	POWER_SUPPLY_ATTR(resistance),
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),

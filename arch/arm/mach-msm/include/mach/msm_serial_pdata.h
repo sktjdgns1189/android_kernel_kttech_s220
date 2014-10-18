@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,8 +10,8 @@
  * GNU General Public License for more details.
 */
 
-#ifndef __ASM_ARCH_MSM_SERIAL_H
-#define __ASM_ARCH_MSM_SERIAL_H
+#ifndef __ASM_ARCH_MSM_SERIAL_HS_H
+#define __ASM_ARCH_MSM_SERIAL_HS_H
 
 #include <linux/serial_core.h>
 
@@ -22,7 +22,6 @@ struct msm_serial_platform_data {
 	/* bool: inject char into rx tty on wakeup */
 	unsigned char inject_rx_on_wakeup;
 	char rx_to_inject;
-	int userid;
 };
 
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,14 +32,10 @@
 
 #include <mach/msm_iomap.h>
 #include <mach/smem_log.h>
-#include <mach/msm_smem.h>
-
-#include <asm/arch_timer.h>
 
 #include "smd_private.h"
 #include "smd_rpc_sym.h"
 #include "modem_notifier.h"
-#include "smem_private.h"
 
 #define DEBUG
 #undef DEBUG
@@ -159,10 +155,7 @@ struct sym base_syms[] = {
 	{ SMEM_LOG_ERROR_EVENT_BASE, "ERROR" },
 	{ SMEM_LOG_DCVS_EVENT_BASE, "DCVS" },
 	{ SMEM_LOG_SLEEP_EVENT_BASE, "SLEEP" },
-	{ SMEM_LOG_RPC_ROUTER_EVENT_BASE, "RPCROUTER" },
-	{ SMEM_LOG_QMI_CCI_EVENT_BASE, "QCCI" },
-	{ SMEM_LOG_QMI_CSI_EVENT_BASE, "QCSI" },
-	{ SMEM_LOG_IPC_ROUTER_EVENT_BASE, "IPCROUTER" },
+	{ SMEM_LOG_RPC_ROUTER_EVENT_BASE, "ROUTER" },
 };
 
 struct sym event_syms[] = {
@@ -659,7 +652,13 @@ static inline unsigned int read_timestamp(void)
 #else
 static inline unsigned int read_timestamp(void)
 {
-	return (unsigned int)(arch_counter_get_cntpct());
+	unsigned long long val;
+
+	/* SMEM LOG uses a 32.768KHz timestamp */
+	val = sched_clock() * 32768U;
+	do_div(val, 1000000000U);
+
+	return (unsigned int)val;
 }
 #endif
 
@@ -2009,23 +2008,25 @@ static int smem_log_initialize(void)
 	return ret;
 }
 
-static int smem_module_init_notifier(struct notifier_block *this,
-				    unsigned long code,
-				    void *_cmd)
+static int smsm_driver_state_notifier(struct notifier_block *this,
+				      unsigned long code,
+				      void *_cmd)
 {
 	int ret = 0;
-	if (!smem_log_initialized)
-		ret = smem_log_initialize();
+	if (code & SMSM_INIT) {
+		if (!smem_log_initialized)
+			ret = smem_log_initialize();
+	}
 	return ret;
 }
 
 static struct notifier_block nb = {
-	.notifier_call = smem_module_init_notifier,
+	.notifier_call = smsm_driver_state_notifier,
 };
 
 static int __init smem_log_init(void)
 {
-	return smem_module_init_notifier_register(&nb);
+	return smsm_driver_state_notifier_register(&nb);
 }
 
 

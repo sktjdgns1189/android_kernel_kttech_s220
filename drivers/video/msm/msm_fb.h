@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -37,9 +37,8 @@
 #include <linux/fb.h>
 #include <linux/list.h>
 #include <linux/types.h>
-#include <linux/switch.h>
-#include <linux/msm_mdp.h>
 
+#include <linux/msm_mdp.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
@@ -51,11 +50,17 @@
 #define MFD_KEY  0x11161126
 #define MSM_FB_MAX_DEV_LIST 32
 
+#ifdef DEBUG_KTTECH
+#define DEBUG_KTTECH_INFO(msg, ...) \
+	printk(KERN_INFO msg, ## __VA_ARGS__);
+#else
+#define DEBUG_KTTECH_INFO(msg, ...)
+#endif
+
 struct disp_info_type_suspend {
 	boolean op_enable;
 	boolean sw_refreshing_enable;
 	boolean panel_power_on;
-	boolean op_suspend;
 };
 
 struct msmfb_writeback_data_list {
@@ -140,8 +145,6 @@ struct msm_fb_data_type {
 	int (*stop_histogram) (struct fb_info *info, uint32_t block);
 	void (*vsync_ctrl) (int enable);
 	void (*vsync_init) (int cndx);
-	void (*update_panel_info)(struct msm_fb_data_type *mfd);
-	bool (*is_panel_ready)(void);
 	void *vsync_show;
 	void *cursor_buf;
 	void *cursor_buf_phys;
@@ -182,7 +185,6 @@ struct msm_fb_data_type {
 	struct list_head writeback_busy_queue;
 	struct list_head writeback_free_queue;
 	struct list_head writeback_register_queue;
-	struct switch_dev writeback_sdev;
 	wait_queue_head_t wait_q;
 	struct ion_client *iclient;
 	unsigned long display_iova;
@@ -195,31 +197,7 @@ struct msm_fb_data_type {
 	u32 writeback_state;
 	bool writeback_active_cnt;
 	int cont_splash_done;
-	void *copy_splash_buf;
-	unsigned char *copy_splash_phys;
-	void *cpu_pm_hdl;
-	u32 avtimer_phy;
 	int vsync_sysfs_created;
-	u32 acq_fen_cnt;
-	struct sync_fence *acq_fen[MDP_MAX_FENCE_FD];
-	int cur_rel_fen_fd;
-	struct sync_pt *cur_rel_sync_pt;
-	struct sync_fence *cur_rel_fence;
-	struct sync_fence *last_rel_fence;
-	struct sw_sync_timeline *timeline;
-	int timeline_value;
-	u32 last_acq_fen_cnt;
-	struct sync_fence *last_acq_fen[MDP_MAX_FENCE_FD];
-	struct mutex sync_mutex;
-	struct completion commit_comp;
-	u32 is_committing;
-	struct work_struct commit_work;
-	void *msm_fb_backup;
-};
-struct msm_fb_backup_type {
-	struct fb_info info;
-	struct fb_var_screeninfo var;
-	struct msm_fb_data_type mfd;
 };
 
 struct dentry *msm_fb_get_debugfs_root(void);
@@ -239,18 +217,19 @@ int msm_fb_writeback_stop(struct fb_info *info);
 int msm_fb_writeback_terminate(struct fb_info *info);
 int msm_fb_detect_client(const char *name);
 int calc_fb_offset(struct msm_fb_data_type *mfd, struct fb_info *fbi, int bpp);
-int msm_fb_wait_for_fence(struct msm_fb_data_type *mfd);
-int msm_fb_signal_timeline(struct msm_fb_data_type *mfd);
+
 #ifdef CONFIG_FB_BACKLIGHT
 void msm_fb_config_backlight(struct msm_fb_data_type *mfd);
 #endif
 
-void fill_black_screen(bool on, uint8 pipe_num, uint8 mixer_num);
+void fill_black_screen(void);
+void unfill_black_screen(void);
 int msm_fb_check_frame_rate(struct msm_fb_data_type *mfd,
 				struct fb_info *info);
 
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/initlogo.rle"
+#define INIT_IMAGE_FTM_FILE "/initlogo_ftm.raw"
 int load_565rle_image(char *filename, bool bf_supported);
 #endif
 

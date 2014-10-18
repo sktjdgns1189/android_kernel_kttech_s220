@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +15,7 @@
 #define __ARCH_ARM_MACH_MSM_CLOCK_LOCAL_H
 
 #include <linux/spinlock.h>
-#include <mach/clk-provider.h>
+#include "clock.h"
 
 #define MN_MODE_DUAL_EDGE 0x2
 
@@ -153,7 +153,6 @@ struct branch {
 };
 
 extern struct clk_ops clk_ops_branch;
-extern struct clk_ops clk_ops_smi_2x;
 extern struct clk_ops clk_ops_reset;
 
 int branch_reset(struct branch *b, enum clk_reset_action action);
@@ -165,7 +164,6 @@ enum handoff branch_handoff(struct branch *b, struct clk *c);
  * Generic clock-definition struct and macros
  */
 struct rcg_clk {
-	bool		prepared;
 	bool		enabled;
 	void		*const ns_reg;
 	void		*const md_reg;
@@ -235,6 +233,7 @@ struct fixed_clk {
  * struct branch_clk - branch
  * @enabled: true if clock is on, false otherwise
  * @b: branch
+ * @parent: clock source
  * @c: clock
  *
  * An on/off switch with a rate derived from the parent.
@@ -242,6 +241,7 @@ struct fixed_clk {
 struct branch_clk {
 	bool enabled;
 	struct branch b;
+	struct clk *parent;
 	struct clk c;
 };
 

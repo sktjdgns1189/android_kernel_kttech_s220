@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -114,18 +114,6 @@ int pwm_config_period(struct pwm_device *pwm,
 int pwm_config_pwm_value(struct pwm_device *pwm, int pwm_value);
 
 /*
- * enum pm_pwm_mode - PWM mode selection
- * %PM_PWM_MODE_PWM - Select PWM mode
- * %PM_PWM_MODE_LPG - Select LPG mode
- */
-enum pm_pwm_mode {
-	PM_PWM_MODE_PWM,
-	PM_PWM_MODE_LPG,
-};
-
-int pwm_change_mode(struct pwm_device *pwm, enum pm_pwm_mode mode);
-
-/*
  * lut_params: Lookup table (LUT) parameters
  * @start_idx: start index in lookup table from 0 to MAX-1
  * @idx_len: number of index
@@ -146,11 +134,7 @@ struct lut_params {
 int pwm_lut_config(struct pwm_device *pwm, int period_us,
 		int duty_pct[], struct lut_params lut_params);
 
-/*
- * support microsecond level configuration
- */
-int pwm_config_us(struct pwm_device *pwm,
-		int duty_us, int period_us);
+int pwm_lut_enable(struct pwm_device *pwm, int start);
 
 /* Standard APIs supported */
 /*
@@ -167,8 +151,8 @@ int pwm_config_us(struct pwm_device *pwm,
 /*
  * pwm_config - change a PWM device configuration
  * @pwm: the PWM device
- * @period_ns: period in nanosecond
- * @duty_ns: duty cycle in nanosecond
+ * @period_us: period in microsecond
+ * @duty_us: duty cycle in microsecond
  */
 
 /*

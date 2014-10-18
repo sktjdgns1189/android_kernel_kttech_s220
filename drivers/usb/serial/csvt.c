@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -48,7 +48,6 @@ struct csvt_ctrl_dev {
 
 static const struct usb_device_id id_table[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x05c6 , 0x904c, 0xff, 0xfe, 0xff)},
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x05c6 , 0x9075, 0xff, 0xfe, 0xff)},
 	{}, /* terminating entry */
 };
 MODULE_DEVICE_TABLE(usb, id_table);

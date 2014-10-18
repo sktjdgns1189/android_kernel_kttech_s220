@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,7 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
-#include <mach/kgsl.h>
+#include <linux/msm_kgsl.h>
 #include <linux/regulator/machine.h>
 #include <linux/init.h>
 #include <linux/irq.h>
@@ -30,13 +30,11 @@
 #include <asm/cacheflush.h>
 #include <mach/rpc_hsusb.h>
 #include <mach/socinfo.h>
-#include <mach/clk-provider.h>
 
 #include "devices.h"
 #include "devices-msm7x2xa.h"
 #include "footswitch.h"
 #include "acpuclock.h"
-#include "acpuclock-8625q.h"
 #include "spm.h"
 #include "mpm-8625.h"
 #include "irq.h"
@@ -239,21 +237,6 @@ struct platform_device msm7x27aa_device_acpuclk = {
 	.name		= "acpuclk-7627",
 	.id		= -1,
 	.dev.platform_data = &msm7x27aa_acpuclk_pdata,
-};
-
-static struct acpuclk_pdata msm8625q_pdata = {
-	.max_speed_delta_khz = 801600,
-};
-
-static struct acpuclk_pdata_8625q msm8625q_acpuclk_pdata = {
-	.acpu_clk_data = &msm8625q_pdata,
-	.pvs_voltage_uv = 1350000,
-};
-
-struct platform_device msm8625q_device_acpuclk = {
-	.name		= "acpuclock-8625q",
-	.id		= -1,
-	.dev.platform_data = &msm8625q_acpuclk_pdata,
 };
 
 static struct acpuclk_pdata msm8625_acpuclk_pdata = {
@@ -517,21 +500,9 @@ static struct msm_pm_irq_calls msm8625_pm_irq_calls = {
 	.exit_sleep3 = msm_gic_irq_exit_sleep3,
 };
 
-void msm_clk_dump_debug_info(void)
-{
-	pr_info("%s: GLBL_CLK_ENA: 0x%08X\n", __func__,
-		readl_relaxed(MSM_CLK_CTL_BASE + 0x0));
-	pr_info("%s: GLBL_CLK_STATE: 0x%08X\n", __func__,
-		readl_relaxed(MSM_CLK_CTL_BASE + 0x4));
-	pr_info("%s: GRP_NS_REG: 0x%08X\n", __func__,
-		readl_relaxed(MSM_CLK_CTL_BASE + 0x84));
-	pr_info("%s: CLK_HALT_STATEB: 0x%08X\n", __func__,
-		readl_relaxed(MSM_CLK_CTL_BASE + 0x10C));
-}
-
 void __init msm_pm_register_irqs(void)
 {
-	if (cpu_is_msm8625() || cpu_is_msm8625q())
+	if (cpu_is_msm8625())
 		msm_pm_set_irq_extns(&msm8625_pm_irq_calls);
 	else
 		msm_pm_set_irq_extns(&msm7x27a_pm_irq_calls);
@@ -546,9 +517,8 @@ static struct msm_pm_cpr_ops msm8625_pm_cpr_ops = {
 void __init msm_pm_register_cpr_ops(void)
 {
 	/* CPR presents on revision >= v2.0 chipsets */
-	if ((cpu_is_msm8625() &&
+	if (cpu_is_msm8625() &&
 			SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2)
-			|| cpu_is_msm8625q())
 		msm_pm_set_cpr_ops(&msm8625_pm_cpr_ops);
 }
 
@@ -558,25 +528,23 @@ void __init msm_pm_register_cpr_ops(void)
 #define MSM_SDC4_BASE         0xA0700000
 static struct resource resources_sdc1[] = {
 	{
-		.name	= "core_mem",
 		.start	= MSM_SDC1_BASE,
 		.end	= MSM_SDC1_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "core_irq",
 		.start	= INT_SDC1_0,
 		.end	= INT_SDC1_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_SDC1_CHAN,
 		.end	= DMOV_SDC1_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC1_CRCI,
 		.end	= DMOV_SDC1_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -585,25 +553,23 @@ static struct resource resources_sdc1[] = {
 
 static struct resource resources_sdc2[] = {
 	{
-		.name	= "core_mem",
 		.start	= MSM_SDC2_BASE,
 		.end	= MSM_SDC2_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name   = "core_irq",
 		.start	= INT_SDC2_0,
 		.end	= INT_SDC2_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_SDC2_CHAN,
 		.end	= DMOV_SDC2_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC2_CRCI,
 		.end	= DMOV_SDC2_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -612,25 +578,23 @@ static struct resource resources_sdc2[] = {
 
 static struct resource resources_sdc3[] = {
 	{
-		.name   = "core_mem",
 		.start	= MSM_SDC3_BASE,
 		.end	= MSM_SDC3_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name   = "core_irq",
 		.start	= INT_SDC3_0,
 		.end	= INT_SDC3_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_NAND_CHAN,
 		.end	= DMOV_NAND_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC3_CRCI,
 		.end	= DMOV_SDC3_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -639,25 +603,23 @@ static struct resource resources_sdc3[] = {
 
 static struct resource resources_sdc4[] = {
 	{
-		.name	= "core_mem",
 		.start	= MSM_SDC4_BASE,
 		.end	= MSM_SDC4_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name   = "core_irq",
 		.start	= INT_SDC4_0,
 		.end	= INT_SDC4_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_SDC4_CHAN,
 		.end	= DMOV_SDC4_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC4_CRCI,
 		.end	= DMOV_SDC4_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -809,16 +771,6 @@ static struct msm_spm_seq_entry msm_spm_seq_list[] __initdata = {
 		.notify_rpm = false,
 		.cmd = spm_pc_without_modem,
 	},
-	[2] = {
-		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
-		.notify_rpm = false,
-		.cmd = spm_pc_without_modem,
-	},
-	[3] = {
-		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
-		.notify_rpm = false,
-		.cmd = spm_pc_without_modem,
-	},
 };
 
 static struct msm_spm_platform_data msm_spm_data[] __initdata = {
@@ -831,20 +783,6 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 	},
 	[1] = {
 		.reg_base_addr = MSM_SAW1_BASE,
-		.reg_init_values[MSM_SPM_REG_SAW2_CFG] = 0x0,
-		.reg_init_values[MSM_SPM_REG_SAW2_SPM_CTL] = 0x01,
-		.num_modes = ARRAY_SIZE(msm_spm_seq_list),
-		.modes = msm_spm_seq_list,
-	},
-	[2] = {
-		.reg_base_addr = MSM_SAW2_BASE,
-		.reg_init_values[MSM_SPM_REG_SAW2_CFG] = 0x0,
-		.reg_init_values[MSM_SPM_REG_SAW2_SPM_CTL] = 0x01,
-		.num_modes = ARRAY_SIZE(msm_spm_seq_list),
-		.modes = msm_spm_seq_list,
-	},
-	[3] = {
-		.reg_base_addr = MSM_SAW3_BASE,
 		.reg_init_values[MSM_SPM_REG_SAW2_CFG] = 0x0,
 		.reg_init_values[MSM_SPM_REG_SAW2_SPM_CTL] = 0x01,
 		.num_modes = ARRAY_SIZE(msm_spm_seq_list),
@@ -902,7 +840,7 @@ static struct platform_device msm_mdp_device = {
 	.resource       = msm_mdp_resources,
 };
 
-struct platform_device msm_lcdc_device = {
+static struct platform_device msm_lcdc_device = {
 	.name   = "lcdc",
 	.id     = 0,
 };
@@ -942,6 +880,7 @@ static struct kgsl_device_platform_data kgsl_3d0_pdata = {
 	.set_grp_async = set_grp_xbar_async,
 	.idle_timeout = HZ,
 	.strtstp_sleepwake = true,
+	.nap_allowed = false,
 	.clk_map = KGSL_CLK_CORE | KGSL_CLK_IFACE | KGSL_CLK_MEM,
 };
 
@@ -968,13 +907,13 @@ void __init msm7x25a_kgsl_3d0_init(void)
 
 void __init msm8x25_kgsl_3d0_init(void)
 {
-	if (cpu_is_msm8625() || cpu_is_msm8625q()) {
+	if (cpu_is_msm8625()) {
 		kgsl_3d0_pdata.idle_timeout = HZ/5;
 		kgsl_3d0_pdata.strtstp_sleepwake = false;
 
 		if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2)
 			/* 8x25 v2.0 & above supports a higher GPU frequency */
-			kgsl_3d0_pdata.pwrlevel[0].gpu_freq = 320000000;
+		kgsl_3d0_pdata.pwrlevel[0].gpu_freq = 320000000;
 		else
 			kgsl_3d0_pdata.pwrlevel[0].gpu_freq = 300000000;
 
@@ -1262,25 +1201,23 @@ static struct platform_device msm8625_device_gpio = {
 
 static struct resource msm8625_resources_sdc1[] = {
 	{
-		.name	= "core_mem",
 		.start	= MSM_SDC1_BASE,
 		.end	= MSM_SDC1_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "core_irq",
 		.start	= MSM8625_INT_SDC1_0,
 		.end	= MSM8625_INT_SDC1_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_SDC1_CHAN,
 		.end	= DMOV_SDC1_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC1_CRCI,
 		.end	= DMOV_SDC1_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -1289,25 +1226,23 @@ static struct resource msm8625_resources_sdc1[] = {
 
 static struct resource msm8625_resources_sdc2[] = {
 	{
-		.name   = "core_mem",
 		.start	= MSM_SDC2_BASE,
 		.end	= MSM_SDC2_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "core_irq",
 		.start	= MSM8625_INT_SDC2_0,
 		.end	= MSM8625_INT_SDC2_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_SDC2_CHAN,
 		.end	= DMOV_SDC2_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC2_CRCI,
 		.end	= DMOV_SDC2_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -1316,25 +1251,23 @@ static struct resource msm8625_resources_sdc2[] = {
 
 static struct resource msm8625_resources_sdc3[] = {
 	{
-		.name   = "core_mem",
 		.start	= MSM_SDC3_BASE,
 		.end	= MSM_SDC3_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "core_irq",
 		.start	= MSM8625_INT_SDC3_0,
 		.end	= MSM8625_INT_SDC3_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_NAND_CHAN,
 		.end	= DMOV_NAND_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC3_CRCI,
 		.end	= DMOV_SDC3_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -1343,25 +1276,23 @@ static struct resource msm8625_resources_sdc3[] = {
 
 static struct resource msm8625_resources_sdc4[] = {
 	{
-		.name   = "core_mem",
 		.start	= MSM_SDC4_BASE,
 		.end	= MSM_SDC4_BASE + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name	= "core_irq",
 		.start	= MSM8625_INT_SDC4_0,
 		.end	= MSM8625_INT_SDC4_1,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
-		.name	= "dma_chnl",
+		.name	= "sdcc_dma_chnl",
 		.start	= DMOV_SDC4_CHAN,
 		.end	= DMOV_SDC4_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
 	{
-		.name	= "dma_crci",
+		.name	= "sdcc_dma_crci",
 		.start	= DMOV_SDC4_CRCI,
 		.end	= DMOV_SDC4_CRCI,
 		.flags	= IORESOURCE_DMA,
@@ -1422,7 +1353,7 @@ int __init msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat)
 	if (controller < 1 || controller > 4)
 		return -EINVAL;
 
-	if (cpu_is_msm8625() || cpu_is_msm8625q())
+	if (cpu_is_msm8625())
 		pdev = msm8625_sdcc_devices[controller-1];
 	else
 		pdev = msm_sdcc_devices[controller-1];
@@ -1511,7 +1442,7 @@ int msm_add_host(unsigned int host, struct msm_usb_host_platform_data *plat)
 {
 	struct platform_device	*pdev;
 
-	if (cpu_is_msm8625() || cpu_is_msm8625q())
+	if (cpu_is_msm8625())
 		pdev = msm8625_host_devices[host];
 	else
 		pdev = msm_host_devices[host];
@@ -1614,12 +1545,12 @@ struct platform_device mipi_dsi_device;
 void __init msm_fb_register_device(char *name, void *data)
 {
 	if (!strncmp(name, "mdp", 3)) {
-		if (cpu_is_msm8625() || cpu_is_msm8625q())
+		if (cpu_is_msm8625())
 			msm_register_device(&msm8625_mdp_device, data);
 		else
 			msm_register_device(&msm_mdp_device, data);
 	} else if (!strncmp(name, "mipi_dsi", 8)) {
-		if (cpu_is_msm8625() || cpu_is_msm8625q()) {
+		if (cpu_is_msm8625()) {
 			msm_register_device(&msm8625_mipi_dsi_device, data);
 			mipi_dsi_device = msm8625_mipi_dsi_device;
 		} else {
@@ -1658,26 +1589,6 @@ struct platform_device msm8625_kgsl_3d0 = {
 	},
 };
 
-static struct resource pl310_resources[] = {
-	{
-		.start = 0xC0400000,
-		.end   = 0xC0400000 + SZ_4K - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	{
-		.name   = "l2_irq",
-		.start  = MSM8625_INT_SC_SICL2PERFMONIRPTREQ,
-		.flags  = IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device pl310_erp_device = {
-	.name           = "pl310_erp",
-	.id             = -1,
-	.resource       = pl310_resources,
-	.num_resources  = ARRAY_SIZE(pl310_resources),
-};
-
 enum {
 	MSM8625,
 	MSM8625A,
@@ -1695,7 +1606,6 @@ static int __init msm8625_cpu_id(void)
 	case 0x771:
 	case 0x77C:
 	case 0x780:
-	case 0x785: /* Edge-only MSM8125-0 */
 	case 0x8D0:
 		cpu = MSM8625;
 		break;
@@ -1790,6 +1700,13 @@ static struct msm_cpr_mode msm_cpr_mode_data[] = {
 	},
 };
 
+struct msm_cpr_vp_data vp_data = {
+	.min_volt = 1000000,
+	.max_volt = 1350000,
+	.default_volt = 1300000,
+	.step_size = 12500,
+};
+
 static uint32_t
 msm_cpr_get_quot(uint32_t max_quot, uint32_t max_freq, uint32_t new_freq)
 {
@@ -1816,7 +1733,7 @@ static void msm_cpr_clk_enable(void)
 
 static struct msm_cpr_config msm_cpr_pdata = {
 	.ref_clk_khz = 19200,
-	.delay_us = 25000,
+	.delay_us = 1000,
 	.irq_line = 0,
 	.cpr_mode_data = msm_cpr_mode_data,
 	.tgt_count_div_N = 1,
@@ -1824,14 +1741,13 @@ static struct msm_cpr_config msm_cpr_pdata = {
 	.ceiling = 40,
 	.sw_vlevel = 20,
 	.up_threshold = 1,
-	.dn_threshold = 3,
+	.dn_threshold = 4,
 	.up_margin = 0,
 	.dn_margin = 0,
 	.max_nom_freq = 700800,
 	.max_freq = 1401600,
 	.max_quot = 0,
-	.disable_cpr = false,
-	.step_size = 12500,
+	.vp_data = &vp_data,
 	.get_quot = msm_cpr_get_quot,
 	.clk_enable = msm_cpr_clk_enable,
 };
@@ -1863,7 +1779,6 @@ static void __init msm_cpr_init(void)
 	}
 
 	msm_smem_get_cpr_info(cpr_info);
-	msm_cpr_pdata.disable_cpr = cpr_info->disable_cpr;
 
 	/**
 	 * Set the ring_osc based on efuse BIT(0)
@@ -1896,11 +1811,11 @@ static void __init msm_cpr_init(void)
 	 * Ditto for a 1.0GHz part.
 	 */
 	if (msm8625_cpu_id() == MSM8625A) {
-		msm_cpr_pdata.max_quot += 30;
+		msm_cpr_pdata.max_quot += 100;
 		if (msm_cpr_pdata.max_quot > 1400)
 			msm_cpr_pdata.max_quot = 1400;
 	} else if (msm8625_cpu_id() == MSM8625) {
-		msm_cpr_pdata.max_quot += 50;
+		msm_cpr_pdata.max_quot += 120;
 		if (msm_cpr_pdata.max_quot > 1350)
 			msm_cpr_pdata.max_quot = 1350;
 	}
@@ -1923,6 +1838,10 @@ static void __init msm_cpr_init(void)
 		msm_cpr_mode_data[TURBO_MODE].turbo_Vmin = 1100000;
 	}
 
+	/* Temporary change until devices have their floor_fuse bits blown */
+	msm_cpr_mode_data[TURBO_MODE].nom_Vmin = 1100000;
+	msm_cpr_mode_data[TURBO_MODE].turbo_Vmin = 1100000;
+
 	pr_debug("%s: cpr: ring_osc: 0x%x\n", __func__,
 		msm_cpr_mode_data[TURBO_MODE].ring_osc);
 	pr_debug("%s: cpr: turbo_quot: 0x%x\n", __func__, cpr_info->turbo_quot);
@@ -1938,8 +1857,8 @@ static void __init msm_cpr_init(void)
 	else if (msm8625_cpu_id() == MSM8625)
 		msm_cpr_pdata.max_freq = 1008000;
 
-	if (machine_is_qrd_skud_prime() || cpu_is_msm8625q())
-		msm_cpr_pdata.step_size = 6250;
+	msm_cpr_clk_enable();
+
 	platform_device_register(&msm8625_vp_device);
 	platform_device_register(&msm8625_device_cpr);
 }
@@ -2011,57 +1930,6 @@ struct clock_init_data msm8625_dummy_clock_init_data __initdata = {
 	.size = ARRAY_SIZE(msm_clock_8625_dummy),
 };
 
-
-static int __init msm_gpio_config_gps(void)
-{
-	unsigned int gps_gpio = 7;
-	int ret = 0;
-
-	if (!machine_is_msm8625_evb())
-		return ret;
-
-	ret = gpio_tlmm_config(GPIO_CFG(gps_gpio, 0, GPIO_CFG_OUTPUT,
-			GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-	if (ret < 0) {
-		pr_err("gpio tlmm failed for gpio-%d\n", gps_gpio);
-		return ret;
-	}
-
-	ret = gpio_request(gps_gpio, "gnss-gpio");
-	if (ret < 0) {
-		pr_err("failed to request gpio-%d\n", gps_gpio);
-		return ret;
-	}
-
-	ret = gpio_direction_input(gps_gpio);
-	if (ret < 0) {
-		pr_err("failed to change direction for gpio-%d\n", gps_gpio);
-		return ret;
-	}
-
-	ret = gpio_export(gps_gpio, true);
-	if (ret < 0)
-		pr_err("failed to export gpio for user\n");
-
-	return ret;
-}
-
-static int __init msm_acpuclock_init(bool flag)
-{
-	struct cpr_info_type *acpu_info = NULL;
-	acpu_info = kzalloc(sizeof(struct cpr_info_type), GFP_KERNEL);
-	if (!acpu_info) {
-		pr_err("%s: Out of memory %d\n", __func__, -ENOMEM);
-		return -ENOMEM;
-	}
-	msm_smem_get_cpr_info(acpu_info);
-	msm8625q_acpuclk_pdata.pvs_voltage_uv =
-			msm_c2_pmic_mv[acpu_info->pvs_fuse & 0x1F];
-	kfree(acpu_info);
-	msm8625q_acpuclk_pdata.flag = flag;
-	return 0;
-}
-
 int __init msm7x2x_misc_init(void)
 {
 	if (machine_is_msm8625_rumi3()) {
@@ -2073,14 +1941,8 @@ int __init msm7x2x_misc_init(void)
 	msm_clock_init(&msm7x27a_clock_init_data);
 	if (cpu_is_msm7x27aa() || cpu_is_msm7x25ab())
 		platform_device_register(&msm7x27aa_device_acpuclk);
-	else if (cpu_is_msm8625q()) {
-		msm_acpuclock_init(1);
-		platform_device_register(&msm8625q_device_acpuclk);
-	} else if (cpu_is_msm8625()) {
-		if (machine_is_qrd_skud_prime()) {
-			msm_acpuclock_init(0);
-			platform_device_register(&msm8625q_device_acpuclk);
-		} else if (msm8625_cpu_id() == MSM8625)
+	else if (cpu_is_msm8625()) {
+		if (msm8625_cpu_id() == MSM8625)
 			platform_device_register(&msm7x27aa_device_acpuclk);
 		else if (msm8625_cpu_id() == MSM8625A)
 			platform_device_register(&msm8625_device_acpuclk);
@@ -2090,17 +1952,9 @@ int __init msm7x2x_misc_init(void)
 		platform_device_register(&msm7x27a_device_acpuclk);
 	}
 
-	if (cpu_is_msm8625() || (cpu_is_msm8625q() &&
-			SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2))
+	if (cpu_is_msm8625() &&
+			(SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2))
 		msm_cpr_init();
-
-	if (!cpu_is_msm8625() && !cpu_is_msm8625q())
-		pl310_resources[1].start = SC_SICL2PERFMONIRPTREQ;
-
-	platform_device_register(&pl310_erp_device);
-
-	if (msm_gpio_config_gps() < 0)
-		pr_err("Error for gpio config for GPS gpio\n");
 
 	return 0;
 }
@@ -2116,7 +1970,7 @@ static int __init msm7x27x_cache_init(void)
 		   (0x2 << L2X0_AUX_CTRL_WAY_SIZE_SHIFT) | \
 		   (0x1 << L2X0_AUX_CTRL_EVNT_MON_BUS_EN_SHIFT);
 
-	if (cpu_is_msm8625() || cpu_is_msm8625q()) {
+	if (cpu_is_msm8625()) {
 		/* Way Size 011(0x3) 64KB */
 		aux_ctrl |= (0x3 << L2X0_AUX_CTRL_WAY_SIZE_SHIFT) | \
 			    (0x1 << L2X0_AUX_CTRL_DATA_PREFETCH_SHIFT) | \
@@ -2132,7 +1986,7 @@ static int __init msm7x27x_cache_init(void)
 	}
 
 	l2x0_init(MSM_L2CC_BASE, aux_ctrl, L2X0_AUX_CTRL_MASK);
-	if (cpu_is_msm8625() || cpu_is_msm8625q()) {
+	if (cpu_is_msm8625()) {
 		pctrl = readl_relaxed(MSM_L2CC_BASE + L2X0_PREFETCH_CTRL);
 		pr_info("Prfetch Ctrl: 0x%08x\n", pctrl);
 	}
@@ -2147,7 +2001,7 @@ void __init msm_common_io_init(void)
 {
 	msm_map_common_io();
 	if (socinfo_init() < 0)
-		pr_err("socinfo_init() failed!\n");
+		pr_err("%s: socinfo_init() failed!\n", __func__);
 	msm7x27x_cache_init();
 }
 
@@ -2163,13 +2017,13 @@ void __init msm8625_map_io(void)
 	msm_map_msm8625_io();
 
 	if (socinfo_init() < 0)
-		pr_err("socinfo_init() failed!\n");
+		pr_err("%s: socinfo_init() failed!\n", __func__);
 	msm7x27x_cache_init();
 }
 
 static int msm7627a_init_gpio(void)
 {
-	if (cpu_is_msm8625() || cpu_is_msm8625q())
+	if (cpu_is_msm8625())
 		platform_device_register(&msm8625_device_gpio);
 	else
 		platform_device_register(&msm_device_gpio);
@@ -2180,7 +2034,6 @@ postcore_initcall(msm7627a_init_gpio);
 static int msm7627a_panic_handler(struct notifier_block *this,
 		unsigned long event, void *ptr)
 {
-	msm_clk_dump_debug_info();
 	flush_cache_all();
 	outer_flush_all();
 	return NOTIFY_DONE;
@@ -2188,7 +2041,6 @@ static int msm7627a_panic_handler(struct notifier_block *this,
 
 static struct notifier_block panic_handler = {
 	.notifier_call = msm7627a_panic_handler,
-	.priority = INT_MAX,
 };
 
 static int __init panic_register(void)

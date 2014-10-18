@@ -1629,8 +1629,6 @@ sub process {
 			 $exec_file =~ /^.+\.ihex$/ or
 			 $exec_file =~ /^.+\.hex$/ or
 			 $exec_file =~ /^.+\.HEX$/ or
-			 $exec_file =~ /^.+\.dts$/ or
-			 $exec_file =~ /^.+\.dtsi$/ or
 			 $exec_file =~ /^.+defconfig$/ or
 			 $exec_file =~ /^Makefile$/ or
 			 $exec_file =~ /^Kconfig$/) &&
@@ -1728,7 +1726,7 @@ sub process {
 				$subjectline = $line;
 				$sublinenr = "#$linenr & ";
 # Check for Subject line less than line limit
-				if (length($1) > SHORTTEXT_LIMIT && !($1 =~ m/Revert\ \"/)) {
+				if (length($1) > SHORTTEXT_LIMIT) {
 					WARN("LONG_SUMMARY_LINE",
 					     "summary line over " .
 					     SHORTTEXT_LIMIT .
@@ -1740,7 +1738,7 @@ sub process {
 				# headers so we are now in the shorttext.
 				$shorttext = IN_SHORTTEXT_BLANKLINE;
 				$shorttext_exspc = 4;
-				if (length($1) > SHORTTEXT_LIMIT && !($1 =~ m/Revert\ \"/)) {
+				if (length($1) > SHORTTEXT_LIMIT) {
 					WARN("LONG_SUMMARY_LINE",
 					     "summary line over " .
 					     SHORTTEXT_LIMIT .
@@ -3361,8 +3359,11 @@ sub process {
 			"strcat"  => "strlcat",
 			"strncat"  => "strlcat",
 			"vsprintf"  => "vsnprintf",
+			"strcmp"  => "strncmp",
+			"strcasecmp" => "strncasecmp",
 			"strchr" => "strnchr",
 			"strstr" => "strnstr",
+			"strlen" => "strnlen",
 		);
 		foreach my $k (keys %str_fns) {
 			if ($line =~ /\b$k\b/) {

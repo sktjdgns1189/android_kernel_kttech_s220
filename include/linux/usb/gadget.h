@@ -508,7 +508,6 @@ struct usb_gadget_ops {
  * @dev: Driver model state for this abstract device.
  * @usb_core_id: Identifies the usb core controlled by this usb_gadget.
  *		 Used in case of more then one core operates concurrently.
- * @streaming_enabled: Enable streaming mode with usb core.
  *
  * Gadgets have a mostly-portable "gadget driver" implementing device
  * functions, handling all usb configurations and interfaces.  Gadget
@@ -546,8 +545,6 @@ struct usb_gadget {
 	const char			*name;
 	struct device			dev;
 	u8				usb_core_id;
-	bool				l1_supported;
-	bool				streaming_enabled;
 };
 
 static inline void set_gadget_data(struct usb_gadget *gadget, void *data)
@@ -570,7 +567,14 @@ static inline struct usb_gadget *dev_to_usb_gadget(struct device *dev)
  */
 static inline int gadget_is_dualspeed(struct usb_gadget *g)
 {
-	return g->max_speed >= USB_SPEED_HIGH;
+#ifdef CONFIG_USB_GADGET_DUALSPEED
+	/* runtime test would check "g->max_speed" ... that might be
+	 * useful to work around hardware bugs, but is mostly pointless
+	 */
+	return 1;
+#else
+	return 0;
+#endif
 }
 
 /**
@@ -580,7 +584,15 @@ static inline int gadget_is_dualspeed(struct usb_gadget *g)
  */
 static inline int gadget_is_superspeed(struct usb_gadget *g)
 {
-	return g->max_speed >= USB_SPEED_SUPER;
+#ifdef CONFIG_USB_GADGET_SUPERSPEED
+	/*
+	 * runtime test would check "g->max_speed" ... that might be
+	 * useful to work around hardware bugs, but is mostly pointless
+	 */
+	return 1;
+#else
+	return 0;
+#endif
 }
 
 /**

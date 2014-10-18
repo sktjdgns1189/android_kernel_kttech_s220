@@ -1,6 +1,7 @@
 config BCMDHD
 	tristate "Broadcom 4329/30 wireless cards support"
 	depends on MMC
+	default m
 	---help---
 	  This module adds support for wireless adapters based on
 	  Broadcom 4329/30 chipset.
@@ -13,7 +14,7 @@ config BCMDHD
 config BCMDHD_FW_PATH
 	depends on BCMDHD
 	string "Firmware path"
-	default "/system/etc/firmware/fw_bcmdhd.bin"
+	default "/system/vendor/firmware/fw_bcmdhd.bin"
 	---help---
 	  Path to the firmware file.
 

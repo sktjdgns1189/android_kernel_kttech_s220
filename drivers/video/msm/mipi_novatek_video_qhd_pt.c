@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,6 +17,10 @@
 
 static struct msm_panel_info pinfo;
 
+#undef DSI_BIT_CLK_500MHZ // Original Setting
+#define DSI_BIT_CLK_480MHZ
+
+#if defined(DSI_BIT_CLK_500MHZ)
 static struct mipi_dsi_phy_ctrl dsi_video_mode_phy_db = {
 /* DSI_BIT_CLK at 500MHz, 2 lane, RGB888 */
 		{0x03, 0x01, 0x01, 0x00},	/* regulator */
@@ -34,6 +38,36 @@ static struct mipi_dsi_phy_ctrl dsi_video_mode_phy_db = {
 #endif
 		0x05, 0x14, 0x03, 0x0, 0x0, 0x54, 0x06, 0x10, 0x04, 0x0},
 };
+#else
+
+static struct mipi_dsi_phy_ctrl dsi_video_mode_phy_db = {
+/* DSI_BIT_CLK at 480MHz, 2 lane, RGB888 */
+		{0x03, 0x01, 0x01, 0x00},	/* regulator */
+		/* timing   */
+		{0x79, 0x25, 0x1F, 0x00, 0x4C, 0x34, 0x25, 0x25,
+		0x1C, 0x03, 0x04},
+		{0x7f, 0x00, 0x00, 0x00},	/* phy ctrl */
+		{0xee, 0x03, 0x86, 0x03},	/* strength */
+
+#if defined(DSI_BIT_CLK_366MHZ)
+		{0x41, 0xdb, 0xb2, 0xf5, 0x00, 0x50, 0x48, 0x63,
+		0x31, 0x0f, 0x07,
+		0x05, 0x14, 0x03, 0x03, 0x03, 0x54, 0x06, 0x10, 0x04, 0x03 },
+#elif defined(DSI_BIT_CLK_380MHZ)
+		{0x41, 0xf7, 0xb2, 0xf5, 0x00, 0x50, 0x48, 0x63,
+		0x31, 0x0f, 0x07,
+		0x05, 0x14, 0x03, 0x03, 0x03, 0x54, 0x06, 0x10, 0x04, 0x03 },
+#elif defined(DSI_BIT_CLK_480MHZ)
+		{0x41, 0xDF, 0x31, 0xda, 0x00, 0x50, 0x48, 0x63,
+		0x31, 0x0f, 0x07,
+		0x05, 0x14, 0x03, 0x03, 0x03, 0x54, 0x06, 0x10, 0x04, 0x03 },
+#else		/* 200 mhz */
+		{0x41, 0x8f, 0xb1, 0xda, 0x00, 0x50, 0x48, 0x63,
+		0x33, 0x1f, 0x0f,
+		0x05, 0x14, 0x03, 0x03, 0x03, 0x54, 0x06, 0x10, 0x04, 0x03 },
+#endif
+};
+#endif
 
 static int __init mipi_video_novatek_qhd_pt_init(void)
 {
@@ -48,18 +82,41 @@ static int __init mipi_video_novatek_qhd_pt_init(void)
 	pinfo.pdest = DISPLAY_1;
 	pinfo.wait_cycle = 0;
 	pinfo.bpp = 24;
+#if defined(DSI_BIT_CLK_500MHZ)
 	pinfo.lcdc.h_back_porch = 80;
 	pinfo.lcdc.h_front_porch = 24;
 	pinfo.lcdc.h_pulse_width = 8;
 	pinfo.lcdc.v_back_porch = 16;
 	pinfo.lcdc.v_front_porch = 8;
 	pinfo.lcdc.v_pulse_width = 1;
+#else
+	pinfo.lcdc.h_back_porch = 96;
+	pinfo.lcdc.h_front_porch = 32;
+	pinfo.lcdc.h_pulse_width = 10;
+	pinfo.lcdc.v_back_porch = 12;
+	pinfo.lcdc.v_front_porch = 4;
+	pinfo.lcdc.v_pulse_width = 10;
+#endif
 	pinfo.lcdc.border_clr = 0;	/* blk */
-	pinfo.lcdc.underflow_clr = 0xff;	/* blue */
+//KT Tech. LCD
+	pinfo.lcdc.underflow_clr = 0;	/* blk */	/* blue 0xff */
 	pinfo.lcdc.hsync_skew = 0;
-	pinfo.bl_max = 15;
+//KT Tech. LCD
+#ifdef CONFIG_KTTECH_NOVATEK_BACKLIGHT
+	pinfo.bl_max = 31;
+#else
+	pinfo.bl_max = 28;
+#endif
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
+
+#if defined(DSI_BIT_CLK_480MHZ)
+	pinfo.clk_rate = 480000000;
+#elif defined(DSI_BIT_CLK_380MHZ)
+	pinfo.clk_rate = 380000000;
+#elif defined(DSI_BIT_CLK_366MHZ)
+	pinfo.clk_rate = 366000000;
+#endif
 
 	pinfo.mipi.mode = DSI_VIDEO_MODE;
 	pinfo.mipi.pulse_mode_hsa_he = TRUE;
@@ -78,8 +135,13 @@ static int __init mipi_video_novatek_qhd_pt_init(void)
 	pinfo.mipi.data_lane1 = TRUE;
 #endif
 	pinfo.mipi.tx_eot_append = TRUE;
+#if defined(DSI_BIT_CLK_500MHZ)
 	pinfo.mipi.t_clk_post = 0x04;
 	pinfo.mipi.t_clk_pre = 0x1c;
+#else
+	pinfo.mipi.t_clk_post = 10;
+	pinfo.mipi.t_clk_pre = 30;
+#endif
 	pinfo.mipi.stream = 0; /* dma_p */
 	pinfo.mipi.mdp_trigger = DSI_CMD_TRIGGER_SW;
 	pinfo.mipi.dma_trigger = DSI_CMD_TRIGGER_SW;

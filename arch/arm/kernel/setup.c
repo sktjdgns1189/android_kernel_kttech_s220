@@ -107,12 +107,6 @@ EXPORT_SYMBOL(elf_hwcap);
 unsigned int boot_reason;
 EXPORT_SYMBOL(boot_reason);
 
-unsigned int cold_boot;
-EXPORT_SYMBOL(cold_boot);
-
-char* (*arch_read_hardware_id)(void);
-EXPORT_SYMBOL(arch_read_hardware_id);
-
 #ifdef MULTI_CPU
 struct processor processor __read_mostly;
 #endif
@@ -516,7 +510,7 @@ void __init dump_machine_table(void)
 		/* can't use cpu_relax() here as it may require MMU setup */;
 }
 
-int __init arm_add_memory(phys_addr_t start, phys_addr_t size)
+int __init arm_add_memory(phys_addr_t start, unsigned long size)
 {
 	struct membank *bank = &meminfo.bank[meminfo.nr_banks];
 
@@ -546,7 +540,7 @@ int __init arm_add_memory(phys_addr_t start, phys_addr_t size)
 	}
 #endif
 
-	bank->size = size & ~(phys_addr_t)(PAGE_SIZE - 1);
+	bank->size = size & PAGE_MASK;
 
 	/*
 	 * Check whether this memory region has non-zero size or
@@ -566,7 +560,7 @@ int __init arm_add_memory(phys_addr_t start, phys_addr_t size)
 static int __init early_mem(char *p)
 {
 	static int usermem __initdata = 0;
-	phys_addr_t size;
+	unsigned long size;
 	phys_addr_t start;
 	char *endp;
 
@@ -980,10 +974,8 @@ void __init setup_arch(char **cmdline_p)
 	unflatten_device_tree();
 
 #ifdef CONFIG_SMP
-	if (is_smp()) {
-		smp_set_ops(mdesc->smp);
+	if (is_smp())
 		smp_init_cpus();
-	}
 #endif
 	reserve_crashkernel();
 
@@ -1111,10 +1103,7 @@ static int c_show(struct seq_file *m, void *v)
 
 	seq_puts(m, "\n");
 
-	if (!arch_read_hardware_id)
-		seq_printf(m, "Hardware\t: %s\n", machine_name);
-	else
-		seq_printf(m, "Hardware\t: %s\n", arch_read_hardware_id());
+	seq_printf(m, "Hardware\t: %s\n", machine_name);
 	seq_printf(m, "Revision\t: %04x\n", system_rev);
 	seq_printf(m, "Serial\t\t: %08x%08x\n",
 		   system_serial_high, system_serial_low);

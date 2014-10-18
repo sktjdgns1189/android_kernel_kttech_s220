@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, 2013 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,6 +29,7 @@ unsigned int get_num_populated_chipselects(void);
 unsigned int get_num_memory_banks(void);
 unsigned int get_memory_bank_size(unsigned int);
 unsigned int get_memory_bank_start(unsigned int);
+int soc_change_memory_power(u64, u64, int);
 
 enum {
 	MEMTYPE_NONE = -1,
@@ -39,24 +40,15 @@ enum {
 	MEMTYPE_MAX,
 };
 
-enum {
-	SYS_MEMORY = 1,        /* system memory*/
-	BOOT_REGION_MEMORY1,   /* boot loader memory 1*/
-	BOOT_REGION_MEMORY2,   /* boot loader memory 2,reserved*/
-	APPSBL_MEMORY,         /* apps boot loader memory*/
-	APPS_MEMORY,           /* apps  usage memory*/
-};
-
-
 void msm_reserve(void);
 
 #define MEMTYPE_FLAGS_FIXED	0x1
 #define MEMTYPE_FLAGS_1M_ALIGN	0x2
 
 struct memtype_reserve {
-	phys_addr_t start;
-	phys_addr_t size;
-	phys_addr_t limit;
+	unsigned long start;
+	unsigned long size;
+	unsigned long limit;
 	int flags;
 };
 
@@ -64,7 +56,7 @@ struct reserve_info {
 	struct memtype_reserve *memtype_reserve_table;
 	void (*calculate_reserve_sizes)(void);
 	void (*reserve_fixed_area)(unsigned long);
-	int (*paddr_to_memtype)(phys_addr_t);
+	int (*paddr_to_memtype)(unsigned int);
 	unsigned long low_unstable_address;
 	unsigned long max_unstable_size;
 	unsigned long bank_size;
@@ -74,9 +66,5 @@ struct reserve_info {
 
 extern struct reserve_info *reserve_info;
 
-int __init dt_scan_for_memory_reserve(unsigned long node, const char *uname,
-					int depth, void *data);
-int __init dt_scan_for_memory_hole(unsigned long node, const char *uname,
-					int depth, void *data);
-void adjust_meminfo(unsigned long start, unsigned long size);
+unsigned long __init reserve_memory_for_fmem(unsigned long, unsigned long);
 #endif

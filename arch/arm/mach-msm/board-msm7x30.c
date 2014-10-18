@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -11,7 +11,6 @@
  *
  */
 
-#include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/irq.h>
 #include <linux/gpio.h>
@@ -39,6 +38,7 @@
 #include <linux/msm_adc.h>
 #include <linux/dma-mapping.h>
 #include <linux/regulator/consumer.h>
+
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
@@ -53,6 +53,7 @@
 #include <mach/msm_spi.h>
 #include <mach/qdsp5v2/msm_lpa.h>
 #include <mach/dma.h>
+#include <linux/android_pmem.h>
 #include <linux/input/msm_ts.h>
 #include <mach/pmic.h>
 #include <mach/rpc_pmapp.h>
@@ -81,7 +82,6 @@
 #include "pm-boot.h"
 #include "spm.h"
 #include "acpuclock.h"
-#include "clock.h"
 #include <mach/dal_axi.h>
 #include <mach/msm_serial_hs.h>
 #include <mach/qdsp5v2/mi2s.h>
@@ -884,7 +884,6 @@ static struct i2c_board_info cy8info[] __initdata = {
 #ifdef CONFIG_MSM_CAMERA_V4L2
 static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
 	{
-		.csiphy_core = 0,
 		.csid_core = 0,
 		.is_vpe    = 1,
 		.ioclk = {
@@ -892,7 +891,6 @@ static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
 		},
 	},
 	{
-		.csiphy_core = 0,
 		.csid_core = 0,
 		.is_vpe    = 1,
 		.ioclk = {
@@ -3529,6 +3527,19 @@ static int msm_hsusb_pmic_notif_init(void (*callback)(int online), int init)
 }
 #endif
 
+static struct android_pmem_platform_data android_pmem_pdata = {
+	.name = "pmem",
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
+	.cached = 1,
+	.memory_type = MEMTYPE_EBI0,
+};
+
+static struct platform_device android_pmem_device = {
+	.name = "android_pmem",
+	.id = 0,
+	.dev = { .platform_data = &android_pmem_pdata },
+};
+
 #ifndef CONFIG_SPI_QSD
 static int lcdc_gpio_array_num[] = {
 				45, /* spi_clk */
@@ -4004,6 +4015,32 @@ static struct platform_device msm_v4l2_video_overlay_device = {
 static struct platform_device msm_migrate_pages_device = {
 	.name   = "msm_migrate_pages",
 	.id     = -1,
+};
+
+static struct android_pmem_platform_data android_pmem_adsp_pdata = {
+       .name = "pmem_adsp",
+       .allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+       .cached = 0,
+	.memory_type = MEMTYPE_EBI0,
+};
+
+static struct android_pmem_platform_data android_pmem_audio_pdata = {
+       .name = "pmem_audio",
+       .allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+       .cached = 0,
+	.memory_type = MEMTYPE_EBI0,
+};
+
+static struct platform_device android_pmem_adsp_device = {
+       .name = "android_pmem",
+       .id = 2,
+       .dev = { .platform_data = &android_pmem_adsp_pdata },
+};
+
+static struct platform_device android_pmem_audio_device = {
+       .name = "android_pmem",
+       .id = 4,
+       .dev = { .platform_data = &android_pmem_audio_pdata },
 };
 
 #if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
@@ -5150,7 +5187,7 @@ static int bluetooth_power(int on)
 
 	int bahama_not_marimba = bahama_present();
 
-	if (bahama_not_marimba < 0) {
+	if (bahama_not_marimba == -1) {
 		printk(KERN_WARNING "%s: bahama_present: %d\n",
 				__func__, bahama_not_marimba);
 		return -ENODEV;
@@ -5354,6 +5391,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_I2C_SSBI
 	&msm_device_ssbi7,
 #endif
+	&android_pmem_device,
 	&msm_fb_device,
 #ifdef CONFIG_MSM_V4L2_VIDEO_OVERLAY_DEVICE
 	&msm_v4l2_video_overlay_device,
@@ -5365,6 +5403,8 @@ static struct platform_device *devices[] __initdata = {
 	&msm_rotator_device,
 #endif
 	&lcdc_sharp_panel_device,
+	&android_pmem_adsp_device,
+	&android_pmem_audio_device,
 	&msm_device_i2c,
 	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
@@ -7118,7 +7158,9 @@ static struct ion_co_heap_pdata co_ion_pdata = {
  * These heaps are listed in the order they will be allocated.
  * Don't swap the order unless you know what you are doing!
  */
-struct ion_platform_heap msm7x30_heaps[] = {
+static struct ion_platform_data ion_pdata = {
+	.nr = MSM_ION_HEAP_NUM,
+	.heaps = {
 		{
 			.id	= ION_SYSTEM_HEAP_ID,
 			.type	= ION_HEAP_TYPE_SYSTEM,
@@ -7131,6 +7173,7 @@ struct ion_platform_heap msm7x30_heaps[] = {
 			.type	= ION_HEAP_TYPE_CARVEOUT,
 			.name	= ION_CAMERA_HEAP_NAME,
 			.memory_type = ION_EBI_TYPE,
+			.has_outer_cache = 1,
 			.extra_data = (void *)&co_ion_pdata,
 		},
 		/* PMEM_AUDIO */
@@ -7139,6 +7182,7 @@ struct ion_platform_heap msm7x30_heaps[] = {
 			.type	= ION_HEAP_TYPE_CARVEOUT,
 			.name	= ION_AUDIO_HEAP_NAME,
 			.memory_type = ION_EBI_TYPE,
+			.has_outer_cache = 1,
 			.extra_data = (void *)&co_ion_pdata,
 		},
 		/* PMEM_MDP = SF */
@@ -7147,14 +7191,11 @@ struct ion_platform_heap msm7x30_heaps[] = {
 			.type	= ION_HEAP_TYPE_CARVEOUT,
 			.name	= ION_SF_HEAP_NAME,
 			.memory_type = ION_EBI_TYPE,
+			.has_outer_cache = 1,
 			.extra_data = (void *)&co_ion_pdata,
 		},
 #endif
-};
-
-static struct ion_platform_data ion_pdata = {
-	.nr = MSM_ION_HEAP_NUM,
-	.heaps = msm7x30_heaps,
+	}
 };
 
 static struct platform_device ion_dev = {
@@ -7190,6 +7231,39 @@ static void fix_sizes(void)
 #endif
 }
 
+static void __init size_pmem_devices(void)
+{
+#ifdef CONFIG_ANDROID_PMEM
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
+
+	android_pmem_adsp_pdata.size = size;
+	android_pmem_audio_pdata.size = pmem_audio_size;
+	android_pmem_pdata.size = pmem_sf_size;
+#endif
+#endif
+}
+
+#ifdef CONFIG_ANDROID_PMEM
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
+static void __init reserve_memory_for(struct android_pmem_platform_data *p)
+{
+	msm7x30_reserve_table[p->memory_type].size += p->size;
+}
+#endif
+#endif
+
+static void __init reserve_pmem_memory(void)
+{
+#ifdef CONFIG_ANDROID_PMEM
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
+	reserve_memory_for(&android_pmem_adsp_pdata);
+	reserve_memory_for(&android_pmem_audio_pdata);
+	reserve_memory_for(&android_pmem_pdata);
+	msm7x30_reserve_table[MEMTYPE_EBI0].size += pmem_kernel_ebi0_size;
+#endif
+#endif
+}
+
 static void __init reserve_mdp_memory(void)
 {
 	mdp_pdata.ov0_wb_size = MSM_FB_OVERLAY0_WRITEBACK_SIZE;
@@ -7217,6 +7291,8 @@ static void __init reserve_ion_memory(void)
 static void __init msm7x30_calculate_reserve_sizes(void)
 {
 	fix_sizes();
+	size_pmem_devices();
+	reserve_pmem_memory();
 	reserve_mdp_memory();
 	size_ion_devices();
 	reserve_ion_memory();
@@ -7271,7 +7347,8 @@ static void __init msm7x30_map_io(void)
 	msm_shared_ram_phys = 0x00100000;
 	msm_map_msm7x30_io();
 	if (socinfo_init() < 0)
-		pr_err("socinfo_init() failed!\n");
+		printk(KERN_ERR "%s: socinfo_init() failed!\n",
+		       __func__);
 }
 
 static void __init msm7x30_init_early(void)

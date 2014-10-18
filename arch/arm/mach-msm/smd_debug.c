@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd_debug.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -21,10 +21,8 @@
 #include <linux/jiffies.h>
 
 #include <mach/msm_iomap.h>
-#include <mach/msm_smem.h>
 
 #include "smd_private.h"
-#include "smem_private.h"
 
 #if defined(CONFIG_DEBUG_FS)
 
@@ -105,24 +103,22 @@ static int debug_int_stats(char *buf, int max)
 	const char *subsys_name;
 
 	i += scnprintf(buf + i, max - i,
-		"   Subsystem    | Interrupt ID |    In     | Out (Hardcoded) |"
-		" Out (Configured)|\n");
+		"   Subsystem    |     In    | Out (Hardcoded) |"
+		" Out (Configured) |\n");
 
 	for (subsys = 0; subsys < NUM_SMD_SUBSYSTEMS; ++subsys) {
 		subsys_name = smd_pid_to_subsystem(subsys);
 		if (subsys_name) {
 			i += scnprintf(buf + i, max - i,
-				"%-10s %4s |    %9d | %9u |       %9u |       %9u |\n",
+				"%-10s %4s | %9u |       %9u |        %9u |\n",
 				smd_pid_to_subsystem(subsys), "smd",
-				stats->smd_interrupt_id,
 				stats->smd_in_count,
 				stats->smd_out_hardcode_count,
 				stats->smd_out_config_count);
 
 			i += scnprintf(buf + i, max - i,
-				"%-10s %4s |    %9d | %9u |       %9u |       %9u |\n",
+				"%-10s %4s | %9u |       %9u |        %9u |\n",
 				smd_pid_to_subsystem(subsys), "smsm",
-				stats->smsm_interrupt_id,
 				stats->smsm_in_count,
 				stats->smsm_out_hardcode_count,
 				stats->smsm_out_config_count);

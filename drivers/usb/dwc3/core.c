@@ -99,7 +99,6 @@ void dwc3_put_device_id(int id)
 
 	ret = test_bit(id, dwc3_devs);
 	WARN(!ret, "dwc3: ID %d not in use\n", id);
-	smp_mb__before_clear_bit();
 	clear_bit(id, dwc3_devs);
 }
 EXPORT_SYMBOL_GPL(dwc3_put_device_id);
@@ -111,43 +110,7 @@ void dwc3_set_mode(struct dwc3 *dwc, u32 mode)
 	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 	reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 	reg |= DWC3_GCTL_PRTCAPDIR(mode);
-	/*
-	 * Set this bit so that device attempts three more times at SS, even
-	 * if it failed previously to operate in SS mode.
-	 */
-	reg |= DWC3_GCTL_U2RSTECN;
-	reg &= ~(DWC3_GCTL_SOFITPSYNC);
-	reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
-	reg |= DWC3_GCTL_PWRDNSCALE(2);
-	reg |= DWC3_GCTL_U2EXIT_LFPS;
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
-
-	if (mode == DWC3_GCTL_PRTCAP_OTG || mode == DWC3_GCTL_PRTCAP_HOST) {
-		/*
-		 * Allow ITP generated off of ref clk based counter instead
-		 * of UTMI/ULPI clk based counter, when superspeed only is
-		 * active so that UTMI/ULPI PHY can be suspened.
-		 *
-		 * Starting with revision 2.50A, GFLADJ_REFCLK_LPM_SEL is used
-		 * instead.
-		 */
-		if (dwc->revision < DWC3_REVISION_250A) {
-			reg = dwc3_readl(dwc->regs, DWC3_GCTL);
-			reg |= DWC3_GCTL_SOFITPSYNC;
-			dwc3_writel(dwc->regs, DWC3_GCTL, reg);
-		} else {
-			reg = dwc3_readl(dwc->regs, DWC3_GFLADJ);
-			reg |= DWC3_GFLADJ_REFCLK_LPM_SEL;
-			dwc3_writel(dwc->regs, DWC3_GFLADJ, reg);
-		}
-	}
-
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
-	reg |= DWC3_GUSB3PIPECTL_SUSPHY;
-	dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), reg);
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
-	reg |= DWC3_GUSB2PHYCFG_SUSPHY;
-	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 }
 
 /**
@@ -162,8 +125,6 @@ static void dwc3_core_soft_reset(struct dwc3 *dwc)
 	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 	reg |= DWC3_GCTL_CORESOFTRESET;
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
-
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_RESET_EVENT);
 
 	/* Assert USB3 PHY reset */
 	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
@@ -187,14 +148,10 @@ static void dwc3_core_soft_reset(struct dwc3 *dwc)
 	reg &= ~DWC3_GUSB2PHYCFG_PHYSOFTRST;
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 
-	mdelay(100);
-
 	/* After PHYs are stable we can take Core out of reset state */
 	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 	reg &= ~DWC3_GCTL_CORESOFTRESET;
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
-
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_POST_RESET_EVENT);
 }
 
 /**
@@ -281,13 +238,7 @@ static int __devinit dwc3_alloc_event_buffers(struct dwc3 *dwc, unsigned length)
 	for (i = 0; i < num; i++) {
 		struct dwc3_event_buffer	*evt;
 
-		/*
-		 * As SW workaround, allocate 8 bytes more than size of event
-		 * buffer given to USB Controller to avoid possible memory
-		 * corruption caused by event buffer overflow when Hw writes
-		 * Vendor Device test event which could be of 12 bytes.
-		 */
-		evt = dwc3_alloc_one_event_buffer(dwc, (length + 8));
+		evt = dwc3_alloc_one_event_buffer(dwc, length);
 		if (IS_ERR(evt)) {
 			dev_err(dwc->dev, "can't allocate event buffer\n");
 			return PTR_ERR(evt);
@@ -304,7 +255,7 @@ static int __devinit dwc3_alloc_event_buffers(struct dwc3 *dwc, unsigned length)
  *
  * Returns 0 on success otherwise negative errno.
  */
-int dwc3_event_buffers_setup(struct dwc3 *dwc)
+static int __devinit dwc3_event_buffers_setup(struct dwc3 *dwc)
 {
 	struct dwc3_event_buffer	*evt;
 	int				n;
@@ -315,14 +266,12 @@ int dwc3_event_buffers_setup(struct dwc3 *dwc)
 				evt->buf, (unsigned long long) evt->dma,
 				evt->length);
 
-		evt->lpos = 0;
-
 		dwc3_writel(dwc->regs, DWC3_GEVNTADRLO(n),
 				lower_32_bits(evt->dma));
 		dwc3_writel(dwc->regs, DWC3_GEVNTADRHI(n),
 				upper_32_bits(evt->dma));
 		dwc3_writel(dwc->regs, DWC3_GEVNTSIZ(n),
-				(evt->length - 8) & 0xffff);
+				evt->length & 0xffff);
 		dwc3_writel(dwc->regs, DWC3_GEVNTCOUNT(n), 0);
 	}
 
@@ -336,9 +285,6 @@ static void dwc3_event_buffers_cleanup(struct dwc3 *dwc)
 
 	for (n = 0; n < dwc->num_event_buffers; n++) {
 		evt = dwc->ev_buffs[n];
-
-		evt->lpos = 0;
-
 		dwc3_writel(dwc->regs, DWC3_GEVNTADRLO(n), 0);
 		dwc3_writel(dwc->regs, DWC3_GEVNTADRHI(n), 0);
 		dwc3_writel(dwc->regs, DWC3_GEVNTSIZ(n), 0);
@@ -346,7 +292,7 @@ static void dwc3_event_buffers_cleanup(struct dwc3 *dwc)
 	}
 }
 
-static void dwc3_cache_hwparams(struct dwc3 *dwc)
+static void __devinit dwc3_cache_hwparams(struct dwc3 *dwc)
 {
 	struct dwc3_hwparams	*parms = &dwc->hwparams;
 
@@ -367,7 +313,7 @@ static void dwc3_cache_hwparams(struct dwc3 *dwc)
  *
  * Returns 0 on success otherwise negative errno.
  */
-static int dwc3_core_init(struct dwc3 *dwc)
+static int __devinit dwc3_core_init(struct dwc3 *dwc)
 {
 	unsigned long		timeout;
 	u32			reg;
@@ -381,6 +327,8 @@ static int dwc3_core_init(struct dwc3 *dwc)
 		goto err0;
 	}
 	dwc->revision = reg;
+
+	dwc3_core_soft_reset(dwc);
 
 	/* issue device SoftReset too */
 	timeout = jiffies + msecs_to_jiffies(500);
@@ -398,8 +346,6 @@ static int dwc3_core_init(struct dwc3 *dwc)
 
 		cpu_relax();
 	} while (true);
-
-	dwc3_core_soft_reset(dwc);
 
 	dwc3_cache_hwparams(dwc);
 
@@ -427,17 +373,6 @@ static int dwc3_core_init(struct dwc3 *dwc)
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 
 	/*
-	 * The default value of GUCTL[31:22] should be 0x8. But on cores
-	 * revision < 2.30a, the default value is mistakenly overridden
-	 * with 0x0. Restore the correct default value.
-	 */
-	if (dwc->revision < DWC3_REVISION_230A) {
-		reg = dwc3_readl(dwc->regs, DWC3_GUCTL);
-		reg &= ~DWC3_GUCTL_REFCLKPER;
-		reg |= 0x8 << __ffs(DWC3_GUCTL_REFCLKPER);
-		dwc3_writel(dwc->regs, DWC3_GUCTL, reg);
-	}
-	/*
 	 * Currently, the default and the recommended value for GUSB3PIPECTL
 	 * [21:19] in the RTL is 3'b100 or 32 consecutive errors. Based on
 	 * analysis and experiments in the lab, it is found that there is a
@@ -460,29 +395,14 @@ static int dwc3_core_init(struct dwc3 *dwc)
 		reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
 		reg &= ~DWC3_GUSB3PIPECTL_DELAY_P1P2P3;
 		reg |= 1 << __ffs(DWC3_GUSB3PIPECTL_DELAY_P1P2P3);
-		/*
-		 * Receiver Detection in U3/Rx.Det is mistakenly disabled in
-		 * cores < 2.30a. Fix it here.
-		 */
-		reg &= ~DWC3_GUSB3PIPECTL_DIS_RXDET_U3_RXDET;
 		dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), reg);
 	}
-	/*
-	 * clear Elastic buffer mode in GUSBPIPE_CTRL(0) register, otherwise
-	 * it results in high link errors and could cause SS mode transfer
-	 * failure.
-	 */
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
-	reg &= ~DWC3_GUSB3PIPECTL_ELASTIC_BUF_MODE;
-	dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), reg);
 
-	if (!dwc->ev_buffs) {
-		ret = dwc3_alloc_event_buffers(dwc, DWC3_EVENT_BUFFERS_SIZE);
-		if (ret) {
-			dev_err(dwc->dev, "failed to allocate event buffers\n");
-			ret = -ENOMEM;
-			goto err1;
-		}
+	ret = dwc3_alloc_event_buffers(dwc, DWC3_EVENT_BUFFERS_SIZE);
+	if (ret) {
+		dev_err(dwc->dev, "failed to allocate event buffers\n");
+		ret = -ENOMEM;
+		goto err1;
 	}
 
 	ret = dwc3_event_buffers_setup(dwc);
@@ -506,31 +426,8 @@ static void dwc3_core_exit(struct dwc3 *dwc)
 	dwc3_free_event_buffers(dwc);
 }
 
-/* XHCI reset, resets other CORE registers as well, re-init those */
-void dwc3_post_host_reset_core_init(struct dwc3 *dwc)
-{
-	dwc3_core_init(dwc);
-	dwc3_gadget_restart(dwc);
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_POST_INITIALIZATION_EVENT);
-}
-
-static void (*notify_event) (struct dwc3 *, unsigned);
-void dwc3_set_notifier(void (*notify)(struct dwc3 *, unsigned))
-{
-	notify_event = notify;
-}
-EXPORT_SYMBOL(dwc3_set_notifier);
-
-void dwc3_notify_event(struct dwc3 *dwc, unsigned event)
-{
-	if (dwc->notify_event)
-		dwc->notify_event(dwc, event);
-}
-EXPORT_SYMBOL(dwc3_notify_event);
-
 #define DWC3_ALIGN_MASK		(16 - 1)
 
-static u64 dwc3_dma_mask = DMA_BIT_MASK(64);
 static int __devinit dwc3_probe(struct platform_device *pdev)
 {
 	struct device_node	*node = pdev->dev.of_node;
@@ -544,7 +441,6 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 	void			*mem;
 
 	u8			mode;
-	bool			host_only_mode;
 
 	mem = devm_kzalloc(dev, sizeof(*dwc) + DWC3_ALIGN_MASK, GFP_KERNEL);
 	if (!mem) {
@@ -554,32 +450,21 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 	dwc = PTR_ALIGN(mem, DWC3_ALIGN_MASK + 1);
 	dwc->mem = mem;
 
-	if (!dev->dma_mask)
-		dev->dma_mask = &dwc3_dma_mask;
-	if (!dev->coherent_dma_mask)
-		dev->coherent_dma_mask = DMA_BIT_MASK(64);
-
-	dwc->notify_event = notify_event;
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (!res) {
 		dev_err(dev, "missing IRQ\n");
 		return -ENODEV;
 	}
-	dwc->xhci_resources[1].start = res->start;
-	dwc->xhci_resources[1].end = res->end;
-	dwc->xhci_resources[1].flags = res->flags;
-	dwc->xhci_resources[1].name = res->name;
+	dwc->xhci_resources[1] = *res;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		dev_err(dev, "missing memory resource\n");
 		return -ENODEV;
 	}
-	dwc->xhci_resources[0].start = res->start;
+	dwc->xhci_resources[0] = *res;
 	dwc->xhci_resources[0].end = dwc->xhci_resources[0].start +
 					DWC3_XHCI_REGS_END;
-	dwc->xhci_resources[0].flags = res->flags;
-	dwc->xhci_resources[0].name = res->name;
 
 	 /*
 	  * Request memory region but exclude xHCI regs,
@@ -594,7 +479,7 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	regs = devm_ioremap_nocache(dev, res->start, resource_size(res));
+	regs = devm_ioremap(dev, res->start, resource_size(res));
 	if (!regs) {
 		dev_err(dev, "ioremap failed\n");
 		return -ENOMEM;
@@ -618,12 +503,12 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 	else
 		dwc->maximum_speed = DWC3_DCFG_SUPERSPEED;
 
-	dwc->needs_fifo_resize = of_property_read_bool(node, "tx-fifo-resize");
-	host_only_mode = of_property_read_bool(node, "host-only-mode");
+	if (of_get_property(node, "tx-fifo-resize", NULL))
+		dwc->needs_fifo_resize = true;
 
-	pm_runtime_no_callbacks(dev);
-	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
+	pm_runtime_get_sync(dev);
+	pm_runtime_forbid(dev);
 
 	ret = dwc3_core_init(dwc);
 	if (ret) {
@@ -632,12 +517,6 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 	}
 
 	mode = DWC3_MODE(dwc->hwparams.hwparams0);
-
-	/* Override mode if user selects host-only config with DRD core */
-	if (host_only_mode && (mode == DWC3_MODE_DRD)) {
-		dev_dbg(dev, "host only mode selected\n");
-		mode = DWC3_MODE_HOST;
-	}
 
 	switch (mode) {
 	case DWC3_MODE_DEVICE:
@@ -691,7 +570,7 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 		goto err2;
 	}
 
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_POST_INITIALIZATION_EVENT);
+	pm_runtime_allow(dev);
 
 	return 0;
 
@@ -726,6 +605,7 @@ static int __devexit dwc3_remove(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
+	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 
 	dwc3_debugfs_exit(dwc);
@@ -752,22 +632,11 @@ static int __devexit dwc3_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_OF
-static const struct of_device_id of_dwc3_match[] = {
-	{
-		.compatible = "synopsys,dwc3"
-	},
-	{ },
-};
-MODULE_DEVICE_TABLE(of, of_dwc3_match);
-#endif
-
 static struct platform_driver dwc3_driver = {
 	.probe		= dwc3_probe,
 	.remove		= __devexit_p(dwc3_remove),
 	.driver		= {
 		.name	= "dwc3",
-		.of_match_table	= of_match_ptr(of_dwc3_match),
 	},
 };
 

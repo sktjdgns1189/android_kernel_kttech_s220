@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -228,7 +228,6 @@ struct flash_platform_data msm_nand_data = {
 	.parts		= NULL,
 	.nr_parts	= 0,
 	.interleave     = 0,
-	.version	= VERSION_2,
 };
 
 struct platform_device msm_device_nand = {
@@ -420,15 +419,6 @@ static struct msm_watchdog_pdata fsm_watchdog_pdata = {
 	.bark_time = 11000,
 	.has_secure = false,
 	.has_vic = true,
-	.base = MSM_TMR_BASE + WDT1_OFFSET,
-};
-
-static struct resource msm_watchdog_resources[] = {
-	{
-		.start	= INT_WDT1_ACCSCSSBARK,
-		.end	= INT_WDT1_ACCSCSSBARK,
-		.flags	= IORESOURCE_IRQ,
-	},
 };
 
 struct platform_device fsm9xxx_device_watchdog = {
@@ -437,7 +427,5 @@ struct platform_device fsm9xxx_device_watchdog = {
 	.dev = {
 		.platform_data = &fsm_watchdog_pdata,
 	},
-	.num_resources	= ARRAY_SIZE(msm_watchdog_resources),
-	.resource	= msm_watchdog_resources,
 };
 

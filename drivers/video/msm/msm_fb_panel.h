@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -60,7 +60,6 @@ enum {
 	BLT_SWITCH_TG_OFF,
 	BLT_SWITCH_TG_ON
 };
-
 /* panel info type */
 struct lcd_panel_info {
 	__u32 vsync_enable;
@@ -71,7 +70,6 @@ struct lcd_panel_info {
 	__u32 hw_vsync_mode;
 	__u32 vsync_notifier_period;
 	__u32 blt_ctrl;
-	__u32 blt_mode;
 	__u32 rev;
 };
 
@@ -175,7 +173,7 @@ struct msm_panel_info {
 	__u32 frame_count;
 	__u32 is_3d_panel;
 	__u32 frame_rate;
-	__u32 frame_interval;
+
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
@@ -200,22 +198,9 @@ struct msm_fb_panel_data {
 	/* function entry chain */
 	int (*on) (struct platform_device *pdev);
 	int (*off) (struct platform_device *pdev);
-	int (*late_init) (struct platform_device *pdev);
 	int (*power_ctrl) (boolean enable);
 	struct platform_device *next;
 	int (*clk_func) (int enable);
-};
-
-enum {
-	MDP4_OVERLAY_BLT_SWITCH_TG_OFF,
-	MDP4_OVERLAY_BLT_SWITCH_TG_ON,
-	MDP4_OVERLAY_BLT_SWITCH_POLL
-};
-
-enum {
-	MDP4_OVERLAY_MODE_BLT_CTRL,
-	MDP4_OVERLAY_MODE_BLT_ALWAYS_ON,
-	MDP4_OVERLAY_MODE_BLT_ALWAYS_OFF
 };
 
 /*===========================================================================
@@ -225,7 +210,6 @@ struct platform_device *msm_fb_device_alloc(struct msm_fb_panel_data *pdata,
 						u32 type, u32 id);
 int panel_next_on(struct platform_device *pdev);
 int panel_next_off(struct platform_device *pdev);
-int panel_next_late_init(struct platform_device *pdev);
 
 int lcdc_device_register(struct msm_panel_info *pinfo);
 

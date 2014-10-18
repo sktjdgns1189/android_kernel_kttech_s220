@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,7 +16,7 @@
 #include <linux/gpio.h>
 #include <linux/platform_device.h>
 #include <linux/bootmem.h>
-#include <linux/msm_ion.h>
+#include <linux/ion.h>
 #include <asm/mach-types.h>
 #include <mach/msm_memtypes.h>
 #include <mach/board.h>
@@ -50,7 +50,6 @@
 #define MSM_FB_OVERLAY1_WRITEBACK_SIZE (0)
 #endif  /* CONFIG_FB_MSM_OVERLAY1_WRITEBACK */
 
-#define AVTIMER_PHYSICAL_ADDRESS 0x28009008
 
 static struct resource msm_fb_resources[] = {
 	{
@@ -63,7 +62,6 @@ static struct resource msm_fb_resources[] = {
 #define MIPI_VIDEO_TOSHIBA_WSVGA_PANEL_NAME "mipi_video_toshiba_wsvga"
 #define MIPI_VIDEO_CHIMEI_WXGA_PANEL_NAME "mipi_video_chimei_wxga"
 #define HDMI_PANEL_NAME "hdmi_msm"
-#define MHL_PANEL_NAME "hdmi_msm,mhl_8334"
 #define TVOUT_PANEL_NAME "tvout_msm"
 
 #define LVDS_PIXEL_MAP_PATTERN_1	1
@@ -75,16 +73,9 @@ static unsigned char hdmi_is_primary = 1;
 static unsigned char hdmi_is_primary;
 #endif
 
-static unsigned char mhl_display_enabled;
-
 unsigned char apq8064_hdmi_as_primary_selected(void)
 {
 	return hdmi_is_primary;
-}
-
-unsigned char apq8064_mhl_display_enabled(void)
-{
-	return mhl_display_enabled;
 }
 
 static void set_mdp_clocks_for_wuxga(void);
@@ -247,7 +238,7 @@ static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
-	.mdp_max_clk = 266667000,
+	.mdp_max_clk = 200000000,
 	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
 	.mdp_rev = MDP_REV_44,
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
@@ -256,7 +247,6 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mem_hid = MEMTYPE_EBI1,
 #endif
 	.mdp_iommu_split_domain = 1,
-	.avtimer_phy = AVTIMER_PHYSICAL_ADDRESS,
 };
 
 void __init apq8064_mdp_writeback(struct memtype_reserve* reserve_table)
@@ -470,11 +460,7 @@ static int mipi_dsi_panel_power(int on)
 
 		gpio_set_value_cansleep(gpio36, 0);
 		gpio_set_value_cansleep(gpio25, 1);
-		if (socinfo_get_pmic_model() == PMIC_MODEL_PM8917)
-			gpio_set_value_cansleep(gpio26, 1);
 	} else {
-		if (socinfo_get_pmic_model() == PMIC_MODEL_PM8917)
-			gpio_set_value_cansleep(gpio26, 0);
 		gpio_set_value_cansleep(gpio25, 0);
 		gpio_set_value_cansleep(gpio36, 1);
 
@@ -605,11 +591,7 @@ static int lvds_panel_power(int on)
 
 		gpio_set_value_cansleep(gpio36, 0);
 		gpio_set_value_cansleep(mpp3, 1);
-		if (socinfo_get_pmic_model() == PMIC_MODEL_PM8917)
-			gpio_set_value_cansleep(gpio26, 1);
 	} else {
-		if (socinfo_get_pmic_model() == PMIC_MODEL_PM8917)
-			gpio_set_value_cansleep(gpio26, 0);
 		gpio_set_value_cansleep(mpp3, 0);
 		gpio_set_value_cansleep(gpio36, 1);
 
@@ -635,17 +617,14 @@ static int lvds_panel_power(int on)
 
 static int lvds_pixel_remap(void)
 {
-	u32 ver = socinfo_get_version();
-
 	if (machine_is_apq8064_cdp() ||
 	    machine_is_apq8064_liquid()) {
+		u32 ver = socinfo_get_version();
 		if ((SOCINFO_VERSION_MAJOR(ver) == 1) &&
 		    (SOCINFO_VERSION_MINOR(ver) == 0))
 			return LVDS_PIXEL_MAP_PATTERN_1;
 	} else if (machine_is_mpq8064_dtv()) {
-		if ((SOCINFO_VERSION_MAJOR(ver) == 1) &&
-		    (SOCINFO_VERSION_MINOR(ver) == 0))
-			return LVDS_PIXEL_MAP_PATTERN_2;
+		return LVDS_PIXEL_MAP_PATTERN_2;
 	}
 	return 0;
 }
@@ -818,13 +797,12 @@ static int hdmi_core_power(int on, int show)
 		return 0;
 
 	/* TBD: PM8921 regulator instead of 8901 */
-	if (!reg_ext_3p3v &&
-		(!(machine_is_mpq8064_hrd() || machine_is_mpq8064_dtv()))) {
+	if (!reg_ext_3p3v) {
 		reg_ext_3p3v = regulator_get(&hdmi_msm_device.dev,
-						"hdmi_mux_vdd");
+					     "hdmi_mux_vdd");
 		if (IS_ERR_OR_NULL(reg_ext_3p3v)) {
 			pr_err("could not get reg_ext_3p3v, rc = %ld\n",
-				PTR_ERR(reg_ext_3p3v));
+			       PTR_ERR(reg_ext_3p3v));
 			reg_ext_3p3v = NULL;
 			return -ENODEV;
 		}
@@ -832,7 +810,7 @@ static int hdmi_core_power(int on, int show)
 
 	if (!reg_8921_lvs7) {
 		reg_8921_lvs7 = regulator_get(&hdmi_msm_device.dev,
-						"hdmi_vdda");
+					      "hdmi_vdda");
 		if (IS_ERR(reg_8921_lvs7)) {
 			pr_err("could not get reg_8921_lvs7, rc = %ld\n",
 				PTR_ERR(reg_8921_lvs7));
@@ -842,7 +820,7 @@ static int hdmi_core_power(int on, int show)
 	}
 	if (!reg_8921_s4) {
 		reg_8921_s4 = regulator_get(&hdmi_msm_device.dev,
-						"hdmi_lvl_tsl");
+					    "hdmi_lvl_tsl");
 		if (IS_ERR(reg_8921_s4)) {
 			pr_err("could not get reg_8921_s4, rc = %ld\n",
 				PTR_ERR(reg_8921_s4));
@@ -861,22 +839,17 @@ static int hdmi_core_power(int on, int show)
 		 * Configure 3P3V_BOOST_EN as GPIO, 8mA drive strength,
 		 * pull none, out-high
 		 */
-		if (!(machine_is_mpq8064_hrd() || machine_is_mpq8064_dtv())) {
-			rc = regulator_set_optimum_mode(reg_ext_3p3v, 290000);
-			if (rc < 0) {
-				pr_err("set_optimum_mode ext_3p3v failed," \
-					"rc=%d\n", rc);
-				return -EINVAL;
-			}
-
-			rc = regulator_enable(reg_ext_3p3v);
-			if (rc) {
-				pr_err("enable reg_ext_3p3v failed, rc=%d\n",
-					rc);
-				return rc;
-			}
+		rc = regulator_set_optimum_mode(reg_ext_3p3v, 290000);
+		if (rc < 0) {
+			pr_err("set_optimum_mode ext_3p3v failed, rc=%d\n", rc);
+			return -EINVAL;
 		}
 
+		rc = regulator_enable(reg_ext_3p3v);
+		if (rc) {
+			pr_err("enable reg_ext_3p3v failed, rc=%d\n", rc);
+			return rc;
+		}
 		rc = regulator_enable(reg_8921_lvs7);
 		if (rc) {
 			pr_err("'%s' regulator enable failed, rc=%d\n",
@@ -891,15 +864,11 @@ static int hdmi_core_power(int on, int show)
 		}
 		pr_debug("%s(on): success\n", __func__);
 	} else {
-		if (!(machine_is_mpq8064_hrd() || machine_is_mpq8064_dtv())) {
-			rc = regulator_disable(reg_ext_3p3v);
-			if (rc) {
-				pr_err("disable reg_ext_3p3v failed, rc=%d\n",
-					rc);
-				return -ENODEV;
-			}
+		rc = regulator_disable(reg_ext_3p3v);
+		if (rc) {
+			pr_err("disable reg_ext_3p3v failed, rc=%d\n", rc);
+			return -ENODEV;
 		}
-
 		rc = regulator_disable(reg_8921_lvs7);
 		if (rc) {
 			pr_err("disable reg_8921_l23 failed, rc=%d\n", rc);
@@ -920,8 +889,7 @@ static int hdmi_core_power(int on, int show)
 error2:
 	regulator_disable(reg_8921_lvs7);
 error1:
-	if (!(machine_is_mpq8064_hrd() || machine_is_mpq8064_dtv()))
-		regulator_disable(reg_ext_3p3v);
+	regulator_disable(reg_ext_3p3v);
 	return rc;
 }
 
@@ -1096,15 +1064,7 @@ void __init apq8064_set_display_params(char *prim_panel, char *ext_panel,
 			PANEL_NAME_MAX_LEN);
 		pr_debug("msm_fb_pdata.ext_panel_name %s\n",
 			msm_fb_pdata.ext_panel_name);
-
-		if (!strncmp((char *)msm_fb_pdata.ext_panel_name,
-			MHL_PANEL_NAME, strnlen(MHL_PANEL_NAME,
-				PANEL_NAME_MAX_LEN))) {
-			pr_debug("MHL is external display by boot parameter\n");
-			mhl_display_enabled = 1;
-		}
 	}
 
 	msm_fb_pdata.ext_resolution = resolution;
-	hdmi_msm_data.is_mhl_enabled = mhl_display_enabled;
 }

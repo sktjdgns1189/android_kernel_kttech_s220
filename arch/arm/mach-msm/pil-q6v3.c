@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,15 +16,11 @@
 #include <linux/io.h>
 #include <linux/ioport.h>
 #include <linux/delay.h>
+#include <linux/elf.h>
 #include <linux/err.h>
 #include <linux/clk.h>
-#include <linux/workqueue.h>
-#include <linux/interrupt.h>
 
-#include <mach/subsystem_restart.h>
-#include <mach/scm.h>
-#include <mach/ramdump.h>
-#include <mach/msm_bus_board.h>
+#include <mach/msm_iomap.h>
 
 #include "peripheral-loader.h"
 #include "scm-pas.h"
@@ -33,7 +29,7 @@
 #define QDSP6SS_STRAP_TCM	0x001C
 #define QDSP6SS_STRAP_AHB	0x0020
 
-#define LCC_Q6_FUNC		0x001C
+#define LCC_Q6_FUNC		(MSM_LPASS_CLK_CTL_BASE + 0x001C)
 #define LV_EN			BIT(27)
 #define STOP_CORE		BIT(26)
 #define CLAMP_IO		BIT(25)
@@ -64,35 +60,21 @@
 #define Q6_STRAP_TCM_BASE	(0x28C << 15)
 #define Q6_STRAP_TCM_CONFIG	0x28B
 
-#define SCM_Q6_NMI_CMD		0x1
-
-/**
- * struct q6v3_data - LPASS driver data
- * @base: register base
- * @cbase: clock base
- * @wk_base: wakeup register base
- * @wd_base: watchdog register base
- * @irq: watchdog irq
- * @pil: peripheral handle
- * @subsys: subsystem restart handle
- * @subsys_desc: subsystem restart descriptor
- * @fatal_wrk: fatal error workqueue
- * @pll: pll clock handle
- * @ramdump_dev: ramdump device
- */
 struct q6v3_data {
 	void __iomem *base;
-	void __iomem *cbase;
-	void __iomem *wk_base;
-	void __iomem *wd_base;
-	int irq;
-	struct pil_desc pil_desc;
-	struct subsys_device *subsys;
-	struct subsys_desc subsys_desc;
-	struct work_struct fatal_wrk;
+	unsigned long start_addr;
+	struct pil_device *pil;
 	struct clk *pll;
-	struct ramdump_device *ramdump_dev;
 };
+
+static int pil_q6v3_init_image(struct pil_desc *pil, const u8 *metadata,
+		size_t size)
+{
+	const struct elf32_hdr *ehdr = (struct elf32_hdr *)metadata;
+	struct q6v3_data *drv = dev_get_drvdata(pil->dev);
+	drv->start_addr = ehdr->e_entry;
+	return 0;
+}
 
 static void pil_q6v3_remove_proxy_votes(struct pil_desc *pil)
 {
@@ -117,14 +99,13 @@ static int pil_q6v3_reset(struct pil_desc *pil)
 {
 	u32 reg;
 	struct q6v3_data *drv = dev_get_drvdata(pil->dev);
-	phys_addr_t start_addr = pil_get_entry_addr(pil);
 
 	/* Put Q6 into reset */
-	reg = readl_relaxed(drv->cbase + LCC_Q6_FUNC);
+	reg = readl_relaxed(LCC_Q6_FUNC);
 	reg |= Q6SS_SS_ARES | Q6SS_ISDB_ARES | Q6SS_ETM_ARES | STOP_CORE |
 		CORE_ARES;
 	reg &= ~CORE_GFM4_CLK_EN;
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	/* Wait 8 AHB cycles for Q6 to be fully reset (AHB = 1.5Mhz) */
 	usleep_range(20, 30);
@@ -132,17 +113,17 @@ static int pil_q6v3_reset(struct pil_desc *pil)
 	/* Turn on Q6 memory */
 	reg |= CORE_GFM4_CLK_EN | CORE_L1_MEM_CORE_EN | CORE_TCM_MEM_CORE_EN |
 		CORE_TCM_MEM_PERPH_EN;
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	/* Turn on Q6 core clocks and take core out of reset */
 	reg &= ~(CLAMP_IO | Q6SS_SS_ARES | Q6SS_ISDB_ARES | Q6SS_ETM_ARES |
 			CORE_ARES);
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	/* Wait for clocks to be enabled */
 	mb();
 	/* Program boot address */
-	writel_relaxed((start_addr >> 12) & 0xFFFFF,
+	writel_relaxed((drv->start_addr >> 12) & 0xFFFFF,
 			drv->base + QDSP6SS_RST_EVB);
 
 	writel_relaxed(Q6_STRAP_TCM_CONFIG | Q6_STRAP_TCM_BASE,
@@ -155,7 +136,7 @@ static int pil_q6v3_reset(struct pil_desc *pil)
 
 	/* Start Q6 instruction execution */
 	reg &= ~STOP_CORE;
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	return 0;
 }
@@ -163,14 +144,13 @@ static int pil_q6v3_reset(struct pil_desc *pil)
 static int pil_q6v3_shutdown(struct pil_desc *pil)
 {
 	u32 reg;
-	struct q6v3_data *drv = dev_get_drvdata(pil->dev);
 
 	/* Put Q6 into reset */
-	reg = readl_relaxed(drv->cbase + LCC_Q6_FUNC);
+	reg = readl_relaxed(LCC_Q6_FUNC);
 	reg |= Q6SS_SS_ARES | Q6SS_ISDB_ARES | Q6SS_ETM_ARES | STOP_CORE |
 		CORE_ARES;
 	reg &= ~CORE_GFM4_CLK_EN;
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	/* Wait 8 AHB cycles for Q6 to be fully reset (AHB = 1.5Mhz) */
 	usleep_range(20, 30);
@@ -178,15 +158,16 @@ static int pil_q6v3_shutdown(struct pil_desc *pil)
 	/* Turn off Q6 memory */
 	reg &= ~(CORE_L1_MEM_CORE_EN | CORE_TCM_MEM_CORE_EN |
 		CORE_TCM_MEM_PERPH_EN);
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	reg |= CLAMP_IO;
-	writel_relaxed(reg, drv->cbase + LCC_Q6_FUNC);
+	writel_relaxed(reg, LCC_Q6_FUNC);
 
 	return 0;
 }
 
 static struct pil_reset_ops pil_q6v3_ops = {
+	.init_image = pil_q6v3_init_image,
 	.auth_and_reset = pil_q6v3_reset,
 	.shutdown = pil_q6v3_shutdown,
 	.proxy_vote = pil_q6v3_make_proxy_votes,
@@ -217,142 +198,33 @@ static struct pil_reset_ops pil_q6v3_ops_trusted = {
 	.proxy_unvote = pil_q6v3_remove_proxy_votes,
 };
 
-static void q6_fatal_fn(struct work_struct *work)
-{
-	struct q6v3_data *drv = container_of(work, struct q6v3_data, fatal_wrk);
-
-	pr_err("Watchdog bite received from Q6!\n");
-	subsystem_restart_dev(drv->subsys);
-	enable_irq(drv->irq);
-}
-
-static void send_q6_nmi(struct q6v3_data *drv)
-{
-	/* Send NMI to QDSP6 via an SCM call. */
-	scm_call_atomic1(SCM_SVC_UTIL, SCM_Q6_NMI_CMD, 0x1);
-
-	/* Wakeup the Q6 */
-	writel_relaxed(0x2000, drv->wk_base + 0x1c);
-	/* Q6 requires atleast 100ms to dump caches etc.*/
-	mdelay(100);
-	pr_info("Q6 NMI was sent.\n");
-}
-
-static int lpass_q6_start(const struct subsys_desc *subsys)
-{
-	struct q6v3_data *drv;
-
-	drv = container_of(subsys, struct q6v3_data, subsys_desc);
-	return pil_boot(&drv->pil_desc);
-}
-
-static void lpass_q6_stop(const struct subsys_desc *subsys)
-{
-	struct q6v3_data *drv;
-
-	drv = container_of(subsys, struct q6v3_data, subsys_desc);
-	pil_shutdown(&drv->pil_desc);
-}
-
-static int lpass_q6_shutdown(const struct subsys_desc *subsys)
-{
-	struct q6v3_data *drv;
-
-	drv = container_of(subsys, struct q6v3_data, subsys_desc);
-	send_q6_nmi(drv);
-	writel_relaxed(0x0, drv->wd_base + 0x24);
-	mb();
-
-	pil_shutdown(&drv->pil_desc);
-	disable_irq_nosync(drv->irq);
-
-	return 0;
-}
-
-static int lpass_q6_powerup(const struct subsys_desc *subsys)
-{
-	struct q6v3_data *drv;
-	int ret;
-
-	drv = container_of(subsys, struct q6v3_data, subsys_desc);
-	ret = pil_boot(&drv->pil_desc);
-	enable_irq(drv->irq);
-	return ret;
-}
-
-static int lpass_q6_ramdump(int enable, const struct subsys_desc *subsys)
-{
-	struct q6v3_data *drv;
-
-	drv = container_of(subsys, struct q6v3_data, subsys_desc);
-	if (!enable)
-		return 0;
-
-	return pil_do_ramdump(&drv->pil_desc, drv->ramdump_dev);
-}
-
-static void lpass_q6_crash_shutdown(const struct subsys_desc *subsys)
-{
-	struct q6v3_data *drv;
-
-	drv = container_of(subsys, struct q6v3_data, subsys_desc);
-	send_q6_nmi(drv);
-}
-
-static irqreturn_t lpass_wdog_bite_irq(int irq, void *dev_id)
-{
-	int ret;
-	struct q6v3_data *drv = dev_id;
-
-	ret = schedule_work(&drv->fatal_wrk);
-	disable_irq_nosync(drv->irq);
-
-	return IRQ_HANDLED;
-}
-
 static int __devinit pil_q6v3_driver_probe(struct platform_device *pdev)
 {
 	struct q6v3_data *drv;
 	struct resource *res;
 	struct pil_desc *desc;
-	int ret;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		return -EINVAL;
 
 	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
 	if (!drv)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, drv);
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	drv->base = devm_request_and_ioremap(&pdev->dev, res);
+	drv->base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (!drv->base)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	drv->wk_base = devm_request_and_ioremap(&pdev->dev, res);
-	if (!drv->wk_base)
+	desc = devm_kzalloc(&pdev->dev, sizeof(*desc), GFP_KERNEL);
+	if (!drv)
 		return -ENOMEM;
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
-	drv->wd_base = devm_request_and_ioremap(&pdev->dev, res);
-	if (!drv->wd_base)
-		return -ENOMEM;
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 3);
-	if (!res)
-		return -EINVAL;
-	drv->cbase = devm_ioremap(&pdev->dev, res->start, resource_size(res));
-	if (!drv->cbase)
-		return -ENOMEM;
-
-	drv->irq = platform_get_irq(pdev, 0);
-	if (drv->irq < 0)
-		return drv->irq;
 
 	drv->pll = devm_clk_get(&pdev->dev, "pll4");
 	if (IS_ERR(drv->pll))
 		return PTR_ERR(drv->pll);
 
-	desc = &drv->pil_desc;
 	desc->name = "q6";
 	desc->dev = &pdev->dev;
 	desc->owner = THIS_MODULE;
@@ -366,59 +238,17 @@ static int __devinit pil_q6v3_driver_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "using non-secure boot\n");
 	}
 
-	ret = pil_desc_init(desc);
-	if (ret)
-		return ret;
-
-	drv->subsys_desc.name = "adsp";
-	drv->subsys_desc.dev = &pdev->dev;
-	drv->subsys_desc.owner = THIS_MODULE;
-	drv->subsys_desc.start = lpass_q6_start;
-	drv->subsys_desc.stop = lpass_q6_stop;
-	drv->subsys_desc.shutdown = lpass_q6_shutdown;
-	drv->subsys_desc.powerup = lpass_q6_powerup;
-	drv->subsys_desc.ramdump = lpass_q6_ramdump;
-	drv->subsys_desc.crash_shutdown = lpass_q6_crash_shutdown;
-
-	INIT_WORK(&drv->fatal_wrk, q6_fatal_fn);
-
-	drv->ramdump_dev = create_ramdump_device("lpass", &pdev->dev);
-	if (!drv->ramdump_dev) {
-		ret = -ENOMEM;
-		goto err_ramdump;
+	drv->pil = msm_pil_register(desc);
+	if (IS_ERR(drv->pil)) {
+		return PTR_ERR(drv->pil);
 	}
-
-	drv->subsys = subsys_register(&drv->subsys_desc);
-	if (IS_ERR(drv->subsys)) {
-		ret = PTR_ERR(drv->subsys);
-		goto err_subsys;
-	}
-
-	scm_pas_init(MSM_BUS_MASTER_SPS);
-
-	ret = devm_request_irq(&pdev->dev, drv->irq, lpass_wdog_bite_irq,
-			       IRQF_TRIGGER_RISING, "lpass_wdog", drv);
-	if (ret) {
-		dev_err(&pdev->dev, "Unable to request wdog irq.\n");
-		goto err_irq;
-	}
-
 	return 0;
-err_irq:
-	subsys_unregister(drv->subsys);
-err_subsys:
-	destroy_ramdump_device(drv->ramdump_dev);
-err_ramdump:
-	pil_desc_release(desc);
-	return ret;
 }
 
 static int __devexit pil_q6v3_driver_exit(struct platform_device *pdev)
 {
 	struct q6v3_data *drv = platform_get_drvdata(pdev);
-	subsys_unregister(drv->subsys);
-	destroy_ramdump_device(drv->ramdump_dev);
-	pil_desc_release(&drv->pil_desc);
+	msm_pil_unregister(drv->pil);
 	return 0;
 }
 

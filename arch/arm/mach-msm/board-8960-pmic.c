@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -109,7 +109,7 @@ static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
 	PM8XXX_GPIO_OUTPUT(43, 1),                       /* DISP_RESET_N */
 	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
 	/* TABLA CODEC RESET */
-	PM8XXX_GPIO_OUTPUT_STRENGTH(34, 0, PM_GPIO_STRENGTH_MED)
+	PM8XXX_GPIO_OUTPUT_STRENGTH(34, 1, PM_GPIO_STRENGTH_MED)
 };
 
 /* Initial PM8921 MPP configurations */
@@ -119,6 +119,35 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 								DOUT_CTRL_LOW),
 };
+
+#ifdef CONFIG_KTTECH_PN544_NFC
+static struct pm8xxx_mpp_config_data nfc_clk_on_config = {
+	.type		= PM8XXX_MPP_TYPE_D_INPUT,
+	.level		= PM8921_MPP_DIG_LEVEL_S4,
+	.control	= PM8XXX_MPP_DIN_TO_INT,
+};
+
+
+static struct pm8xxx_mpp_config_data nfc_clk_off_config = {
+ .type  = PM8XXX_MPP_TYPE_D_INPUT,
+ .level  = PM8XXX_MPP_CS_OUT_5MA,
+ .control = PM8XXX_MPP_CS_CTRL_DISABLE,
+};
+ 
+static int32_t msm_nfc_8960_d1_clk_ctrl(int enable)
+{
+ int rc = 0;
+ if (enable) {
+  rc = pm8xxx_mpp_config(PM8921_MPP_PM_TO_SYS(9),
+   &nfc_clk_on_config);
+ } else {
+  rc = pm8xxx_mpp_config(PM8921_MPP_PM_TO_SYS(9),
+   &nfc_clk_off_config);
+ }
+ return rc;
+}
+#endif
+
 
 void __init msm8960_pm8921_gpio_mpp_init(void)
 {
@@ -141,6 +170,12 @@ void __init msm8960_pm8921_gpio_mpp_init(void)
 			break;
 		}
 	}
+    
+#ifdef CONFIG_KTTECH_PN544_NFC
+	msm_nfc_8960_d1_clk_ctrl(1);
+#endif
+
+	
 }
 
 static struct pm8xxx_adc_amux pm8xxx_adc_channels_data[] = {
@@ -249,8 +284,8 @@ static struct pm8xxx_keypad_platform_data keypad_data_liquid = {
 static const unsigned int keymap[] = {
 	KEY(0, 0, KEY_VOLUMEUP),
 	KEY(0, 1, KEY_VOLUMEDOWN),
-	KEY(0, 2, KEY_CAMERA_FOCUS),
-	KEY(0, 3, KEY_CAMERA_SNAPSHOT),
+	KEY(0, 2, KEY_CAMERA_SNAPSHOT),
+	KEY(0, 3, KEY_CAMERA_FOCUS),
 };
 
 static struct matrix_keymap_data keymap_data = {
@@ -386,6 +421,25 @@ static const unsigned int keymap_sim[] = {
 	KEY(0, 3, KEY_CAMERA_FOCUS),
 };
 
+static struct matrix_keymap_data keymap_data_sim = {
+	.keymap_size    = ARRAY_SIZE(keymap_sim),
+	.keymap         = keymap_sim,
+};
+
+static struct pm8xxx_keypad_platform_data keypad_data_sim = {
+	.input_name             = "keypad_8960",
+	.input_phys_device      = "keypad_8960/input0",
+	.num_rows               = 12,
+	.num_cols               = 8,
+	.rows_gpio_start	= PM8921_GPIO_PM_TO_SYS(9),
+	.cols_gpio_start	= PM8921_GPIO_PM_TO_SYS(1),
+	.debounce_ms            = 15,
+	.scan_delay_ms          = 32,
+	.row_hold_ns            = 91500,
+	.wakeup                 = 1,
+	.keymap_data            = &keymap_data_sim,
+};
+
 static int pm8921_therm_mitigation[] = {
 	1100,
 	700,
@@ -394,19 +448,16 @@ static int pm8921_therm_mitigation[] = {
 };
 
 #define MAX_VOLTAGE_MV		4200
-#define CHG_TERM_MA		100
 static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
+	.safety_time		= 180,
 	.update_time		= 60000,
 	.max_voltage		= MAX_VOLTAGE_MV,
 	.min_voltage		= 3200,
 	.uvd_thresh_voltage	= 4050,
-	.alarm_low_mv		= 3400,
-	.alarm_high_mv		= 4000,
-	.resume_voltage_delta	= 60,
-	.resume_charge_percent	= 99,
-	.term_current		= CHG_TERM_MA,
+	.resume_voltage_delta	= 100,
+	.term_current		= 100,
 	.cool_temp		= 10,
-	.warm_temp		= 45,
+	.warm_temp		= 40,
 	.temp_check_period	= 1,
 	.max_bat_chg_current	= 1100,
 	.cool_bat_chg_current	= 350,
@@ -423,25 +474,12 @@ static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
 };
 
 static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
-	.battery_type			= BATT_UNKNOWN,
-	.r_sense_uohm			= 10000,
-	.v_cutoff			= 3400,
-	.max_voltage_uv			= MAX_VOLTAGE_MV * 1000,
-	.rconn_mohm			= 18,
-	.shutdown_soc_valid_limit	= 20,
-	.adjust_soc_low_threshold	= 25,
-	.chg_term_ua			= CHG_TERM_MA * 1000,
-	.normal_voltage_calc_ms		= 20000,
-	.low_voltage_calc_ms		= 1000,
-	.alarm_low_mv			= 3400,
-	.alarm_high_mv			= 4000,
-	.high_ocv_correction_limit_uv	= 50,
-	.low_ocv_correction_limit_uv	= 100,
-	.hold_soc_est			= 3,
-	.enable_fcc_learning		= 1,
-	.min_fcc_learning_soc		= 20,
-	.min_fcc_ocv_pc			= 30,
-	.min_fcc_learning_samples	= 5,
+	.battery_type	= BATT_UNKNOWN,
+	.r_sense		= 10,
+	.i_test			= 2500,
+	.v_failure		= 3000,
+	.max_voltage_uv		= MAX_VOLTAGE_MV * 1000,
+	.rconn_mohm		= 18,
 };
 
 #define	PM8921_LC_LED_MAX_CURRENT	4	/* I = 4mA */
@@ -563,7 +601,7 @@ static struct pm8xxx_led_platform_data pm8xxx_leds_pdata = {
 };
 
 static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
-	.r_sense_uohm		= 10000,
+	.r_sense		= 10,
 	.calib_delay_ms		= 600000,
 };
 
@@ -610,20 +648,18 @@ void __init msm8960_init_pmic(void)
 				&msm8960_ssbi_pm8921_pdata;
 	pm8921_platform_data.num_regulators = msm_pm8921_regulator_pdata_len;
 
+	/* Simulator supports a QWERTY keypad */
+	if (machine_is_msm8960_sim())
+		pm8921_platform_data.keypad_pdata = &keypad_data_sim;
+
 	if (machine_is_msm8960_liquid()) {
 		pm8921_platform_data.keypad_pdata = &keypad_data_liquid;
 		pm8921_platform_data.leds_pdata = &pm8xxx_leds_pdata_liquid;
 		pm8921_platform_data.bms_pdata->battery_type = BATT_DESAY;
 	} else if (machine_is_msm8960_mtp()) {
 		pm8921_platform_data.bms_pdata->battery_type = BATT_PALLADIUM;
-	} else if (machine_is_msm8960_cdp()) {
-		pm8921_chg_pdata.has_dc_supply = true;
 	}
 
 	if (machine_is_msm8960_fluid())
 		pm8921_bms_pdata.rconn_mohm = 20;
-
-	if (!machine_is_msm8960_fluid() && !machine_is_msm8960_liquid()
-			&& !machine_is_msm8960_mtp())
-		pm8921_chg_pdata.battery_less_hardware = 1;
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,7 +16,7 @@
 
 #include <asm/mach-types.h>
 
-#include <mach/camera.h>
+#include <mach/board.h>
 #include <mach/msm_bus_board.h>
 #include <mach/gpiomux.h>
 
@@ -187,22 +187,8 @@ static struct msm_gpiomux_config apq8064_cam_common_configs[] = {
 #define VFE_CAMIF_TIMER1_GPIO 3
 #define VFE_CAMIF_TIMER2_GPIO 1
 
-static struct gpio flash_init_gpio[] = {
-	{VFE_CAMIF_TIMER1_GPIO, GPIOF_OUT_INIT_LOW, "CAMIF_TIMER1"},
-	{VFE_CAMIF_TIMER2_GPIO, GPIOF_OUT_INIT_LOW, "CAMIF_TIMER2"},
-};
-
-static struct msm_gpio_set_tbl flash_set_gpio[] = {
-	{VFE_CAMIF_TIMER1_GPIO, GPIOF_OUT_INIT_HIGH, 2000},
-	{VFE_CAMIF_TIMER2_GPIO, GPIOF_OUT_INIT_HIGH, 2000},
-};
-
 static struct msm_camera_sensor_flash_src msm_flash_src = {
 	.flash_sr_type = MSM_CAMERA_FLASH_SRC_EXT,
-	.init_gpio_tbl = flash_init_gpio,
-	.init_gpio_tbl_size = ARRAY_SIZE(flash_init_gpio),
-	.set_gpio_tbl = flash_set_gpio,
-	.set_gpio_tbl_size = ARRAY_SIZE(flash_set_gpio),
 	._fsrc.ext_driver_src.led_en = VFE_CAMIF_TIMER1_GPIO,
 	._fsrc.ext_driver_src.led_flash_en = VFE_CAMIF_TIMER2_GPIO,
 	._fsrc.ext_driver_src.flash_id = MAM_CAMERA_EXT_LED_FLASH_SC628A,
@@ -257,7 +243,7 @@ static struct msm_bus_vectors cam_video_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_VFE,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 274406400,
+		.ab  = 140451840,
 		.ib  = 561807360,
 	},
 	{
@@ -316,61 +302,6 @@ static struct msm_bus_vectors cam_zsl_vectors[] = {
 	},
 };
 
-static struct msm_bus_vectors cam_video_ls_vectors[] = {
-	{
-		.src = MSM_BUS_MASTER_VFE,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 348192000,
-		.ib  = 617103360,
-	},
-	{
-		.src = MSM_BUS_MASTER_VPE,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 206807040,
-		.ib  = 488816640,
-	},
-	{
-		.src = MSM_BUS_MASTER_JPEG_ENC,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 540000000,
-		.ib  = 1350000000,
-	},
-};
-
-static struct msm_bus_vectors cam_dual_vectors[] = {
-	{
-		.src = MSM_BUS_MASTER_VFE,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 348192000,
-		.ib  = 1208286720,
-	},
-	{
-		.src = MSM_BUS_MASTER_VPE,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 206807040,
-		.ib  = 488816640,
-	},
-	{
-		.src = MSM_BUS_MASTER_JPEG_ENC,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab  = 540000000,
-		.ib  = 1350000000,
-	},
-	{
-		.src = MSM_BUS_MASTER_JPEG_ENC,
-		.dst = MSM_BUS_SLAVE_MM_IMEM,
-		.ab  = 43200000,
-		.ib  = 69120000,
-	},
-	{
-		.src = MSM_BUS_MASTER_VFE,
-		.dst = MSM_BUS_SLAVE_MM_IMEM,
-		.ab  = 43200000,
-		.ib  = 69120000,
-	},
-};
-
-
 static struct msm_bus_paths cam_bus_client_config[] = {
 	{
 		ARRAY_SIZE(cam_init_vectors),
@@ -392,14 +323,6 @@ static struct msm_bus_paths cam_bus_client_config[] = {
 		ARRAY_SIZE(cam_zsl_vectors),
 		cam_zsl_vectors,
 	},
-	{
-		ARRAY_SIZE(cam_video_ls_vectors),
-		cam_video_ls_vectors,
-	},
-	{
-		ARRAY_SIZE(cam_dual_vectors),
-		cam_dual_vectors,
-	},
 };
 
 static struct msm_bus_scale_pdata cam_bus_client_pdata = {
@@ -410,23 +333,28 @@ static struct msm_bus_scale_pdata cam_bus_client_pdata = {
 
 static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
 	{
-		.csiphy_core = 0,
 		.csid_core = 0,
 		.is_vpe    = 1,
 		.cam_bus_scale_table = &cam_bus_client_pdata,
 	},
 	{
-		.csiphy_core = 1,
 		.csid_core = 1,
 		.is_vpe    = 1,
 		.cam_bus_scale_table = &cam_bus_client_pdata,
 	},
 };
 
-static struct camera_vreg_t apq_8064_cam_vreg[] = {
+static struct camera_vreg_t apq_8064_back_cam_vreg[] = {
 	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
 	{"cam_vio", REG_VS, 0, 0, 0},
 	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
+};
+
+static struct camera_vreg_t apq_8064_front_cam_vreg[] = {
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
 	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
 };
 
@@ -517,44 +445,9 @@ static struct msm_camera_i2c_conf apq8064_front_cam_i2c_conf = {
 	.i2c_mux_mode = MODE_L,
 };
 
-static struct msm_camera_sensor_flash_data flash_imx135 = {
-	.flash_type = MSM_CAMERA_FLASH_NONE,
-};
-
-static struct msm_camera_csi_lane_params imx135_csi_lane_params = {
-	.csi_lane_assign = 0xE4,
-	.csi_lane_mask = 0xF,
-};
-
-static struct msm_camera_sensor_platform_info sensor_board_info_imx135 = {
-	.mount_angle    = 90,
-	.cam_vreg = apq_8064_cam_vreg,
-	.num_vreg = ARRAY_SIZE(apq_8064_cam_vreg),
-	.gpio_conf = &apq8064_back_cam_gpio_conf,
-	.i2c_conf = &apq8064_back_cam_i2c_conf,
-	.csi_lane_params = &imx135_csi_lane_params,
-};
-
-static struct msm_camera_sensor_info msm_camera_sensor_imx135_data = {
-	.sensor_name    = "imx135",
-	.pdata  = &msm_camera_csi_device_data[0],
-	.flash_data = &flash_imx135,
-	.sensor_platform_info = &sensor_board_info_imx135,
-	.csi_if = 1,
-	.camera_type = BACK_CAMERA_2D,
-	.sensor_type = BAYER_SENSOR,
-	.actuator_info = &msm_act_main_cam_1_info,
-};
-
-static struct i2c_board_info sc628a_flash_i2c_info = {
-	I2C_BOARD_INFO("sc628a", 0x6E),
-};
-
 static struct msm_camera_sensor_flash_data flash_imx074 = {
 	.flash_type	= MSM_CAMERA_FLASH_LED,
-	.flash_src	= &msm_flash_src,
-	.board_info     = &sc628a_flash_i2c_info,
-	.bus_id         = APQ_8064_GSBI4_QUP_I2C_BUS_ID,
+	.flash_src	= &msm_flash_src
 };
 
 static struct msm_camera_csi_lane_params imx074_csi_lane_params = {
@@ -564,8 +457,8 @@ static struct msm_camera_csi_lane_params imx074_csi_lane_params = {
 
 static struct msm_camera_sensor_platform_info sensor_board_info_imx074 = {
 	.mount_angle	= 90,
-	.cam_vreg = apq_8064_cam_vreg,
-	.num_vreg = ARRAY_SIZE(apq_8064_cam_vreg),
+	.cam_vreg = apq_8064_back_cam_vreg,
+	.num_vreg = ARRAY_SIZE(apq_8064_back_cam_vreg),
 	.gpio_conf = &apq8064_back_cam_gpio_conf,
 	.i2c_conf = &apq8064_back_cam_i2c_conf,
 	.csi_lane_params = &imx074_csi_lane_params,
@@ -597,14 +490,21 @@ static struct msm_camera_csi_lane_params imx091_csi_lane_params = {
 	.csi_lane_mask = 0xF,
 };
 
+static struct camera_vreg_t apq_8064_imx091_vreg[] = {
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vio", REG_VS, 0, 0, 0},
+};
+
 static struct msm_camera_sensor_flash_data flash_imx091 = {
 	.flash_type	= MSM_CAMERA_FLASH_NONE,
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_imx091 = {
 	.mount_angle	= 0,
-	.cam_vreg = apq_8064_cam_vreg,
-	.num_vreg = ARRAY_SIZE(apq_8064_cam_vreg),
+	.cam_vreg = apq_8064_imx091_vreg,
+	.num_vreg = ARRAY_SIZE(apq_8064_imx091_vreg),
 	.gpio_conf = &apq8064_back_cam_gpio_conf,
 	.i2c_conf = &apq8064_back_cam_i2c_conf,
 	.csi_lane_params = &imx091_csi_lane_params,
@@ -631,6 +531,13 @@ static struct msm_camera_sensor_info msm_camera_sensor_imx091_data = {
 	.eeprom_info = &imx091_eeprom_info,
 };
 
+static struct camera_vreg_t apq_8064_s5k3l1yx_vreg[] = {
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
+};
+
 static struct msm_camera_sensor_flash_data flash_s5k3l1yx = {
 	.flash_type	= MSM_CAMERA_FLASH_NONE,
 };
@@ -642,8 +549,8 @@ static struct msm_camera_csi_lane_params s5k3l1yx_csi_lane_params = {
 
 static struct msm_camera_sensor_platform_info sensor_board_info_s5k3l1yx = {
 	.mount_angle	= 90,
-	.cam_vreg = apq_8064_cam_vreg,
-	.num_vreg = ARRAY_SIZE(apq_8064_cam_vreg),
+	.cam_vreg = apq_8064_s5k3l1yx_vreg,
+	.num_vreg = ARRAY_SIZE(apq_8064_s5k3l1yx_vreg),
 	.gpio_conf = &apq8064_back_cam_gpio_conf,
 	.i2c_conf = &apq8064_back_cam_i2c_conf,
 	.csi_lane_params = &s5k3l1yx_csi_lane_params,
@@ -659,6 +566,13 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3l1yx_data = {
 	.sensor_type = BAYER_SENSOR,
 };
 
+static struct camera_vreg_t apq_8064_mt9m114_vreg[] = {
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
+};
+
 static struct msm_camera_sensor_flash_data flash_mt9m114 = {
 	.flash_type = MSM_CAMERA_FLASH_NONE
 };
@@ -670,8 +584,8 @@ static struct msm_camera_csi_lane_params mt9m114_csi_lane_params = {
 
 static struct msm_camera_sensor_platform_info sensor_board_info_mt9m114 = {
 	.mount_angle = 90,
-	.cam_vreg = apq_8064_cam_vreg,
-	.num_vreg = ARRAY_SIZE(apq_8064_cam_vreg),
+	.cam_vreg = apq_8064_mt9m114_vreg,
+	.num_vreg = ARRAY_SIZE(apq_8064_mt9m114_vreg),
 	.gpio_conf = &apq8064_front_cam_gpio_conf,
 	.i2c_conf = &apq8064_front_cam_i2c_conf,
 	.csi_lane_params = &mt9m114_csi_lane_params,
@@ -698,8 +612,8 @@ static struct msm_camera_csi_lane_params ov2720_csi_lane_params = {
 
 static struct msm_camera_sensor_platform_info sensor_board_info_ov2720 = {
 	.mount_angle	= 0,
-	.cam_vreg = apq_8064_cam_vreg,
-	.num_vreg = ARRAY_SIZE(apq_8064_cam_vreg),
+	.cam_vreg = apq_8064_front_cam_vreg,
+	.num_vreg = ARRAY_SIZE(apq_8064_front_cam_vreg),
 	.gpio_conf = &apq8064_front_cam_gpio_conf,
 	.i2c_conf = &apq8064_front_cam_i2c_conf,
 	.csi_lane_params = &ov2720_csi_lane_params,
@@ -749,16 +663,15 @@ static struct i2c_board_info apq8064_camera_i2c_boardinfo[] = {
 	.platform_data = &msm_camera_sensor_imx074_data,
 	},
 	{
-	I2C_BOARD_INFO("imx135", 0x10),
-	.platform_data = &msm_camera_sensor_imx135_data,
-	},
-	{
 	I2C_BOARD_INFO("mt9m114", 0x48),
 	.platform_data = &msm_camera_sensor_mt9m114_data,
 	},
 	{
 	I2C_BOARD_INFO("ov2720", 0x6C),
 	.platform_data = &msm_camera_sensor_ov2720_data,
+	},
+	{
+	I2C_BOARD_INFO("sc628a", 0x6E),
 	},
 	{
 	I2C_BOARD_INFO("imx091", 0x34),

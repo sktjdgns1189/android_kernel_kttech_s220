@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,23 +13,18 @@
 #include <linux/kernel.h>
 #include <linux/err.h>
 #include <linux/io.h>
+#include <linux/elf.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 #include <linux/clk.h>
-#include <linux/interrupt.h>
-#include <linux/wcnss_wlan.h>
 
-#include <mach/subsystem_restart.h>
-#include <mach/ramdump.h>
-#include <mach/msm_smem.h>
-#include <mach/msm_bus_board.h>
+#include <mach/msm_iomap.h>
 
 #include "peripheral-loader.h"
 #include "scm-pas.h"
-#include "smd_private.h"
 
 #define RIVA_PMU_A2XB_CFG		0xB8
 #define RIVA_PMU_A2XB_CFG_EN		BIT(0)
@@ -53,18 +48,19 @@
 
 #define RIVA_PMU_CCPU_BOOT_REMAP_ADDR	0xA0
 
-#define RIVA_PLL_MODE			0x31A0
+#define RIVA_PLL_MODE			(MSM_CLK_CTL_BASE + 0x31A0)
 #define PLL_MODE_OUTCTRL		BIT(0)
 #define PLL_MODE_BYPASSNL		BIT(1)
 #define PLL_MODE_RESET_N		BIT(2)
 #define PLL_MODE_REF_XO_SEL		0x30
 #define PLL_MODE_REF_XO_SEL_CXO		(2 << 4)
 #define PLL_MODE_REF_XO_SEL_RF		(3 << 4)
-#define RIVA_PLL_L_VAL			0x31A4
-#define RIVA_PLL_M_VAL			0x31A8
-#define RIVA_PLL_N_VAL			0x31Ac
-#define RIVA_PLL_CONFIG			0x31B4
-#define RIVA_RESET			0x35E0
+#define RIVA_PLL_L_VAL			(MSM_CLK_CTL_BASE + 0x31A4)
+#define RIVA_PLL_M_VAL			(MSM_CLK_CTL_BASE + 0x31A8)
+#define RIVA_PLL_N_VAL			(MSM_CLK_CTL_BASE + 0x31Ac)
+#define RIVA_PLL_CONFIG			(MSM_CLK_CTL_BASE + 0x31B4)
+#define RIVA_PLL_STATUS			(MSM_CLK_CTL_BASE + 0x31B8)
+#define RIVA_RESET			(MSM_CLK_CTL_BASE + 0x35E0)
 
 #define RIVA_PMU_ROOT_CLK_SEL		0xC8
 #define RIVA_PMU_ROOT_CLK_SEL_3		BIT(2)
@@ -82,17 +78,10 @@
 
 struct riva_data {
 	void __iomem *base;
-	void __iomem *cbase;
+	unsigned long start_addr;
 	struct clk *xo;
 	struct regulator *pll_supply;
-	struct pil_desc pil_desc;
-	int irq;
-	int crash;
-	int rst_in_progress;
-	struct subsys_device *subsys;
-	struct subsys_desc subsys_desc;
-	struct delayed_work cancel_work;
-	struct ramdump_device *ramdump_dev;
+	struct pil_device *pil;
 };
 
 static bool cxo_is_needed(struct riva_data *drv)
@@ -131,13 +120,21 @@ static void pil_riva_remove_proxy_vote(struct pil_desc *pil)
 	clk_disable_unprepare(drv->xo);
 }
 
+static int pil_riva_init_image(struct pil_desc *pil, const u8 *metadata,
+		size_t size)
+{
+	const struct elf32_hdr *ehdr = (struct elf32_hdr *)metadata;
+	struct riva_data *drv = dev_get_drvdata(pil->dev);
+	drv->start_addr = ehdr->e_entry;
+	return 0;
+}
+
 static int pil_riva_reset(struct pil_desc *pil)
 {
 	u32 reg, sel;
 	struct riva_data *drv = dev_get_drvdata(pil->dev);
 	void __iomem *base = drv->base;
-	phys_addr_t start_addr = pil_get_entry_addr(pil);
-	void __iomem *cbase = drv->cbase;
+	unsigned long start_addr = drv->start_addr;
 	bool use_cxo = cxo_is_needed(drv);
 
 	/* Enable A2XB bridge */
@@ -146,26 +143,26 @@ static int pil_riva_reset(struct pil_desc *pil)
 	writel_relaxed(reg, base + RIVA_PMU_A2XB_CFG);
 
 	/* Program PLL 13 to 960 MHz */
-	reg = readl_relaxed(cbase + RIVA_PLL_MODE);
+	reg = readl_relaxed(RIVA_PLL_MODE);
 	reg &= ~(PLL_MODE_BYPASSNL | PLL_MODE_OUTCTRL | PLL_MODE_RESET_N);
-	writel_relaxed(reg, cbase + RIVA_PLL_MODE);
+	writel_relaxed(reg, RIVA_PLL_MODE);
 
 	if (use_cxo)
-		writel_relaxed(0x40000C00 | 50, cbase + RIVA_PLL_L_VAL);
+		writel_relaxed(0x40000C00 | 50, RIVA_PLL_L_VAL);
 	else
-		writel_relaxed(0x40000C00 | 40, cbase + RIVA_PLL_L_VAL);
-	writel_relaxed(0, cbase + RIVA_PLL_M_VAL);
-	writel_relaxed(1, cbase + RIVA_PLL_N_VAL);
-	writel_relaxed(0x01495227, cbase + RIVA_PLL_CONFIG);
+		writel_relaxed(0x40000C00 | 40, RIVA_PLL_L_VAL);
+	writel_relaxed(0, RIVA_PLL_M_VAL);
+	writel_relaxed(1, RIVA_PLL_N_VAL);
+	writel_relaxed(0x01495227, RIVA_PLL_CONFIG);
 
-	reg = readl_relaxed(cbase + RIVA_PLL_MODE);
+	reg = readl_relaxed(RIVA_PLL_MODE);
 	reg &= ~(PLL_MODE_REF_XO_SEL);
 	reg |= use_cxo ? PLL_MODE_REF_XO_SEL_CXO : PLL_MODE_REF_XO_SEL_RF;
-	writel_relaxed(reg, cbase + RIVA_PLL_MODE);
+	writel_relaxed(reg, RIVA_PLL_MODE);
 
 	/* Enable PLL 13 */
 	reg |= PLL_MODE_BYPASSNL;
-	writel_relaxed(reg, cbase + RIVA_PLL_MODE);
+	writel_relaxed(reg, RIVA_PLL_MODE);
 
 	/*
 	 * H/W requires a 5us delay between disabling the bypass and
@@ -175,9 +172,9 @@ static int pil_riva_reset(struct pil_desc *pil)
 	usleep_range(10, 20);
 
 	reg |= PLL_MODE_RESET_N;
-	writel_relaxed(reg, cbase + RIVA_PLL_MODE);
+	writel_relaxed(reg, RIVA_PLL_MODE);
 	reg |= PLL_MODE_OUTCTRL;
-	writel_relaxed(reg, cbase + RIVA_PLL_MODE);
+	writel_relaxed(reg, RIVA_PLL_MODE);
 
 	/* Wait for PLL to settle */
 	mb();
@@ -232,21 +229,31 @@ static int pil_riva_reset(struct pil_desc *pil)
 static int pil_riva_shutdown(struct pil_desc *pil)
 {
 	struct riva_data *drv = dev_get_drvdata(pil->dev);
-	void __iomem *cbase = drv->cbase;
+	u32 reg;
+
+	/* Put cCPU and cCPU clock into reset */
+	reg = readl_relaxed(drv->base + RIVA_PMU_OVRD_VAL);
+	reg &= ~(RIVA_PMU_OVRD_VAL_CCPU_RESET | RIVA_PMU_OVRD_VAL_CCPU_CLK);
+	writel_relaxed(reg, drv->base + RIVA_PMU_OVRD_VAL);
+	reg = readl_relaxed(drv->base + RIVA_PMU_OVRD_EN);
+	reg |= RIVA_PMU_OVRD_EN_CCPU_RESET | RIVA_PMU_OVRD_EN_CCPU_CLK;
+	writel_relaxed(reg, drv->base + RIVA_PMU_OVRD_EN);
+	mb();
 
 	/* Assert reset to Riva */
-	writel_relaxed(1, cbase + RIVA_RESET);
+	writel_relaxed(1, RIVA_RESET);
 	mb();
 	usleep_range(1000, 2000);
 
 	/* Deassert reset to Riva */
-	writel_relaxed(0, cbase + RIVA_RESET);
+	writel_relaxed(0, RIVA_RESET);
 	mb();
 
 	return 0;
 }
 
 static struct pil_reset_ops pil_riva_ops = {
+	.init_image = pil_riva_init_image,
 	.auth_and_reset = pil_riva_reset,
 	.shutdown = pil_riva_shutdown,
 	.proxy_vote = pil_riva_make_proxy_vote,
@@ -256,17 +263,17 @@ static struct pil_reset_ops pil_riva_ops = {
 static int pil_riva_init_image_trusted(struct pil_desc *pil,
 		const u8 *metadata, size_t size)
 {
-	return pas_init_image(PAS_WCNSS, metadata, size);
+	return pas_init_image(PAS_RIVA, metadata, size);
 }
 
 static int pil_riva_reset_trusted(struct pil_desc *pil)
 {
-	return pas_auth_and_reset(PAS_WCNSS);
+	return pas_auth_and_reset(PAS_RIVA);
 }
 
 static int pil_riva_shutdown_trusted(struct pil_desc *pil)
 {
-	return pas_shutdown(PAS_WCNSS);
+	return pas_shutdown(PAS_RIVA);
 }
 
 static struct pil_reset_ops pil_riva_ops_trusted = {
@@ -277,168 +284,6 @@ static struct pil_reset_ops pil_riva_ops_trusted = {
 	.proxy_unvote = pil_riva_remove_proxy_vote,
 };
 
-static int enable_riva_ssr;
-
-static int enable_riva_ssr_set(const char *val, struct kernel_param *kp)
-{
-	int ret;
-
-	ret = param_set_int(val, kp);
-	if (ret)
-		return ret;
-
-	if (enable_riva_ssr)
-		pr_info("Subsystem restart activated for riva.\n");
-
-	return 0;
-}
-module_param_call(enable_riva_ssr, enable_riva_ssr_set, param_get_int,
-		 &enable_riva_ssr, S_IRUGO | S_IWUSR);
-
-static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
-			       uint32_t new_state)
-{
-	struct riva_data *drv = data;
-	char *smem_reset_reason;
-	char buffer[81];
-	unsigned smem_reset_size;
-	unsigned size;
-
-	drv->crash = true;
-	if (!(new_state & SMSM_RESET))
-		return;
-
-	if (drv->rst_in_progress) {
-		pr_err("riva: Ignoring smsm reset req, restart in progress\n");
-		return;
-	}
-
-	pr_err("riva: smsm state changed to smsm reset\n");
-	wcnss_riva_dump_pmic_regs();
-
-	smem_reset_reason = smem_get_entry(SMEM_SSR_REASON_WCNSS0,
-		&smem_reset_size);
-
-	if (!smem_reset_reason || !smem_reset_size) {
-		pr_err("wcnss subsystem failure reason:\n"
-		       "(unknown, smem_get_entry failed)");
-	} else if (!smem_reset_reason[0]) {
-		pr_err("wcnss subsystem failure reason:\n"
-		       "(unknown, init string found)");
-	} else {
-		size = smem_reset_size < sizeof(buffer) ? smem_reset_size :
-				(sizeof(buffer) - 1);
-		memcpy(buffer, smem_reset_reason, size);
-		buffer[size] = '\0';
-		pr_err("wcnss subsystem failure reason: %s\n", buffer);
-		memset(smem_reset_reason, 0, smem_reset_size);
-		wmb();
-	}
-
-	drv->rst_in_progress = 1;
-	subsystem_restart_dev(drv->subsys);
-}
-
-static irqreturn_t riva_wdog_bite_irq_hdlr(int irq, void *dev_id)
-{
-	struct riva_data *drv = dev_id;
-
-	drv->crash = true;
-	if (drv->rst_in_progress) {
-		pr_err("Ignoring riva bite irq, restart in progress\n");
-		return IRQ_HANDLED;
-	}
-	if (!enable_riva_ssr)
-		panic("Watchdog bite received from Riva");
-
-	drv->rst_in_progress = 1;
-	wcnss_riva_log_debug_regs();
-	subsystem_restart_dev(drv->subsys);
-
-	return IRQ_HANDLED;
-}
-
-static void riva_post_bootup(struct work_struct *work)
-{
-	struct platform_device *pdev = wcnss_get_platform_device();
-	struct wcnss_wlan_config *pwlanconfig = wcnss_get_wlan_config();
-
-	wcnss_wlan_power(&pdev->dev, pwlanconfig, WCNSS_WLAN_SWITCH_OFF, NULL);
-}
-
-static int riva_start(const struct subsys_desc *desc)
-{
-	struct riva_data *drv;
-
-	drv = container_of(desc, struct riva_data, subsys_desc);
-	return pil_boot(&drv->pil_desc);
-}
-
-static void riva_stop(const struct subsys_desc *desc)
-{
-	struct riva_data *drv;
-
-	drv = container_of(desc, struct riva_data, subsys_desc);
-	pil_shutdown(&drv->pil_desc);
-}
-
-static int riva_shutdown(const struct subsys_desc *desc)
-{
-	struct riva_data *drv;
-
-	drv = container_of(desc, struct riva_data, subsys_desc);
-	pil_shutdown(&drv->pil_desc);
-	flush_delayed_work(&drv->cancel_work);
-	wcnss_flush_delayed_boot_votes();
-	disable_irq_nosync(drv->irq);
-
-	return 0;
-}
-
-static int riva_powerup(const struct subsys_desc *desc)
-{
-	struct riva_data *drv;
-	struct platform_device *pdev = wcnss_get_platform_device();
-	struct wcnss_wlan_config *pwlanconfig = wcnss_get_wlan_config();
-	int ret = 0;
-
-	drv = container_of(desc, struct riva_data, subsys_desc);
-	if (pdev && pwlanconfig) {
-		ret = wcnss_wlan_power(&pdev->dev, pwlanconfig,
-					WCNSS_WLAN_SWITCH_ON, NULL);
-		if (!ret)
-			pil_boot(&drv->pil_desc);
-	}
-	drv->rst_in_progress = 0;
-	enable_irq(drv->irq);
-	schedule_delayed_work(&drv->cancel_work, msecs_to_jiffies(5000));
-
-	return ret;
-}
-
-static int riva_ramdump(int enable, const struct subsys_desc *desc)
-{
-	struct riva_data *drv;
-
-	drv = container_of(desc, struct riva_data, subsys_desc);
-
-	if (!enable)
-		return 0;
-
-	return pil_do_ramdump(&drv->pil_desc, drv->ramdump_dev);
-}
-
-/* Riva crash handler */
-static void riva_crash_shutdown(const struct subsys_desc *desc)
-{
-	struct riva_data *drv;
-
-	drv = container_of(desc, struct riva_data, subsys_desc);
-	pr_err("riva crash shutdown %d\n", drv->crash);
-	if (drv->crash != true)
-		smsm_change_state(SMSM_APPS_STATE, SMSM_RESET, SMSM_RESET);
-}
-
 static int __devinit pil_riva_probe(struct platform_device *pdev)
 {
 	struct riva_data *drv;
@@ -446,20 +291,21 @@ static int __devinit pil_riva_probe(struct platform_device *pdev)
 	struct pil_desc *desc;
 	int ret;
 
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		return -EINVAL;
+
 	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
 	if (!drv)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, drv);
 
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	drv->base = devm_request_and_ioremap(&pdev->dev, res);
+	drv->base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (!drv->base)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	drv->cbase = devm_request_and_ioremap(&pdev->dev, res);
-	if (!drv->cbase)
+	desc = devm_kzalloc(&pdev->dev, sizeof(*desc), GFP_KERNEL);
+	if (!desc)
 		return -ENOMEM;
 
 	drv->pll_supply = devm_regulator_get(&pdev->dev, "pll_vdd");
@@ -483,88 +329,33 @@ static int __devinit pil_riva_probe(struct platform_device *pdev)
 		}
 	}
 
-	drv->irq = platform_get_irq(pdev, 0);
-	if (drv->irq < 0)
-		return drv->irq;
-
-	drv->xo = devm_clk_get(&pdev->dev, "cxo");
-	if (IS_ERR(drv->xo))
-		return PTR_ERR(drv->xo);
-
-	desc = &drv->pil_desc;
 	desc->name = "wcnss";
 	desc->dev = &pdev->dev;
 	desc->owner = THIS_MODULE;
 	desc->proxy_timeout = 10000;
 
-	if (pas_supported(PAS_WCNSS) > 0) {
+	if (pas_supported(PAS_RIVA) > 0) {
 		desc->ops = &pil_riva_ops_trusted;
 		dev_info(&pdev->dev, "using secure boot\n");
 	} else {
 		desc->ops = &pil_riva_ops;
 		dev_info(&pdev->dev, "using non-secure boot\n");
 	}
-	ret = pil_desc_init(desc);
 
-	ret = smsm_state_cb_register(SMSM_WCNSS_STATE, SMSM_RESET,
-					smsm_state_cb_hdlr, drv);
-	if (ret < 0)
-		goto err_smsm;
+	drv->xo = devm_clk_get(&pdev->dev, "cxo");
+	if (IS_ERR(drv->xo))
+		return PTR_ERR(drv->xo);
 
-	drv->subsys_desc.name = "wcnss";
-	drv->subsys_desc.dev = &pdev->dev;
-	drv->subsys_desc.owner = THIS_MODULE;
-	drv->subsys_desc.start = riva_start;
-	drv->subsys_desc.stop = riva_stop;
-	drv->subsys_desc.shutdown = riva_shutdown;
-	drv->subsys_desc.powerup = riva_powerup;
-	drv->subsys_desc.ramdump = riva_ramdump;
-	drv->subsys_desc.crash_shutdown = riva_crash_shutdown;
-
-	INIT_DELAYED_WORK(&drv->cancel_work, riva_post_bootup);
-
-	drv->ramdump_dev = create_ramdump_device("riva", &pdev->dev);
-	if (!drv->ramdump_dev) {
-		ret = -ENOMEM;
-		goto err_ramdump;
-	}
-
-	drv->subsys = subsys_register(&drv->subsys_desc);
-	if (IS_ERR(drv->subsys)) {
-		ret = PTR_ERR(drv->subsys);
-		goto err_subsys;
-	}
-
-	scm_pas_init(MSM_BUS_MASTER_SPS);
-
-	ret = devm_request_irq(&pdev->dev, drv->irq, riva_wdog_bite_irq_hdlr,
-			IRQF_TRIGGER_RISING, "riva_wdog", drv);
-	if (ret < 0)
-		goto err;
-
+	drv->pil = msm_pil_register(desc);
+	if (IS_ERR(drv->pil))
+		return PTR_ERR(drv->pil);
 	return 0;
-err:
-	subsys_unregister(drv->subsys);
-err_subsys:
-	destroy_ramdump_device(drv->ramdump_dev);
-err_ramdump:
-	smsm_state_cb_deregister(SMSM_WCNSS_STATE, SMSM_RESET,
-					smsm_state_cb_hdlr, drv);
-err_smsm:
-	pil_desc_release(desc);
-	return ret;
 }
 
 static int __devexit pil_riva_remove(struct platform_device *pdev)
 {
 	struct riva_data *drv = platform_get_drvdata(pdev);
-
-	subsys_unregister(drv->subsys);
-	destroy_ramdump_device(drv->ramdump_dev);
-	smsm_state_cb_deregister(SMSM_WCNSS_STATE, SMSM_RESET,
-					smsm_state_cb_hdlr, drv);
-	pil_desc_release(&drv->pil_desc);
-
+	msm_pil_unregister(drv->pil);
 	return 0;
 }
 

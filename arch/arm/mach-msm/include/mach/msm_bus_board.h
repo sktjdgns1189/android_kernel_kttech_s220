@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,24 +24,22 @@ enum context {
 
 struct msm_bus_fabric_registration {
 	unsigned int id;
-	const char *name;
+	char *name;
 	struct msm_bus_node_info *info;
 	unsigned int len;
 	int ahb;
 	const char *fabclk[NUM_CTX];
-	const char *iface_clk;
 	unsigned int offset;
 	unsigned int haltid;
 	unsigned int rpm_enabled;
-	unsigned int nmasters;
-	unsigned int nslaves;
-	unsigned int ntieredslaves;
+	const unsigned int nmasters;
+	const unsigned int nslaves;
+	const unsigned int ntieredslaves;
 	bool il_flag;
 	const struct msm_bus_board_algorithm *board_algo;
 	int hw_sel;
 	void *hw_data;
 	uint32_t qos_freq;
-	uint32_t qos_baseoffset;
 	bool virt;
 };
 
@@ -67,7 +65,6 @@ extern struct msm_bus_fabric_registration msm_bus_def_fab_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8960_apps_fabric_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8960_sys_fabric_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8960_mm_fabric_pdata;
-extern struct msm_bus_fabric_registration msm_bus_8960_sg_mm_fabric_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8960_sys_fpb_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8960_cpss_fpb_pdata;
 
@@ -94,17 +91,9 @@ extern struct msm_bus_fabric_registration msm_bus_8974_periph_noc_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8974_config_noc_pdata;
 extern struct msm_bus_fabric_registration msm_bus_8974_ocmem_vnoc_pdata;
 
-extern struct msm_bus_fabric_registration msm_bus_9625_sys_noc_pdata;
-extern struct msm_bus_fabric_registration msm_bus_9625_bimc_pdata;
-extern struct msm_bus_fabric_registration msm_bus_9625_periph_noc_pdata;
-extern struct msm_bus_fabric_registration msm_bus_9625_config_noc_pdata;
-
 void msm_bus_rpm_set_mt_mask(void);
 int msm_bus_board_rpm_get_il_ids(uint16_t *id);
 int msm_bus_board_get_iid(int id);
-
-#define NFAB_MSM8226 6
-#define NFAB_MSM8610 5
 
 /*
  * These macros specify the convention followed for allocating
@@ -115,6 +104,7 @@ int msm_bus_board_get_iid(int id);
  */
 #define FABRIC_ID_KEY 1024
 #define SLAVE_ID_KEY ((FABRIC_ID_KEY) >> 1)
+#define NUM_FAB 5
 #define MAX_FAB_KEY 7168  /* OR(All fabric ids) */
 
 #define GET_FABID(id) ((id) & MAX_FAB_KEY)
@@ -300,11 +290,8 @@ enum msm_bus_fabric_master_type {
 	MSM_BUS_MASTER_USB_HS,
 	MSM_BUS_MASTER_PNOC_CFG,
 	MSM_BUS_MASTER_V_OCMEM_GFX3D,
-	MSM_BUS_MASTER_IPA,
-	MSM_BUS_MASTER_QPIC,
-	MSM_BUS_MASTER_MDPE,
 
-	MSM_BUS_MASTER_LAST,
+	MSM_BUS_MASTER_LAST = MSM_BUS_MASTER_V_OCMEM_GFX3D,
 
 	MSM_BUS_SYSTEM_FPB_MASTER_SYSTEM =
 		MSM_BUS_SYSTEM_MASTER_SYSTEM_FPB,
@@ -458,11 +445,8 @@ enum msm_bus_fabric_slave_type {
 	MSM_BUS_SLAVE_PHY_APU_CFG,
 	MSM_BUS_SLAVE_EBI1_PHY_CFG,
 	MSM_BUS_SLAVE_SERVICE_CNOC,
-	MSM_BUS_SLAVE_IPS_CFG,
-	MSM_BUS_SLAVE_QPIC,
-	MSM_BUS_SLAVE_DSI_CFG,
 
-	MSM_BUS_SLAVE_LAST,
+	MSM_BUS_SLAVE_LAST = MSM_BUS_SLAVE_SERVICE_CNOC,
 
 	MSM_BUS_SYSTEM_FPB_SLAVE_SYSTEM =
 		MSM_BUS_SYSTEM_SLAVE_SYSTEM_FPB,

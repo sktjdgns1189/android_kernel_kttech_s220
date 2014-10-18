@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2013 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -42,7 +42,6 @@ void rtac_remove_voice(u32 cvs_handle) {}
 void rtac_set_voice_handle(u32 mode, void *handle) {}
 bool rtac_make_voice_callback(u32 mode, uint32_t *payload,
 		u32 payload_size) {return false; }
-int rtac_clear_mapping(uint32_t cal_type) {return false; }
 
 #else
 
@@ -123,8 +122,6 @@ struct mutex			rtac_adm_apr_mutex;
 struct mutex			rtac_asm_apr_mutex;
 struct mutex			rtac_voice_mutex;
 struct mutex			rtac_voice_apr_mutex;
-
-int rtac_clear_mapping(uint32_t cal_type) {return false; }
 
 static int rtac_open(struct inode *inode, struct file *f)
 {
@@ -356,7 +353,7 @@ void rtac_remove_voice(u32 cvs_handle)
 	return;
 }
 
-static int get_voice_index_cvs(u32 cvs_handle)
+static int get_voice_index(u32 cvs_handle)
 {
 	u32 i;
 
@@ -367,32 +364,6 @@ static int get_voice_index_cvs(u32 cvs_handle)
 
 	pr_err("%s: No voice index for CVS handle %d found returning 0\n",
 	       __func__, cvs_handle);
-	return 0;
-}
-
-static int get_voice_index_cvp(u32 cvp_handle)
-{
-	u32 i;
-
-	for (i = 0; i < rtac_voice_data.num_of_voice_combos; i++) {
-		if (rtac_voice_data.voice[i].cvp_handle == cvp_handle)
-			return i;
-	}
-
-	pr_err("%s: No voice index for CVP handle %d found returning 0\n",
-	       __func__, cvp_handle);
-	return 0;
-}
-
-static int get_voice_index(u32 mode, u32 handle)
-{
-	if (mode == RTAC_CVP)
-		return get_voice_index_cvp(handle);
-	if (mode == RTAC_CVS)
-		return get_voice_index_cvs(handle);
-
-	pr_err("%s: Invalid mode %d, returning 0\n",
-	       __func__, mode);
 	return 0;
 }
 
@@ -797,8 +768,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 		goto done;
 	}
 
-	if (copy_from_user(&payload_size, buf + sizeof(payload_size),
-						sizeof(payload_size))) {
+	if (copy_from_user(&payload_size, buf + sizeof(u32), sizeof(u32))) {
 		pr_err("%s: Could not copy payload size from user buffer\n",
 			__func__);
 		goto done;
@@ -810,8 +780,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 		goto done;
 	}
 
-	if (copy_from_user(&dest_port, buf + 2 * sizeof(dest_port),
-						sizeof(dest_port))) {
+	if (copy_from_user(&dest_port, buf + 2 * sizeof(u32), sizeof(u32))) {
 		pr_err("%s: Could not copy port id from user buffer\n",
 			__func__);
 		goto done;
@@ -848,10 +817,10 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 	voice_params.src_svc = 0;
 	voice_params.src_domain = APR_DOMAIN_APPS;
 	voice_params.src_port = voice_session_id[
-					get_voice_index(mode, dest_port)];
+					get_voice_index(dest_port)];
 	voice_params.dest_svc = 0;
 	voice_params.dest_domain = APR_DOMAIN_MODEM;
-	voice_params.dest_port = (u16)dest_port;
+	voice_params.dest_port = dest_port;
 	voice_params.token = 0;
 	voice_params.opcode = opcode;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -69,7 +69,7 @@ static struct gpiomux_setting gsbi12 = {
 
 static struct gpiomux_setting cdc_mclk = {
 	.func = GPIOMUX_FUNC_1,
-	.drv = GPIOMUX_DRV_2MA,
+	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
@@ -279,13 +279,6 @@ static struct gpiomux_setting hdmi_active_5_cfg = {
 };
 
 #endif
-
-static struct gpiomux_setting sitar_reset = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_6MA,
-	.pull = GPIOMUX_PULL_NONE,
-	.dir = GPIOMUX_OUT_LOW,
-};
 
 #if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
 static struct msm_gpiomux_config msm8960_ethernet_configs[] = {
@@ -701,121 +694,6 @@ static struct msm_gpiomux_config msm8930_sd_det_config[] __initdata = {
 	},
 };
 
-static struct gpiomux_setting gyro_int_line = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_NONE,
-};
-
-static struct msm_gpiomux_config msm8930_gyro_int_config[] __initdata = {
-	{
-		.gpio = 69,	/* Gyro Interrupt Line */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gyro_int_line,
-			[GPIOMUX_ACTIVE] = &gyro_int_line,
-		},
-	},
-};
-
-static struct msm_gpiomux_config msm_sitar_config[] __initdata = {
-	{
-		.gpio   = 42,           /* SYS_RST_N */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &sitar_reset,
-		},
-	}
-};
-
-#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-static struct gpiomux_setting sdcc2_clk_actv_cfg = {
-	.func = GPIOMUX_FUNC_2,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
-};
-
-static struct gpiomux_setting sdcc2_cmd_data_0_3_actv_cfg = {
-	.func = GPIOMUX_FUNC_2,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_UP,
-};
-
-static struct gpiomux_setting sdcc2_suspend_cfg = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_DOWN,
-};
-
-static struct gpiomux_setting sdcc2_data_1_suspend_cfg = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_UP,
-};
-
-/**
- * DAT_0 to DAT_3 lines (gpio 89 - 92) are shared with ethernet
- * CMD line (gpio 97) is shared with USB
- * CLK line (gpio 98) is shared with battery alarm in
- */
-static struct msm_gpiomux_config msm8960_sdcc2_configs[] __initdata = {
-	{
-		/* DATA_3 */
-		.gpio      = 92,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &sdcc2_cmd_data_0_3_actv_cfg,
-			[GPIOMUX_SUSPENDED] = &sdcc2_suspend_cfg,
-		},
-	},
-	{
-		/* DATA_2 */
-		.gpio      = 91,
-		.settings = {
-		[GPIOMUX_ACTIVE]    = &sdcc2_cmd_data_0_3_actv_cfg,
-		[GPIOMUX_SUSPENDED] = &sdcc2_suspend_cfg,
-		},
-	},
-	{
-		/* DATA_1 */
-		.gpio      = 90,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &sdcc2_cmd_data_0_3_actv_cfg,
-			[GPIOMUX_SUSPENDED] = &sdcc2_data_1_suspend_cfg,
-		},
-	},
-	{
-		/* DATA_0 */
-		.gpio      = 89,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &sdcc2_cmd_data_0_3_actv_cfg,
-			[GPIOMUX_SUSPENDED] = &sdcc2_suspend_cfg,
-		},
-	},
-	{
-		/* CMD */
-		.gpio      = 97,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &sdcc2_cmd_data_0_3_actv_cfg,
-			[GPIOMUX_SUSPENDED] = &sdcc2_suspend_cfg,
-		},
-	},
-	{
-		/* CLK */
-		.gpio      = 98,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &sdcc2_clk_actv_cfg,
-			[GPIOMUX_SUSPENDED] = &sdcc2_suspend_cfg,
-		},
-	},
-};
-
-static void msm_gpiomux_sdc2_install(void)
-{
-	msm_gpiomux_install(msm8960_sdcc2_configs,
-			    ARRAY_SIZE(msm8960_sdcc2_configs));
-}
-#else
-static void msm_gpiomux_sdc2_install(void) {}
-#endif /* CONFIG_MMC_MSM_SDC2_SUPPORT */
-
 int __init msm8930_init_gpiomux(void)
 {
 	int rc = msm_gpiomux_init(NR_GPIO_IRQS);
@@ -875,7 +753,7 @@ int __init msm8930_init_gpiomux(void)
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 	msm_gpiomux_install(msm8960_hdmi_configs,
 			ARRAY_SIZE(msm8960_hdmi_configs));
-	if (msm8930_mhl_display_enabled())
+	if (machine_is_msm8930_fluid())
 		msm_gpiomux_install(msm8930_mhl_configs,
 				ARRAY_SIZE(msm8930_mhl_configs));
 #endif
@@ -885,14 +763,6 @@ int __init msm8930_init_gpiomux(void)
 
 	msm_gpiomux_install(msm8930_sd_det_config,
 			ARRAY_SIZE(msm8930_sd_det_config));
-
-	if (machine_is_msm8930_fluid() || machine_is_msm8930_mtp())
-		msm_gpiomux_install(msm8930_gyro_int_config,
-			ARRAY_SIZE(msm8930_gyro_int_config));
-
-	msm_gpiomux_install(msm_sitar_config, ARRAY_SIZE(msm_sitar_config));
-
-	msm_gpiomux_sdc2_install();
 
 	return 0;
 }

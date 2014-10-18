@@ -94,7 +94,7 @@ static const char	hcd_name [] = "ehci_hcd";
  */
 #define	EHCI_TUNE_FLS		1	/* (medium) 512-frame schedule */
 
-#define EHCI_IAA_MSECS		100		/* arbitrary */
+#define EHCI_IAA_MSECS		10		/* arbitrary */
 #define EHCI_IO_JIFFIES		(HZ/10)		/* io watchdog > irq_thresh */
 #define EHCI_ASYNC_JIFFIES	(HZ/20)		/* async idle timeout */
 #define EHCI_SHRINK_JIFFIES	(DIV_ROUND_UP(HZ, 200) + 1)
@@ -976,10 +976,9 @@ static irqreturn_t ehci_irq (struct usb_hcd *hcd)
 	/* PCI errors [4.15.2.4] */
 	if (unlikely ((status & STS_FATAL) != 0)) {
 		ehci_err(ehci, "fatal error\n");
-		if (hcd->driver->dump_regs) {
+		if (hcd->driver->dump_regs)
 			hcd->driver->dump_regs(hcd);
-			panic("System error\n");
-		}
+		panic("System error\n");
 		dbg_cmd(ehci, "fatal", cmd);
 		dbg_status(ehci, "fatal", status);
 		ehci_halt(ehci);

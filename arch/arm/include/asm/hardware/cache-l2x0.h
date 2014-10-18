@@ -107,12 +107,15 @@
 
 #define REV_PL310_R2P0				4
 
+#define L2X0_LATENCY_CTRL_SETUP_SHIFT	0
+#define L2X0_LATENCY_CTRL_RD_SHIFT	4
+#define L2X0_LATENCY_CTRL_WR_SHIFT	8
+
 #define L2X0_PREFETCH_CTRL_OFFSET_SHIFT		0
 #define L2X0_PREFETCH_CTRL_WRAP8_INC_SHIFT	23
 #define L2X0_PREFETCH_CTRL_WRAP8_SHIFT		30
 
 #ifndef __ASSEMBLY__
-extern void __iomem *l2x0_base;
 extern void l2cc_suspend(void);
 extern void l2cc_resume(void);
 extern void l2x0_cache_sync(void);

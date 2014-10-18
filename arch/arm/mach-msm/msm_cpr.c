@@ -50,7 +50,6 @@
 static struct platform_device *cpr_pdev;
 
 static bool enable = 1;
-static bool disable_cpr;
 module_param(enable, bool, 0644);
 MODULE_PARM_DESC(enable, "CPR Enable");
 
@@ -91,11 +90,12 @@ struct msm_cpr {
 	struct regulator *vreg_cx;
 	const struct msm_cpr_config *config;
 	struct notifier_block freq_transition;
-	uint32_t step_size;
+	struct msm_cpr_vp_data *vp;
 };
 
 /* Need to maintain state data for suspend and resume APIs */
 static struct msm_cpr_reg cpr_save_state;
+static struct msm_cpr *msm_cpr;
 
 static inline
 void cpr_write_reg(struct msm_cpr *cpr, u32 offset, u32 value)
@@ -219,7 +219,7 @@ cpr_2pt_kv_analysis(struct msm_cpr *cpr, struct msm_cpr_mode *chip_data)
 	 *
 	 */
 	level_uV = chip_data->turbo_Vmax -
-		(chip_data->tgt_volt_offset * cpr->step_size);
+		(chip_data->tgt_volt_offset * cpr->vp->step_size);
 	msm_cpr_debug(MSM_CPR_DEBUG_CONFIG,
 		"tgt_volt_uV = %d\n", level_uV);
 
@@ -260,7 +260,7 @@ cpr_2pt_kv_analysis(struct msm_cpr *cpr, struct msm_cpr_mode *chip_data)
 	quot1 = (cpr_read_reg(cpr, RBCPR_DEBUG1) & QUOT_SLOW_M) >> 12;
 
 	/* Take second CPR measurement at a lower voltage to get QUOT2 */
-	level_uV -= 4 * cpr->step_size;
+	level_uV -= 4 * cpr->vp->step_size;
 	msm_cpr_debug(MSM_CPR_DEBUG_CONFIG,
 		"tgt_volt_uV = %d\n", level_uV);
 
@@ -330,12 +330,12 @@ void cpr_irq_clr_and_nack(struct msm_cpr *cpr, uint32_t mask)
 	cpr_write_reg(cpr, RBIF_CONT_NACK_CMD, 0x1);
 }
 
-static void cpr_irq_set(struct msm_cpr *cpr, uint32_t irq, bool enable_irq)
+static void cpr_irq_set(struct msm_cpr *cpr, uint32_t irq, bool enable)
 {
 	uint32_t irq_enabled;
 
 	irq_enabled = cpr_read_reg(cpr, RBIF_IRQ_EN(cpr->config->irq_line));
-	if (enable_irq == 1)
+	if (enable == 1)
 		irq_enabled |= irq;
 	else
 		irq_enabled &= ~irq;
@@ -360,8 +360,8 @@ cpr_up_event_handler(struct msm_cpr *cpr, uint32_t new_volt)
 	if (cpr->prev_volt_uV == set_volt_uV)
 		rc = regulator_sync_voltage(cpr->vreg_cx);
 	else
-		rc = regulator_set_voltage(cpr->vreg_cx, set_volt_uV,
-							set_volt_uV);
+	rc = regulator_set_voltage(cpr->vreg_cx, set_volt_uV,
+					set_volt_uV);
 	if (rc) {
 		pr_err("Unable to set_voltage = %d, rc(%d)\n", set_volt_uV, rc);
 		cpr_irq_clr_and_nack(cpr, BIT(4) | BIT(0));
@@ -404,8 +404,8 @@ cpr_dn_event_handler(struct msm_cpr *cpr, uint32_t new_volt)
 	if (cpr->prev_volt_uV == set_volt_uV)
 		rc = regulator_sync_voltage(cpr->vreg_cx);
 	else
-		rc = regulator_set_voltage(cpr->vreg_cx, set_volt_uV,
-							set_volt_uV);
+	rc = regulator_set_voltage(cpr->vreg_cx, set_volt_uV,
+					set_volt_uV);
 	if (rc) {
 		pr_err("Unable to set_voltage = %d, rc(%d)\n", set_volt_uV, rc);
 		cpr_irq_clr_and_nack(cpr, BIT(2) | BIT(0));
@@ -493,7 +493,7 @@ static void cpr_set_vdd(struct msm_cpr *cpr, enum cpr_action action)
 		error_step += 1;
 
 		/* Calculte new PMIC voltage */
-		new_volt = curr_volt + (error_step * cpr->step_size);
+		new_volt = curr_volt + (error_step * cpr->vp->step_size);
 		msm_cpr_debug(MSM_CPR_DEBUG_STEPS,
 			"UP_INT: new_volt: %d, error_step=%d\n",
 					new_volt, error_step);
@@ -531,7 +531,7 @@ static void cpr_set_vdd(struct msm_cpr *cpr, enum cpr_action action)
 			error_step = 2;
 
 		/* Calculte new PMIC voltage */
-		new_volt = curr_volt - (error_step * cpr->step_size);
+		new_volt = curr_volt - (error_step * cpr->vp->step_size);
 		msm_cpr_debug(MSM_CPR_DEBUG_STEPS,
 			"DOWN_INT: new_volt: %d, error_step=%d\n",
 			new_volt, error_step);
@@ -765,9 +765,9 @@ cpr_freq_transition(struct notifier_block *nb, unsigned long val,
 }
 
 #ifdef CONFIG_PM
-static int msm_cpr_resume(struct device *dev)
+static int msm_cpr_resume(void)
 {
-	struct msm_cpr *cpr = dev_get_drvdata(dev);
+	struct msm_cpr *cpr = msm_cpr;
 	int osc_num = cpr->config->cpr_mode_data->ring_osc;
 
 	cpr->config->clk_enable();
@@ -798,10 +798,9 @@ static int msm_cpr_resume(struct device *dev)
 	return 0;
 }
 
-static int msm_cpr_suspend(struct device *dev)
-
+static int msm_cpr_suspend(void)
 {
-	struct msm_cpr *cpr = dev_get_drvdata(dev);
+	struct msm_cpr *cpr = msm_cpr;
 	int osc_num = cpr->config->cpr_mode_data->ring_osc;
 
 	/* Disable CPR measurement before IRQ to avoid pending interrupts */
@@ -833,28 +832,31 @@ static int msm_cpr_suspend(struct device *dev)
 
 void msm_cpr_pm_resume(void)
 {
-	if (!enable || disable_cpr)
+	if (!enable)
 		return;
 
-	msm_cpr_resume(&cpr_pdev->dev);
+	msm_cpr_resume();
 }
 EXPORT_SYMBOL(msm_cpr_pm_resume);
 
 void msm_cpr_pm_suspend(void)
 {
-	if (!enable || disable_cpr)
+	if (!enable)
 		return;
 
-	msm_cpr_suspend(&cpr_pdev->dev);
+	msm_cpr_suspend();
 }
 EXPORT_SYMBOL(msm_cpr_pm_suspend);
+#else
+#define msm_cpr_suspend_core NULL
+#define msm_cpr_resume_core NULL
 #endif
 
 void msm_cpr_disable(void)
 {
 	struct msm_cpr *cpr;
 
-	if (!enable || disable_cpr)
+	if (!enable)
 		return;
 
 	cpr = platform_get_drvdata(cpr_pdev);
@@ -867,7 +869,7 @@ void msm_cpr_enable(void)
 {
 	struct msm_cpr *cpr;
 
-	if (!enable || disable_cpr)
+	if (!enable)
 		return;
 
 	cpr = platform_get_drvdata(cpr_pdev);
@@ -894,25 +896,11 @@ static int __devinit msm_cpr_probe(struct platform_device *pdev)
 		return -EIO;
 	}
 
-	if (pdata->disable_cpr == true) {
-		pr_err("CPR disabled by modem\n");
-		disable_cpr = true;
-		return -EPERM;
-	}
-
 	cpr = devm_kzalloc(&pdev->dev, sizeof(struct msm_cpr), GFP_KERNEL);
 	if (!cpr) {
 		enable = false;
 		return -ENOMEM;
 	}
-
-	/* enable clk for cpr */
-	if (!pdata->clk_enable) {
-		pr_err("CPR: Invalid clk_enable hook\n");
-		return -EFAULT;
-	}
-
-	pdata->clk_enable();
 
 	/* Initialize platform_data */
 	cpr->config = pdata;
@@ -922,6 +910,7 @@ static int __devinit msm_cpr_probe(struct platform_device *pdev)
 	cpr->cur_Vmax = cpr->config->cpr_mode_data[1].turbo_Vmax;
 
 	cpr_pdev = pdev;
+	msm_cpr = cpr;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem || !mem->start) {
@@ -953,7 +942,7 @@ static int __devinit msm_cpr_probe(struct platform_device *pdev)
 
 	cpr->base = base;
 
-	cpr->step_size = pdata->step_size;
+	cpr->vp = pdata->vp_data;
 
 	spin_lock_init(&cpr->cpr_lock);
 
@@ -1018,8 +1007,6 @@ static int __devinit msm_cpr_probe(struct platform_device *pdev)
 	cpufreq_register_notifier(&cpr->freq_transition,
 					CPUFREQ_TRANSITION_NOTIFIER);
 
-	pr_info("MSM CPR driver successfully registered!\n");
-
 	return res;
 
 err_reg_get:
@@ -1047,20 +1034,12 @@ static int __devexit msm_cpr_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct dev_pm_ops msm_cpr_dev_pm_ops = {
-	.suspend = msm_cpr_suspend,
-	.resume = msm_cpr_resume,
-};
-
 static struct platform_driver msm_cpr_driver = {
 	.probe = msm_cpr_probe,
 	.remove = __devexit_p(msm_cpr_remove),
 	.driver = {
 		.name = MODULE_NAME,
 		.owner = THIS_MODULE,
-#ifdef CONFIG_PM
-		.pm = &msm_cpr_dev_pm_ops,
-#endif
 	},
 };
 

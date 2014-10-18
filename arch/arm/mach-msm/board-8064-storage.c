@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,7 +21,6 @@
 #include <mach/msm_bus_board.h>
 #include <mach/board.h>
 #include <mach/gpiomux.h>
-#include <mach/socinfo.h>
 #include "devices.h"
 #include "board-8064.h"
 #include "board-storage-common-a.h"
@@ -239,10 +238,6 @@ static unsigned int sdc1_sup_clk_rates[] = {
 	400000, 24000000, 48000000, 96000000
 };
 
-static unsigned int sdc1_sup_clk_rates_all[] = {
-	400000, 24000000, 48000000, 96000000, 192000000
-};
-
 static struct mmc_platform_data sdc1_data = {
 	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29,
 #ifdef CONFIG_MMC_MSM_SDC1_8_BIT_SUPPORT
@@ -336,26 +331,28 @@ static struct mmc_platform_data *apq8064_sdc4_pdata;
 
 void __init apq8064_init_mmc(void)
 {
-	if (apq8064_sdc1_pdata) {
-		/* 8064 v2 supports upto 200MHz clock on SDC1 slot */
-		if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2) {
-			apq8064_sdc1_pdata->sup_clk_table =
-					sdc1_sup_clk_rates_all;
-			apq8064_sdc1_pdata->sup_clk_cnt	=
-					ARRAY_SIZE(sdc1_sup_clk_rates_all);
+	if ((machine_is_apq8064_rumi3()) || machine_is_apq8064_sim()) {
+		if (apq8064_sdc1_pdata) {
+			if (machine_is_apq8064_sim())
+				apq8064_sdc1_pdata->disable_bam = true;
+			apq8064_sdc1_pdata->disable_runtime_pm = true;
+			apq8064_sdc1_pdata->disable_cmd23 = true;
 		}
-		apq8064_add_sdcc(1, apq8064_sdc1_pdata);
+		if (apq8064_sdc3_pdata) {
+			if (machine_is_apq8064_sim())
+				apq8064_sdc3_pdata->disable_bam = true;
+			apq8064_sdc3_pdata->disable_runtime_pm = true;
+			apq8064_sdc3_pdata->disable_cmd23 = true;
+		}
 	}
+
+	if (apq8064_sdc1_pdata)
+		apq8064_add_sdcc(1, apq8064_sdc1_pdata);
 
 	if (apq8064_sdc2_pdata)
 		apq8064_add_sdcc(2, apq8064_sdc2_pdata);
 
 	if (apq8064_sdc3_pdata) {
-		if (machine_is_mpq8064_hrd() || machine_is_mpq8064_dtv()) {
-			apq8064_sdc3_pdata->uhs_caps &= ~(MMC_CAP_UHS_SDR12 |
-				MMC_CAP_UHS_SDR25 | MMC_CAP_UHS_DDR50 |
-				MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_SDR104);
-		}
 		if (!machine_is_apq8064_cdp()) {
 			apq8064_sdc3_pdata->wpswitch_gpio = 0;
 			apq8064_sdc3_pdata->is_wpswitch_active_low = false;
@@ -395,14 +392,6 @@ void __init apq8064_init_mmc(void)
 			     i++)
 				apq8064_sdc3_pdata->pin_data->pad_data->\
 					drv->on[i].val = GPIO_CFG_10MA;
-		}
-		if (machine_is_mpq8064_hrd() || machine_is_mpq8064_dtv()) {
-			apq8064_sdc3_pdata->pin_data->pad_data->\
-				drv->on[0].val = GPIO_CFG_16MA;
-			apq8064_sdc3_pdata->pin_data->pad_data->\
-				drv->on[1].val = GPIO_CFG_10MA;
-			apq8064_sdc3_pdata->pin_data->pad_data->\
-				drv->on[2].val = GPIO_CFG_10MA;
 		}
 		apq8064_add_sdcc(3, apq8064_sdc3_pdata);
 	}

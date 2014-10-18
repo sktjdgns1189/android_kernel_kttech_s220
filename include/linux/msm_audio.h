@@ -1,7 +1,7 @@
 /* include/linux/msm_audio.h
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2012 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -245,7 +245,6 @@ struct msm_cad_device_config {
 #define CAD_SET_DEVICE _IOW(SND_IOCTL_MAGIC, 2, struct msm_cad_device_config *)
 
 #define SND_METHOD_VOICE 0
-#define SND_METHOD_MIDI 4
 
 struct msm_snd_volume_config {
 	uint32_t device;

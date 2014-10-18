@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -369,14 +369,6 @@ void __init msm7627a_init_mmc(void)
 	if (!(machine_is_msm7627a_qrd3() || machine_is_msm8625_qrd7())) {
 		if (mmc_regulator_init(3, "emmc", 3000000))
 			return;
-		/*
-		 * On 7x25A FFA data CRC errors are seen, which are
-		 * probably due to the proximity of SIM card and eMMC.
-		 * Hence, reducing the clock to 24.7Mhz from 49Mhz.
-		 */
-		if (machine_is_msm7625a_ffa())
-			sdc3_plat_data.msmsdcc_fmax =
-				sdc3_plat_data.msmsdcc_fmid;
 		msm_add_sdcc(3, &sdc3_plat_data);
 	}
 #endif
@@ -386,9 +378,9 @@ void __init msm7627a_init_mmc(void)
 	if (mmc_regulator_init(1, "mmc", 2850000))
 		return;
 	/* 8x25 EVT do not use hw detector */
-	if (!((machine_is_msm8625_evt() || machine_is_qrd_skud_prime())))
+	if (!(machine_is_msm8625_evt()))
 		sdc1_plat_data.status_irq = MSM_GPIO_TO_INT(gpio_sdc1_hw_det);
-	if (machine_is_msm8625_evt() || machine_is_qrd_skud_prime())
+	if (machine_is_msm8625_evt())
 		sdc1_plat_data.status = NULL;
 
 	msm_add_sdcc(1, &sdc1_plat_data);

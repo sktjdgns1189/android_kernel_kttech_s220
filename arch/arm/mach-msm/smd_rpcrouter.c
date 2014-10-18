@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd_rpcrouter.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -159,7 +159,6 @@ static atomic_t pm_mid = ATOMIC_INIT(1);
 static void do_read_data(struct work_struct *work);
 static void do_create_pdevs(struct work_struct *work);
 static void do_create_rpcrouter_pdev(struct work_struct *work);
-static int msm_rpcrouter_close(void);
 
 static DECLARE_WORK(work_create_pdevs, do_create_pdevs);
 static DECLARE_WORK(work_create_rpcrouter_pdev, do_create_rpcrouter_pdev);
@@ -232,6 +231,8 @@ static struct notifier_block msm_rpc_reboot_notifier = {
 	.notifier_call = msm_rpc_reboot_call,
 	.priority = 100
 };
+
+
 
 /*
  * Search for transport (xprt) that matches the provided PID.
@@ -545,13 +546,12 @@ static void rpcrouter_register_board_dev(struct rr_server *server)
 			D("%s: registering device %x\n",
 			  __func__, board_info->dev->prog);
 			list_del(&board_info->list);
-			spin_unlock_irqrestore(&rpc_board_dev_list_lock, flags);
 			rc = platform_device_register(&board_info->dev->pdev);
 			if (rc)
 				pr_err("%s: board dev register failed %d\n",
 				       __func__, rc);
 			kfree(board_info);
-			return;
+			break;
 		}
 	}
 	spin_unlock_irqrestore(&rpc_board_dev_list_lock, flags);
@@ -2149,7 +2149,7 @@ int msm_rpc_get_curr_pkt_size(struct msm_rpc_endpoint *ept)
 	return rc;
 }
 
-static int msm_rpcrouter_close(void)
+int msm_rpcrouter_close(void)
 {
 	struct rpcrouter_xprt_info *xprt_info;
 	union rr_control_msg ctl;
@@ -2449,7 +2449,6 @@ void msm_rpcrouter_xprt_notify(struct rpcrouter_xprt *xprt, unsigned event)
 {
 	struct rpcrouter_xprt_info *xprt_info;
 	struct rpcrouter_xprt_work *xprt_work;
-	unsigned long flags;
 
 	/* Workqueue is created in init function which works for all existing
 	 * clients.  If this fails in the future, then it will need to be
@@ -2481,13 +2480,11 @@ void msm_rpcrouter_xprt_notify(struct rpcrouter_xprt *xprt, unsigned event)
 
 	xprt_info = xprt->priv;
 	if (xprt_info) {
-		spin_lock_irqsave(&xprt_info->lock, flags);
 		/* Check read_avail even for OPEN event to handle missed
 		   DATA events while processing the OPEN event*/
 		if (xprt->read_avail() >= xprt_info->need_len)
 			wake_lock(&xprt_info->wakelock);
 		wake_up(&xprt_info->read_wait);
-		spin_unlock_irqrestore(&xprt_info->lock, flags);
 	}
 }
 

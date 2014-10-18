@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,12 +35,17 @@
 #include "snddev_mi2s.h"
 #include "snddev_virtual.h"
 
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+#include <mach/qdsp6v2/audio_amp_ctl.h>
+#endif
+
 #ifdef CONFIG_DEBUG_FS
 static struct dentry *debugfs_hsed_config;
 static void snddev_hsed_config_modify_setting(int type);
 static void snddev_hsed_config_restore_setting(void);
 #endif
 
+#if !defined(CONFIG_KTTECH_SOUND)
 /* GPIO_CLASS_D0_EN */
 #define SNDDEV_GPIO_CLASS_D0_EN 227
 
@@ -70,6 +75,7 @@ struct platform_device msm_device_dspcrashd_8x60 = {
 	.resource       = resources_dspcrashd_8x60,
 	.dev = { .platform_data = &dspcrashd_pdata_8x60 },
 };
+#endif /*CONFIG_KTTECH_SOUND*/
 
 static struct resource msm_cdcclk_ctl_resources[] = {
 	{
@@ -126,6 +132,7 @@ static struct platform_device msm_aux_pcm_device = {
 	.resource       = msm_aux_pcm_resources,
 };
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static struct resource msm_mi2s_gpio_resources[] = {
 
 	{
@@ -193,6 +200,22 @@ static struct regulator *mvs;
 
 static int msm_snddev_enable_dmic_power(void)
 {
+#if defined(CONFIG_KTTECH_SOUND)
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_0, OTHC_SIGNAL_ALWAYS_ON);
+	if (ret)
+		pr_err("%s: Enabling mainmic power failed\n", __func__);
+#endif
+
+	APM_INFO("%s: enable main mic\n", __func__);
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+	audio_amp_on(AMP_PATH_MAINMIC);
+#endif
+
+	return ret;
+#else
 	int ret;
 
 	s3 = regulator_get(NULL, "8058_s3");
@@ -234,10 +257,26 @@ fail_s3:
 	s3 = NULL;
 fail_get_s3:
 	return ret;
+#endif /*CONFIG_KTTECH_SOUND*/
 }
 
 static void msm_snddev_disable_dmic_power(void)
 {
+#if defined(CONFIG_KTTECH_SOUND)
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_0, OTHC_SIGNAL_OFF);
+	if (ret)
+		pr_err("%s: Disabling mainmic power failed\n", __func__);
+#endif
+
+	APM_INFO("%s: disable main mic\n", __func__);
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+	audio_amp_off(AMP_PATH_MAINMIC);
+#endif
+	//msleep(30);
+#else
 	int ret;
 
 	if (mvs) {
@@ -255,6 +294,7 @@ static void msm_snddev_disable_dmic_power(void)
 		regulator_put(s3);
 		s3 = NULL;
 	}
+#endif /*CONFIG_KTTECH_SOUND*/
 }
 
 #define PM8901_MPP_3 (2) /* PM8901 MPP starts from 0 */
@@ -323,17 +363,30 @@ static int config_class_d1_gpio(int enable)
 	}
 	return 0;
 }
+#endif /*CONFIG_KTTECH_SOUND*/
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static atomic_t pamp_ref_cnt;
+#endif /*CONFIG_KTTECH_SOUND*/
 
 static int msm_snddev_poweramp_on(void)
 {
 	int rc;
 
+#if !defined(CONFIG_KTTECH_SOUND)
 	if (atomic_inc_return(&pamp_ref_cnt) > 1)
 		return 0;
+#endif /*CONFIG_KTTECH_SOUND*/
 
-	pr_debug("%s: enable stereo spkr amp\n", __func__);
+	APM_INFO("%s: enable stereo spkr amp\n", __func__);
+
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+	audio_amp_on(AMP_PATH_SPEAKER);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+
+#if defined(CONFIG_KTTECH_SOUND)
+	rc = 0;
+#else
 	rc = config_class_d0_gpio(1);
 	if (rc) {
 		pr_err("%s: d0 gpio configuration failed\n", __func__);
@@ -345,29 +398,199 @@ static int msm_snddev_poweramp_on(void)
 		goto config_gpio_fail;
 	}
 config_gpio_fail:
+#endif /*CONFIG_KTTECH_SOUND*/
 	return rc;
 }
 
 static void msm_snddev_poweramp_off(void)
 {
+#if !defined(CONFIG_KTTECH_SOUND)
 	if (atomic_dec_return(&pamp_ref_cnt) == 0) {
-		pr_debug("%s: disable stereo spkr amp\n", __func__);
+#endif /*CONFIG_KTTECH_SOUND*/
+		APM_INFO("%s: disable stereo spkr amp\n", __func__);
+
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+		audio_amp_off(AMP_PATH_SPEAKER);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+
+#if !defined(CONFIG_KTTECH_SOUND)
 		config_class_d0_gpio(0);
 		config_class_d1_gpio(0);
 		msleep(30);
+#endif /*CONFIG_KTTECH_SOUND*/
+#if !defined(CONFIG_KTTECH_SOUND)
 	}
+#endif /*CONFIG_KTTECH_SOUND*/
 }
 
+#if defined(CONFIG_KTTECH_SOUND)
+int msm_snddev_hs_poweramp_on(void)
+{
+	APM_INFO("%s: enable stereo headset amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_on(AMP_PATH_HEADSET);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	return 0;
+}
+
+void msm_snddev_hs_poweramp_off(void)
+{
+	APM_INFO("%s: disable stereo headset amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_off(AMP_PATH_HEADSET);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+
+int msm_snddev_spk_poweramp_on(void)
+{
+	APM_INFO("%s: enable stereo spkr amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_on(AMP_PATH_SPEAKER);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	return 0;
+}
+
+void msm_snddev_spk_poweramp_off(void)
+{
+	APM_INFO("%s: disable stereo spkr amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_off(AMP_PATH_SPEAKER);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+
+int msm_snddev_hs_spk_poweramp_on(void)
+{
+	APM_INFO("%s: enable stereo headset and spkr amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_on(AMP_PATH_HEADSET_SPEAKER);
+
+	//config_class_d0_gpio(1);
+	//config_class_d1_gpio(1);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	return 0;
+}
+
+void msm_snddev_hs_spk_poweramp_off(void)
+{
+	APM_INFO("%s: disable stereo headset and spkr amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_off(AMP_PATH_HEADSET_SPEAKER);
+
+	//config_class_d0_gpio(0);
+	//config_class_d1_gpio(0);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+
+int msm_snddev_hand_poweramp_on(void)
+{
+	APM_INFO("%s: enable mono handset amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_on(AMP_PATH_HANDSET);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+
+	return 0;
+}
+
+void msm_snddev_hand_poweramp_off(void)
+{
+	APM_INFO("%s: disable mono handset amp\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_off(AMP_PATH_HANDSET);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+
+int msm_snddev_hs_mic_poweramp_on(void)
+{
+	APM_INFO("%s: enable ear mic\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_on(AMP_PATH_EARMIC);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	return 0;
+}
+
+void msm_snddev_hs_mic_poweramp_off(void)
+{
+	APM_INFO("%s: disable ear mic\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_off(AMP_PATH_EARMIC);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+
+int msm_snddev_hs_with_mic_poweramp_on(void)
+{
+	APM_INFO("%s: enable headset and earmic\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_set(AMP_TYPE_CAL, AMP_CAL_VOICECALL);
+	audio_amp_on(AMP_PATH_HEADSET);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	return 0;
+}
+
+void msm_snddev_hs_with_mic_poweramp_off(void)
+{
+	APM_INFO("%s: disable headset and earmic\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_set(AMP_TYPE_CAL, AMP_CAL_NORMAL);
+	audio_amp_off(AMP_PATH_HEADSET);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+
+int msm_snddev_spk_with_mic_poweramp_on(void)
+{
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_0, OTHC_SIGNAL_ALWAYS_ON);
+	if (ret)
+		pr_err("%s: Enabling mainmic power failed\n", __func__);
+#endif
+
+	APM_INFO("%s: enable speaker and mainmic\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_set(AMP_TYPE_CAL, AMP_CAL_VOICECALL);
+	audio_amp_on(AMP_PATH_SPEAKER);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	return 0;
+}
+
+void msm_snddev_spk_with_mic_poweramp_off(void)
+{
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_0, OTHC_SIGNAL_OFF);
+	if (ret)
+		pr_err("%s: Disabling mainmic power failed\n", __func__);
+#endif
+
+	APM_INFO("%s: disable speaker and mainmic\n", __func__);
+#ifdef CONFIG_KTTECH_SOUND_AMP
+	audio_amp_set(AMP_TYPE_CAL, AMP_CAL_NORMAL);
+	audio_amp_off(AMP_PATH_SPEAKER);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+}
+#endif /*CONFIG_KTTECH_SOUND*/
+
+#if !defined(CONFIG_KTTECH_SOUND)
 /* Regulator 8058_l10 supplies regulator 8058_ncp. */
 static struct regulator *snddev_reg_ncp;
 static struct regulator *snddev_reg_l10;
+#endif /*CONFIG_KTTECH_SOUND*/
 
 static atomic_t preg_ref_cnt;
 
 static int msm_snddev_voltage_on(void)
 {
+#if !defined(CONFIG_KTTECH_SOUND)
 	int rc;
-	pr_debug("%s\n", __func__);
+	APM_INFO("%s\n", __func__);
 
 	if (atomic_inc_return(&preg_ref_cnt) > 1)
 		return 0;
@@ -414,12 +637,16 @@ regulator_fail:
 	regulator_put(snddev_reg_ncp);
 	snddev_reg_ncp = NULL;
 	return rc;
+#else
+	return 0;
+#endif /*CONFIG_KTTECH_SOUND*/
 }
 
 static void msm_snddev_voltage_off(void)
 {
+#if !defined(CONFIG_KTTECH_SOUND)
 	int rc;
-	pr_debug("%s\n", __func__);
+	APM_INFO("%s\n", __func__);
 
 	if (!snddev_reg_ncp)
 		goto done;
@@ -446,10 +673,25 @@ done:
 	regulator_put(snddev_reg_l10);
 
 	snddev_reg_l10 = NULL;
+#endif /*CONFIG_KTTECH_SOUND*/
 }
 
 static int msm_snddev_enable_amic_power(void)
 {
+#if defined(CONFIG_KTTECH_SOUND)
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_0, OTHC_SIGNAL_ALWAYS_ON);
+	if (ret)
+		pr_err("%s: Enabling mainmic power failed\n", __func__);
+#endif
+
+	APM_INFO("%s: enable main amic\n", __func__);
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+	audio_amp_on(AMP_PATH_MAINMIC);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+#else
 	int ret = 0;
 #ifdef CONFIG_PMIC8058_OTHC
 
@@ -484,11 +726,27 @@ static int msm_snddev_enable_amic_power(void)
 			pr_err("%s: Enabling amic power failed\n", __func__);
 	}
 #endif
+#endif /*CONFIG_KTTECH_SOUND*/
 	return ret;
 }
 
 static void msm_snddev_disable_amic_power(void)
 {
+#if defined(CONFIG_KTTECH_SOUND)
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_0, OTHC_SIGNAL_OFF);
+	if (ret)
+		pr_err("%s: Disabling mainmic power failed\n", __func__);
+#endif
+
+	APM_INFO("%s: disable main amic\n", __func__);
+#if defined(CONFIG_KTTECH_SOUND_AMP)
+	audio_amp_off(AMP_PATH_MAINMIC);
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
+	//msleep(30);
+#else
 #ifdef CONFIG_PMIC8058_OTHC
 	int ret;
 	if (machine_is_msm8x60_fluid()) {
@@ -502,11 +760,14 @@ static void msm_snddev_disable_amic_power(void)
 	if (ret)
 		pr_err("%s: Disabling amic power failed\n", __func__);
 #endif
+#endif /*CONFIG_KTTECH_SOUND*/
 }
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static int msm_snddev_enable_anc_power(void)
 {
 	int ret = 0;
+#ifndef CONFIG_KTTECH_SOUND
 #ifdef CONFIG_PMIC8058_OTHC
 	ret = pm8058_micbias_enable(OTHC_MICBIAS_2,
 		OTHC_SIGNAL_ALWAYS_ON);
@@ -539,11 +800,15 @@ static int msm_snddev_enable_anc_power(void)
 
 	}
 #endif
+#endif
 	return ret;
 }
+#endif
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static void msm_snddev_disable_anc_power(void)
 {
+#ifndef CONFIG_KTTECH_SOUND
 #ifdef CONFIG_PMIC8058_OTHC
 	int ret;
 
@@ -559,8 +824,11 @@ static void msm_snddev_disable_anc_power(void)
 	if (ret)
 		pr_err("%s: Disabling anc power failed\n", __func__);
 #endif
+#endif
 }
+#endif
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static int msm_snddev_enable_amic_sec_power(void)
 {
 #ifdef CONFIG_PMIC8058_OTHC
@@ -634,6 +902,7 @@ static void msm_snddev_disable_dmic_sec_power(void)
 	pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_OFF);
 #endif
 }
+#endif /*CONFIG_KTTECH_SOUND*/
 
 static struct adie_codec_action_unit iearpiece_48KHz_osr256_actions[] =
 	EAR_PRI_MONO_8000_OSR_256;
@@ -660,6 +929,10 @@ static struct snddev_icodec_data snddev_iearpiece_data = {
 	.profile = &iearpiece_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hand_poweramp_on,
+	.pamp_off = msm_snddev_hand_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
 };
 
 static struct platform_device msm_iearpiece_device = {
@@ -743,6 +1016,10 @@ static struct snddev_icodec_data snddev_ihs_stereo_rx_data = {
 	.profile = &headset_ab_cpls_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_poweramp_on,
+	.pamp_off = msm_snddev_hs_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
 	.voltage_on = msm_snddev_voltage_on,
 	.voltage_off = msm_snddev_voltage_off,
 };
@@ -777,8 +1054,13 @@ static struct snddev_icodec_data snddev_anc_headset_data = {
 	.profile = &headset_anc_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_poweramp_on,
+	.pamp_off = msm_snddev_hs_poweramp_off,
+#else
 	.pamp_on = msm_snddev_enable_anc_power,
 	.pamp_off = msm_snddev_disable_anc_power,
+#endif /*CONFIG_KTTECH_SOUND*/
 	.voltage_on = msm_snddev_voltage_on,
 	.voltage_off = msm_snddev_voltage_off,
 };
@@ -811,7 +1093,11 @@ static struct snddev_icodec_data snddev_ispkr_stereo_data = {
 	.name = "speaker_stereo_rx",
 	.copp_id = 0,
 	.profile = &ispkr_stereo_profile,
+#if defined(CONFIG_KTTECH_SOUND_YDA165)
+	.channel_mode = 1,
+#else
 	.channel_mode = 2,
+#endif /*CONFIG_KTTECH_SOUND_YDA165*/
 	.default_sample_rate = 48000,
 	.pamp_on = msm_snddev_poweramp_on,
 	.pamp_off = msm_snddev_poweramp_off,
@@ -822,6 +1108,7 @@ static struct platform_device msm_ispkr_stereo_device = {
 	.dev = { .platform_data = &snddev_ispkr_stereo_data },
 };
 
+#if !defined(CONFIG_KTTECH_SOUND_YDA165)
 static struct adie_codec_action_unit idmic_mono_48KHz_osr256_actions[] =
 	DMIC1_PRI_MONO_OSR_256;
 
@@ -839,16 +1126,26 @@ static struct adie_codec_dev_profile idmic_mono_profile = {
 	.settings = idmic_mono_settings,
 	.setting_sz = ARRAY_SIZE(idmic_mono_settings),
 };
+#endif /*CONFIG_KTTECH_SOUND_YDA165*/
 
 static struct snddev_icodec_data snddev_ispkr_mic_data = {
 	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
 	.name = "speaker_mono_tx",
 	.copp_id = PRIMARY_I2S_TX,
+#if defined(CONFIG_KTTECH_SOUND_YDA165)
+	.profile = &imic_profile,
+#else
 	.profile = &idmic_mono_profile,
+#endif /*CONFIG_KTTECH_SOUND_YDA165*/
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+#else
 	.pamp_on = msm_snddev_enable_dmic_power,
 	.pamp_off = msm_snddev_disable_dmic_power,
+#endif /*CONFIG_KTTECH_SOUND*/
 };
 
 static struct platform_device msm_ispkr_mic_device = {
@@ -881,6 +1178,10 @@ static struct snddev_icodec_data snddev_iearpiece_ffa_data = {
 	.profile = &iearpiece_ffa_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hand_poweramp_on,
+	.pamp_off = msm_snddev_hand_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
 };
 
 static struct platform_device msm_iearpiece_ffa_device = {
@@ -892,11 +1193,20 @@ static struct snddev_icodec_data snddev_imic_ffa_data = {
 	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
 	.name = "handset_tx",
 	.copp_id = PRIMARY_I2S_TX,
+#if defined(CONFIG_KTTECH_SOUND_YDA165)
+	.profile = &imic_profile,
+#else
 	.profile = &idmic_mono_profile,
+#endif /*CONFIG_KTTECH_SOUND_YDA165*/
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+#else
 	.pamp_on = msm_snddev_enable_dmic_power,
 	.pamp_off = msm_snddev_disable_dmic_power,
+#endif /*CONFIG_KTTECH_SOUND*/
 };
 
 static struct platform_device msm_imic_ffa_device = {
@@ -904,6 +1214,7 @@ static struct platform_device msm_imic_ffa_device = {
 	.dev = { .platform_data = &snddev_imic_ffa_data },
 };
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static struct adie_codec_action_unit dual_mic_endfire_8KHz_osr256_actions[] =
 	DMIC1_PRI_STEREO_OSR_256;
 
@@ -1152,6 +1463,7 @@ static struct platform_device msm_mi2s_fm_rx_device = {
 	.id = 1,
 	.dev = { .platform_data = &snddev_mi2s_fm_rx_data },
 };
+#endif /*CONFIG_KTTECH_SOUND*/
 
 static struct adie_codec_action_unit iheadset_mic_tx_osr256_actions[] =
 	HEADSET_AMIC2_TX_MONO_PRI_OSR_256;
@@ -1178,6 +1490,10 @@ static struct snddev_icodec_data snddev_headset_mic_data = {
 	.profile = &iheadset_mic_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_mic_poweramp_on,
+	.pamp_off = msm_snddev_hs_mic_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
 };
 
 static struct platform_device msm_headset_mic_device = {
@@ -1213,8 +1529,13 @@ static struct snddev_icodec_data snddev_ihs_stereo_speaker_stereo_rx_data = {
 	.profile = &ihs_stereo_speaker_stereo_rx_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_spk_poweramp_on,
+	.pamp_off = msm_snddev_hs_spk_poweramp_off,
+#else
 	.pamp_on = msm_snddev_poweramp_on,
 	.pamp_off = msm_snddev_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND_AMP*/
 	.voltage_on = msm_snddev_voltage_on,
 	.voltage_off = msm_snddev_voltage_off,
 };
@@ -1251,6 +1572,7 @@ struct platform_device msm_bt_sco_mic_device = {
 	.dev = { .platform_data = &snddev_bt_sco_mic_data },
 };
 
+#if !defined(CONFIG_KTTECH_SOUND)
 static struct adie_codec_action_unit itty_mono_tx_actions[] =
 	TTY_HEADSET_MONO_TX_OSR_256;
 
@@ -1308,6 +1630,10 @@ static struct snddev_icodec_data snddev_itty_mono_rx_data = {
 	.profile = &itty_mono_rx_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_poweramp_on,
+	.pamp_off = msm_snddev_hs_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
 	.voltage_on = msm_snddev_voltage_on,
 	.voltage_off = msm_snddev_voltage_off,
 };
@@ -1579,7 +1905,231 @@ static struct adie_codec_dev_profile ftm_spkr_r_rx_profile = {
 	.settings = ftm_spkr_r_rx_settings,
 	.setting_sz = ARRAY_SIZE(ftm_spkr_r_rx_settings),
 };
+#endif /*CONFIG_KTTECH_SOUND*/
 
+#ifdef CONFIG_KTTECH_VOIP_VIDEO_ACDB
+// VOIP_HANDSET_MIC
+static struct snddev_icodec_data snddev_imic_voip_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "voip_handset_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &idmic_mono_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device msm_imic_voip_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_imic_voip_data },
+};
+
+// VOIP_HANDSET_SPKR
+static struct snddev_icodec_data snddev_iearpiece_voip_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "voip_handset_rx",
+	.copp_id = 0,
+	.profile = &iearpiece_ffa_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hand_poweramp_on,
+	.pamp_off = msm_snddev_hand_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
+};
+
+static struct platform_device msm_iearpiece_voip_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_iearpiece_voip_data },
+};
+
+// VOIP_HEADSET_MIC
+static struct snddev_icodec_data snddev_headset_mic_voip_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "voip_headset_mono_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &iheadset_mic_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_mic_poweramp_on,
+	.pamp_off = msm_snddev_hs_mic_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
+};
+
+static struct platform_device msm_headset_mic_voip_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_headset_mic_voip_data },
+};
+
+// VOIP_HEADSET_SPKR_STEREO
+static struct snddev_icodec_data snddev_ihs_stereo_rx_voip_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "voip_headset_stereo_rx",
+	.copp_id = 0,
+	.profile = &headset_ab_cpls_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_poweramp_on,
+	.pamp_off = msm_snddev_hs_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device msm_headset_stereo_voip_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_ihs_stereo_rx_voip_data },
+};
+
+// VOIP_SPKR_PHONE_MONO_TX
+static struct snddev_icodec_data snddev_ispkr_mic_voip_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "voip_speaker_mono_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &idmic_mono_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device msm_ispkr_mic_voip_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_ispkr_mic_voip_data },
+};
+
+// VOIP_SPKR_PHONE_SPKR_STEREO
+static struct snddev_icodec_data snddev_ispkr_stereo_voip_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "voip_speaker_stereo_rx",
+	.copp_id = 0,
+	.profile = &ispkr_stereo_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device msm_ispkr_stereo_voip_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_ispkr_stereo_voip_data },
+};
+
+// VIDEO_HANDSET_MIC
+static struct snddev_icodec_data snddev_imic_video_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "video_handset_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &idmic_mono_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device msm_imic_video_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_imic_video_data },
+};
+
+// VIDEO_HANDSET_SPKR
+static struct snddev_icodec_data snddev_iearpiece_video_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "video_handset_rx",
+	.copp_id = 0,
+	.profile = &iearpiece_ffa_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hand_poweramp_on,
+	.pamp_off = msm_snddev_hand_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
+};
+
+static struct platform_device msm_iearpiece_video_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_iearpiece_video_data },
+};
+
+// VIDEO_HEADSET_MIC
+static struct snddev_icodec_data snddev_headset_mic_video_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "video_headset_mono_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &iheadset_mic_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_mic_poweramp_on,
+	.pamp_off = msm_snddev_hs_mic_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
+};
+
+static struct platform_device msm_headset_mic_video_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_headset_mic_video_data },
+};
+
+// VIDEO_HEADSET_SPKR_STEREO
+static struct snddev_icodec_data snddev_ihs_stereo_rx_video_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "video_headset_stereo_rx",
+	.copp_id = 0,
+	.profile = &headset_ab_cpls_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+#if defined(CONFIG_KTTECH_SOUND)
+	.pamp_on = msm_snddev_hs_poweramp_on,
+	.pamp_off = msm_snddev_hs_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device msm_headset_stereo_video_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_ihs_stereo_rx_video_data },
+};
+
+// VIDEO_SPKR_PHONE_MONO_TX
+static struct snddev_icodec_data snddev_ispkr_mic_video_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "video_speaker_mono_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &idmic_mono_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device msm_ispkr_mic_video_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_ispkr_mic_video_data },
+};
+
+// VIDEO_SPKR_PHONE_SPKR_STEREO
+static struct snddev_icodec_data snddev_ispkr_stereo_video_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "video_speaker_stereo_rx",
+	.copp_id = 0,
+	.profile = &ispkr_stereo_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device msm_ispkr_stereo_video_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_ispkr_stereo_video_data },
+};
+#endif /*CONFIG_KTTECH_VOIP_VIDEO_ACDB*/
+
+#if !defined(CONFIG_KTTECH_SOUND)
 static struct snddev_icodec_data ftm_spkr_r_rx_data = {
 	.capability = SNDDEV_CAP_RX,
 	.name = "ftm_spkr_r_rx",
@@ -2426,7 +2976,7 @@ static struct platform_device msm_snddev_hdmi_non_linear_pcm_rx_device = {
 	.name = "snddev_hdmi",
 	.dev = { .platform_data = &snddev_hdmi_non_linear_pcm_rx_data },
 };
-
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 static struct adie_codec_action_unit
@@ -2471,6 +3021,10 @@ static void snddev_hsed_config_modify_setting(int type)
 
 	if (icodec_data) {
 		if (type == 1) {
+#if defined(CONFIG_KTTECH_SOUND)
+			icodec_data->pamp_on = NULL;
+			icodec_data->pamp_off = NULL;
+#endif /*CONFIG_KTTECH_SOUND*/
 			icodec_data->voltage_on = NULL;
 			icodec_data->voltage_off = NULL;
 			icodec_data->profile->settings =
@@ -2478,6 +3032,10 @@ static void snddev_hsed_config_modify_setting(int type)
 			icodec_data->profile->setting_sz =
 			ARRAY_SIZE(ihs_stereo_rx_class_d_legacy_settings);
 		} else if (type == 2) {
+#if defined(CONFIG_KTTECH_SOUND)
+			icodec_data->pamp_on = NULL;
+			icodec_data->pamp_off = NULL;
+#endif /*CONFIG_KTTECH_SOUND*/
 			icodec_data->voltage_on = NULL;
 			icodec_data->voltage_off = NULL;
 			icodec_data->profile->settings =
@@ -2497,6 +3055,10 @@ static void snddev_hsed_config_restore_setting(void)
 	icodec_data = (struct snddev_icodec_data *)device->dev.platform_data;
 
 	if (icodec_data) {
+#if defined(CONFIG_KTTECH_SOUND)
+		icodec_data->pamp_on = msm_snddev_hs_poweramp_on,
+		icodec_data->pamp_off = msm_snddev_hs_poweramp_off,
+#endif /*CONFIG_KTTECH_SOUND*/
 		icodec_data->voltage_on = msm_snddev_voltage_on;
 		icodec_data->voltage_off = msm_snddev_voltage_off;
 		icodec_data->profile->settings = headset_ab_cpls_settings;
@@ -2551,12 +3113,15 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_iearpiece_ffa_device,
 	&msm_imic_ffa_device,
 	&msm_ispkr_stereo_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_snddev_hdmi_stereo_rx_device,
+#endif /*CONFIG_KTTECH_SOUND*/
 	&msm_headset_mic_device,
 	&msm_ispkr_mic_device,
 	&msm_bt_sco_earpiece_device,
 	&msm_bt_sco_mic_device,
 	&msm_headset_stereo_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_itty_mono_tx_device,
 	&msm_itty_mono_rx_device,
 	&msm_mi2s_fm_tx_device,
@@ -2565,68 +3130,114 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_spkr_dual_mic_endfire_device,
 	&msm_hs_dual_mic_broadside_device,
 	&msm_spkr_dual_mic_broadside_device,
+#endif /*CONFIG_KTTECH_SOUND*/
 	&msm_ihs_stereo_speaker_stereo_rx_device,
 	&msm_anc_headset_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_auxpga_lp_hs_device,
 	&msm_auxpga_lp_lo_device,
 	&msm_linein_pri_device,
 	&msm_icodec_gpio_device,
 	&msm_snddev_hdmi_non_linear_pcm_rx_device,
+#endif /*CONFIG_KTTECH_SOUND*/
+#ifdef CONFIG_KTTECH_VOIP_VIDEO_ACDB
+	&msm_iearpiece_voip_device,
+	&msm_imic_voip_device,
+	&msm_ispkr_mic_voip_device,
+	&msm_ispkr_stereo_voip_device, 
+	&msm_headset_mic_voip_device,
+	&msm_headset_stereo_voip_device,
+	&msm_iearpiece_video_device,
+	&msm_imic_video_device,
+	&msm_ispkr_mic_video_device,
+	&msm_ispkr_stereo_video_device, 
+	&msm_headset_mic_video_device,
+	&msm_headset_stereo_video_device,
+#endif /*CONFIG_KTTECH_VOIP_VIDEO_ACDB*/
 };
 
 static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_iearpiece_device,
 	&msm_imic_device,
 	&msm_ispkr_stereo_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_snddev_hdmi_stereo_rx_device,
+#endif /*CONFIG_KTTECH_SOUND*/
 	&msm_headset_mic_device,
 	&msm_ispkr_mic_device,
 	&msm_bt_sco_earpiece_device,
 	&msm_bt_sco_mic_device,
 	&msm_headset_stereo_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_itty_mono_tx_device,
 	&msm_itty_mono_rx_device,
 	&msm_mi2s_fm_tx_device,
 	&msm_mi2s_fm_rx_device,
+#endif /*CONFIG_KTTECH_SOUND*/
 	&msm_ihs_stereo_speaker_stereo_rx_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_auxpga_lp_hs_device,
 	&msm_auxpga_lp_lo_device,
 	&msm_linein_pri_device,
 	&msm_icodec_gpio_device,
 	&msm_snddev_hdmi_non_linear_pcm_rx_device,
+#endif /*CONFIG_KTTECH_SOUND*/
+#ifdef CONFIG_KTTECH_VOIP_VIDEO_ACDB
+	&msm_iearpiece_voip_device,
+	&msm_imic_voip_device,
+	&msm_ispkr_mic_voip_device,
+	&msm_ispkr_stereo_voip_device, 
+	&msm_headset_mic_voip_device,
+	&msm_headset_stereo_voip_device,
+	&msm_iearpiece_video_device,
+	&msm_imic_video_device,
+	&msm_ispkr_mic_video_device,
+	&msm_ispkr_stereo_video_device, 
+	&msm_headset_mic_video_device,
+	&msm_headset_stereo_video_device,
+#endif /*CONFIG_KTTECH_VOIP_VIDEO_ACDB*/
 };
 
 static struct platform_device *snd_devices_fluid[] __initdata = {
 	&msm_iearpiece_device,
 	&msm_imic_device,
 	&msm_ispkr_stereo_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_snddev_hdmi_stereo_rx_device,
+#endif /*CONFIG_KTTECH_SOUND*/
 	&msm_headset_stereo_device,
 	&msm_headset_mic_device,
 	&msm_fluid_ispkr_mic_device,
 	&msm_bt_sco_earpiece_device,
 	&msm_bt_sco_mic_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_mi2s_fm_tx_device,
 	&msm_mi2s_fm_rx_device,
 	&msm_fluid_hs_dual_mic_endfire_device,
 	&msm_fluid_spkr_dual_mic_endfire_device,
 	&msm_fluid_hs_dual_mic_broadside_device,
 	&msm_fluid_spkr_dual_mic_broadside_device,
+#endif /*CONFIG_KTTECH_SOUND*/
 	&msm_anc_headset_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_auxpga_lp_hs_device,
 	&msm_auxpga_lp_lo_device,
 	&msm_icodec_gpio_device,
 	&msm_snddev_hdmi_non_linear_pcm_rx_device,
+#endif
 };
 
 static struct platform_device *snd_devices_common[] __initdata = {
 	&msm_aux_pcm_device,
 	&msm_cdcclk_ctl_device,
+#if !defined(CONFIG_KTTECH_SOUND)
 	&msm_mi2s_device,
 	&msm_uplink_rx_device,
 	&msm_device_dspcrashd_8x60,
+#endif /*CONFIG_KTTECH_SOUND*/
 };
 
+#if !defined(CONFIG_KTTECH_SOUND)
 #ifdef CONFIG_MSM8X60_FTM_AUDIO_DEVICES
 static struct platform_device *snd_devices_ftm[] __initdata = {
 	&ftm_headset_mono_rx_device,
@@ -2663,14 +3274,16 @@ static struct platform_device *snd_devices_ftm[] __initdata = {
 #else
 static struct platform_device *snd_devices_ftm[] __initdata = {};
 #endif
-
+#endif /*CONFIG_KTTECH_SOUND*/
 
 void __init msm_snddev_init(void)
 {
 	int i;
 	int dev_id;
 
+#if !defined(CONFIG_KTTECH_SOUND)
 	atomic_set(&pamp_ref_cnt, 0);
+#endif /*CONFIG_KTTECH_SOUND*/
 	atomic_set(&preg_ref_cnt, 0);
 
 	for (i = 0, dev_id = 0; i < ARRAY_SIZE(snd_devices_common); i++)
@@ -2703,11 +3316,13 @@ void __init msm_snddev_init(void)
 	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa()
 		|| machine_is_msm8x60_fusion()
 		|| machine_is_msm8x60_fusn_ffa()) {
+#if !defined(CONFIG_KTTECH_SOUND)
 		for (i = 0; i < ARRAY_SIZE(snd_devices_ftm); i++)
 			snd_devices_ftm[i]->id = dev_id++;
 
 		platform_add_devices(snd_devices_ftm,
 				ARRAY_SIZE(snd_devices_ftm));
+#endif /*CONFIG_KTTECH_SOUND*/
 	}
 
 #ifdef CONFIG_DEBUG_FS

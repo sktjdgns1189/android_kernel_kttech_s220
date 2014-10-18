@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,21 +22,7 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		qcom,qpnp-revid@100 {
-			compatible = "qcom,qpnp-revid";
-			reg = <0x100 0x100>;
-		};
-
-		qcom,temp-alarm@2400 {
-			compatible = "qcom,qpnp-temp-alarm";
-			reg = <0x2400 0x100>;
-			interrupts = <0x4 0x24 0x0>;
-			label = "pm8841_tz";
-			qcom,threshold-set = <0>;
-			qcom,default-temp = <37000>;
-		};
-
-		pm8841_mpps: mpps {
+		pm8841_mpps {
 			spmi-dev-container;
 			compatible = "qcom,qpnp-pin";
 			gpio-controller;
@@ -48,21 +34,25 @@
 			mpp@a000 {
 				reg = <0xa000 0x100>;
 				qcom,pin-num = <1>;
+				status = "disabled";
 			};
 
 			mpp@a100 {
 				reg = <0xa100 0x100>;
 				qcom,pin-num = <2>;
+				status = "disabled";
 			};
 
 			mpp@a200 {
 				reg = <0xa200 0x100>;
 				qcom,pin-num = <3>;
+				status = "disabled";
 			};
 
 			mpp@a300 {
 				reg = <0xa300 0x100>;
 				qcom,pin-num = <4>;
+				status = "disabled";
 			};
 		};
 	};
@@ -101,7 +91,6 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x1700 0x300>;
 			status = "disabled";
-			qcom,force-type = <0x1c 0x08>;
 
 			qcom,ctl@1700 {
 				reg = <0x1700 0x100>;
@@ -142,7 +131,6 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x1d00 0x300>;
 			status = "disabled";
-			qcom,force-type = <0x1c 0x08>;
 
 			qcom,ctl@1d00 {
 				reg = <0x1d00 0x100>;
@@ -163,7 +151,6 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x2000 0x300>;
 			status = "disabled";
-			qcom,force-type = <0x1c 0x08>;
 
 			qcom,ctl@0 {
 				reg = <0x2000 0x100>;
@@ -184,7 +171,6 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x2300 0x300>;
 			status = "disabled";
-			qcom,force-type = <0x1c 0x08>;
 
 			qcom,ctl@2300 {
 				reg = <0x2300 0x100>;
@@ -205,7 +191,6 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x2600 0x300>;
 			status = "disabled";
-			qcom,force-type = <0x1c 0x08>;
 
 			qcom,ctl@2600 {
 				reg = <0x2600 0x100>;
@@ -226,7 +211,6 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x2900 0x300>;
 			status = "disabled";
-			qcom,force-type = <0x1c 0x08>;
 
 			qcom,ctl@2900 {
 				reg = <0x2900 0x100>;
@@ -236,29 +220,6 @@
 			};
 			qcom,freq@2b00 {
 				reg = <0x2b00 0x100>;
-			};
-		};
-
-		krait_regulator_pmic: qcom,krait-regulator-pmic@2000 {
-			spmi-dev-container;
-			compatible = "qcom,krait-regulator-pmic";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			status = "disabled";
-
-			qcom,ctl@2000 {
-				status = "disabled";
-				reg = <0x2000 0x100>;
-			};
-
-			qcom,ps@2100 {
-				status = "disabled";
-				reg = <0x2100 0x100>;
-			};
-
-			qcom,freq@2200 {
-				status = "disabled";
-				reg = <0x2200 0x100>;
 			};
 		};
 	};

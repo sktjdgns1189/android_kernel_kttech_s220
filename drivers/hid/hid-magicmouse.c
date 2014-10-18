@@ -22,15 +22,23 @@
 
 #include "hid-ids.h"
 
-static bool emulate_3button = true;
-module_param(emulate_3button, bool, 0644);
+/****************** KT tech ******************/
+// Begin : 2012.02.03 : joengyoon.kim@kttech.co.kr 
+// Disable specialized funtionalities of Apple magic mouse to prevent unexpected operation 
+static bool emulate_3button = false;
+// End : 2012.02.03 : jeongyoon.kim@kttech.co.kr
+/*******************************************/module_param(emulate_3button, bool, 0644);
 MODULE_PARM_DESC(emulate_3button, "Emulate a middle button");
 
 static int middle_button_start = -350;
 static int middle_button_stop = +350;
 
-static bool emulate_scroll_wheel = true;
-module_param(emulate_scroll_wheel, bool, 0644);
+/****************** KT tech ******************/
+// Begin : 2012.02.03 : joengyoon.kim@kttech.co.kr 
+// Disable specialized funtionalities of Apple magic mouse to prevent unexpected operation 
+static bool emulate_scroll_wheel = false;
+// End : 2012.02.03 : jeongyoon.kim@kttech.co.kr
+/*******************************************/module_param(emulate_scroll_wheel, bool, 0644);
 MODULE_PARM_DESC(emulate_scroll_wheel, "Emulate a scroll wheel");
 
 static unsigned int scroll_speed = 32;
@@ -48,8 +56,12 @@ static bool scroll_acceleration = false;
 module_param(scroll_acceleration, bool, 0644);
 MODULE_PARM_DESC(scroll_acceleration, "Accelerate sequential scroll events");
 
-static bool report_touches = true;
-module_param(report_touches, bool, 0644);
+/****************** KT tech ******************/
+// Begin : 2012.02.03 : joengyoon.kim@kttech.co.kr 
+// Disable specialized funtionalities of Apple magic mouse to prevent unexpected operation 
+static bool report_touches = false;
+// End : 2012.02.03 : jeongyoon.kim@kttech.co.kr
+/*******************************************/module_param(report_touches, bool, 0644);
 MODULE_PARM_DESC(report_touches, "Emit touch records (otherwise, only use them for emulation)");
 
 static bool report_undeciphered;

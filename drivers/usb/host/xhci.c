@@ -1386,8 +1386,6 @@ int xhci_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 		ep->stop_cmd_timer.expires = jiffies +
 			XHCI_STOP_EP_CMD_TIMEOUT * HZ;
 		add_timer(&ep->stop_cmd_timer);
-		if (hcd->driver->set_autosuspend)
-			hcd->driver->set_autosuspend(hcd, 0);
 		xhci_queue_stop_endpoint(xhci, urb->dev->slot_id, ep_index, 0);
 		xhci_ring_cmd_db(xhci);
 	}
@@ -2466,7 +2464,7 @@ static int xhci_configure_endpoint(struct xhci_hcd *xhci,
 	/* Wait for the configure endpoint command to complete */
 	timeleft = wait_for_completion_interruptible_timeout(
 			cmd_completion,
-			XHCI_CMD_DEFAULT_TIMEOUT);
+			USB_CTRL_SET_TIMEOUT);
 	if (timeleft <= 0) {
 		xhci_warn(xhci, "%s while waiting for %s command\n",
 				timeleft == 0 ? "Timeout" : "Signal",
@@ -3435,7 +3433,7 @@ int xhci_alloc_dev(struct usb_hcd *hcd, struct usb_device *udev)
 
 	/* XXX: how much time for xHC slot assignment? */
 	timeleft = wait_for_completion_interruptible_timeout(&xhci->addr_dev,
-			XHCI_CMD_DEFAULT_TIMEOUT);
+			USB_CTRL_SET_TIMEOUT);
 	if (timeleft <= 0) {
 		xhci_warn(xhci, "%s while waiting for a slot\n",
 				timeleft == 0 ? "Timeout" : "Signal");
@@ -3551,7 +3549,7 @@ int xhci_address_device(struct usb_hcd *hcd, struct usb_device *udev)
 
 	/* ctrl tx can take up to 5 sec; XXX: need more time for xHC? */
 	timeleft = wait_for_completion_interruptible_timeout(&xhci->addr_dev,
-			XHCI_CMD_DEFAULT_TIMEOUT);
+			USB_CTRL_SET_TIMEOUT);
 	/* FIXME: From section 4.3.4: "Software shall be responsible for timing
 	 * the SetAddress() "recovery interval" required by USB and aborting the
 	 * command on a timeout.
@@ -4057,9 +4055,6 @@ int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks)
 	retval = xhci_reset(xhci);
 	if (retval)
 		goto error;
-
-	if (xhci->quirks & XHCI_RESET_DELAY)
-		usleep_range(350, 1000);
 	xhci_dbg(xhci, "Reset complete\n");
 
 	temp = xhci_readl(xhci, &xhci->cap_regs->hcc_params);

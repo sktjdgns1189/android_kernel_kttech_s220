@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,14 +19,12 @@
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/interrupt.h>
 #include <linux/bitops.h>
 #include <linux/slab.h>
 #include <linux/spmi.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
-#include <linux/ktime.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/regulator/qpnp-regulator.h>
@@ -38,7 +36,6 @@ enum {
 	QPNP_VREG_DEBUG_INIT		= BIT(2), /* Show state after probe */
 	QPNP_VREG_DEBUG_WRITES		= BIT(3), /* Show SPMI writes */
 	QPNP_VREG_DEBUG_READS		= BIT(4), /* Show SPMI reads */
-	QPNP_VREG_DEBUG_OCP		= BIT(5), /* Show VS OCP IRQ events */
 };
 
 static int qpnp_vreg_debug_mask;
@@ -59,7 +56,7 @@ enum qpnp_regulator_logical_type {
 };
 
 enum qpnp_regulator_type {
-	QPNP_REGULATOR_TYPE_BUCK		= 0x03,
+	QPNP_REGULATOR_TYPE_HF_BUCK		= 0x03,
 	QPNP_REGULATOR_TYPE_LDO			= 0x04,
 	QPNP_REGULATOR_TYPE_VS			= 0x05,
 	QPNP_REGULATOR_TYPE_BOOST		= 0x1B,
@@ -74,18 +71,11 @@ enum qpnp_regulator_subtype {
 	QPNP_REGULATOR_SUBTYPE_N300		= 0x03,
 	QPNP_REGULATOR_SUBTYPE_N600		= 0x04,
 	QPNP_REGULATOR_SUBTYPE_N1200		= 0x05,
-	QPNP_REGULATOR_SUBTYPE_N600_ST		= 0x06,
-	QPNP_REGULATOR_SUBTYPE_N1200_ST		= 0x07,
 	QPNP_REGULATOR_SUBTYPE_P50		= 0x08,
 	QPNP_REGULATOR_SUBTYPE_P150		= 0x09,
 	QPNP_REGULATOR_SUBTYPE_P300		= 0x0A,
 	QPNP_REGULATOR_SUBTYPE_P600		= 0x0B,
 	QPNP_REGULATOR_SUBTYPE_P1200		= 0x0C,
-	QPNP_REGULATOR_SUBTYPE_LV_P50		= 0x28,
-	QPNP_REGULATOR_SUBTYPE_LV_P150		= 0x29,
-	QPNP_REGULATOR_SUBTYPE_LV_P300		= 0x2A,
-	QPNP_REGULATOR_SUBTYPE_LV_P600		= 0x2B,
-	QPNP_REGULATOR_SUBTYPE_LV_P1200		= 0x2C,
 	QPNP_REGULATOR_SUBTYPE_LV100		= 0x01,
 	QPNP_REGULATOR_SUBTYPE_LV300		= 0x02,
 	QPNP_REGULATOR_SUBTYPE_MV300		= 0x08,
@@ -97,7 +87,6 @@ enum qpnp_regulator_subtype {
 };
 
 enum qpnp_common_regulator_registers {
-	QPNP_COMMON_REG_DIG_MAJOR_REV		= 0x01,
 	QPNP_COMMON_REG_TYPE			= 0x04,
 	QPNP_COMMON_REG_SUBTYPE			= 0x05,
 	QPNP_COMMON_REG_VOLTAGE_RANGE		= 0x40,
@@ -117,7 +106,7 @@ enum qpnp_vs_registers {
 };
 
 enum qpnp_boost_registers {
-	QPNP_BOOST_REG_CURRENT_LIMIT		= 0x4A,
+	QPNP_BOOST_REG_CURRENT_LIMIT		= 0x40,
 };
 
 /* Used for indexing into ctrl_reg.  These are offets from 0x40 */
@@ -126,6 +115,10 @@ enum qpnp_common_control_register_index {
 	QPNP_COMMON_IDX_VOLTAGE_SET		= 1,
 	QPNP_COMMON_IDX_MODE			= 5,
 	QPNP_COMMON_IDX_ENABLE			= 6,
+};
+
+enum qpnp_boost_control_register_index {
+	QPNP_BOOST_IDX_CURRENT_LIMIT		= 0,
 };
 
 /* Common regulator control register layout */
@@ -159,8 +152,9 @@ enum qpnp_common_control_register_index {
 #define QPNP_LDO_SOFT_START_ENABLE_MASK		0x80
 
 /* VS regulator over current protection control register layout */
-#define QPNP_VS_OCP_OVERRIDE			0x01
-#define QPNP_VS_OCP_NO_OVERRIDE			0x00
+#define QPNP_VS_OCP_ENABLE_MASK			0x80
+#define QPNP_VS_OCP_OVERRIDE_MASK		0x01
+#define QPNP_VS_OCP_DISABLE			0x00
 
 /* VS regulator soft start control register layout */
 #define QPNP_VS_SOFT_START_ENABLE_MASK		0x80
@@ -169,11 +163,6 @@ enum qpnp_common_control_register_index {
 /* Boost regulator current limit control register layout */
 #define QPNP_BOOST_CURRENT_LIMIT_ENABLE_MASK	0x80
 #define QPNP_BOOST_CURRENT_LIMIT_MASK		0x07
-
-#define QPNP_VS_OCP_DEFAULT_MAX_RETRIES		10
-#define QPNP_VS_OCP_DEFAULT_RETRY_DELAY_MS	30
-#define QPNP_VS_OCP_FALL_DELAY_US		90
-#define QPNP_VS_OCP_FAULT_DELAY_US		20000
 
 /*
  * This voltage in uV is returned by get_voltage functions when there is no way
@@ -201,8 +190,6 @@ struct qpnp_regulator_mapping {
 	enum qpnp_regulator_type		type;
 	enum qpnp_regulator_subtype		subtype;
 	enum qpnp_regulator_logical_type	logical_type;
-	u32					revision_min;
-	u32					revision_max;
 	struct regulator_ops			*ops;
 	struct qpnp_voltage_set_points		*set_points;
 	int					hpm_min_load;
@@ -210,34 +197,27 @@ struct qpnp_regulator_mapping {
 
 struct qpnp_regulator {
 	struct regulator_desc			rdesc;
-	struct delayed_work			ocp_work;
 	struct spmi_device			*spmi_dev;
 	struct regulator_dev			*rdev;
 	struct qpnp_voltage_set_points		*set_points;
 	enum qpnp_regulator_logical_type	logical_type;
 	int					enable_time;
+	int					ocp_enable_time;
 	int					ocp_enable;
-	int					ocp_irq;
-	int					ocp_count;
-	int					ocp_max_retries;
-	int					ocp_retry_delay_ms;
 	int					system_load;
 	int					hpm_min_load;
 	u32					write_count;
 	u32					prev_write_count;
-	ktime_t					vs_enable_time;
 	u16					base_addr;
 	/* ctrl_reg provides a shadow copy of register values 0x40 to 0x47. */
 	u8					ctrl_reg[8];
 };
 
-#define QPNP_VREG_MAP(_type, _subtype, _dig_major_min, _dig_major_max, \
-		      _logical_type, _ops_val, _set_points_val, _hpm_min_load) \
+#define QPNP_VREG_MAP(_type, _subtype, _logical_type, _ops_val, \
+		      _set_points_val, _hpm_min_load) \
 	{ \
 		.type		= QPNP_REGULATOR_TYPE_##_type, \
 		.subtype	= QPNP_REGULATOR_SUBTYPE_##_subtype, \
-		.revision_min	= _dig_major_min, \
-		.revision_max	= _dig_major_max, \
 		.logical_type	= QPNP_REGULATOR_LOGICAL_TYPE_##_logical_type, \
 		.ops		= &qpnp_##_ops_val##_ops, \
 		.set_points	= &_set_points_val##_set_points, \
@@ -282,18 +262,14 @@ static struct qpnp_voltage_range nldo2_ranges[] = {
 	VOLTAGE_RANGE(2,  750000,  775000, 1537500, 12500),
 };
 
-static struct qpnp_voltage_range nldo3_ranges[] = {
-	VOLTAGE_RANGE(0,  375000,  375000, 1537500, 12500),
-};
-
 static struct qpnp_voltage_range smps_ranges[] = {
 	VOLTAGE_RANGE(0,  375000,  375000, 1562500, 12500),
 	VOLTAGE_RANGE(1, 1550000, 1575000, 3125000, 25000),
 };
 
 static struct qpnp_voltage_range ftsmps_ranges[] = {
-	VOLTAGE_RANGE(0,       0,  350000, 1275000,  5000),
-	VOLTAGE_RANGE(1,       0, 1280000, 2040000, 10000),
+	VOLTAGE_RANGE(0,   80000,  350000, 1355000,  5000),
+	VOLTAGE_RANGE(1,  160000, 1360000, 2710000, 10000),
 };
 
 static struct qpnp_voltage_range boost_ranges[] = {
@@ -305,8 +281,6 @@ static struct qpnp_voltage_set_points nldo1_set_points
 					= SET_POINTS(nldo1_ranges);
 static struct qpnp_voltage_set_points nldo2_set_points
 					= SET_POINTS(nldo2_ranges);
-static struct qpnp_voltage_set_points nldo3_set_points
-					= SET_POINTS(nldo3_ranges);
 static struct qpnp_voltage_set_points smps_set_points = SET_POINTS(smps_ranges);
 static struct qpnp_voltage_set_points ftsmps_set_points
 					= SET_POINTS(ftsmps_ranges);
@@ -318,7 +292,6 @@ static struct qpnp_voltage_set_points *all_set_points[] = {
 	&pldo_set_points,
 	&nldo1_set_points,
 	&nldo2_set_points,
-	&nldo3_set_points,
 	&smps_set_points,
 	&ftsmps_set_points,
 	&boost_set_points,
@@ -513,13 +486,35 @@ static int qpnp_regulator_common_enable(struct regulator_dev *rdev)
 static int qpnp_regulator_vs_enable(struct regulator_dev *rdev)
 {
 	struct qpnp_regulator *vreg = rdev_get_drvdata(rdev);
+	int rc;
+	u8 reg;
 
-	if (vreg->ocp_irq) {
-		vreg->ocp_count = 0;
-		vreg->vs_enable_time = ktime_get();
+	if (vreg->ocp_enable == QPNP_REGULATOR_ENABLE) {
+		/* Disable OCP */
+		reg = QPNP_VS_OCP_DISABLE;
+		rc = qpnp_vreg_write(vreg, QPNP_VS_REG_OCP, &reg, 1);
+		if (rc)
+			goto fail;
 	}
 
-	return qpnp_regulator_common_enable(rdev);
+	rc = qpnp_regulator_common_enable(rdev);
+	if (rc)
+		goto fail;
+
+	if (vreg->ocp_enable == QPNP_REGULATOR_ENABLE) {
+		/* Wait for inrush current to subsided, then enable OCP. */
+		udelay(vreg->ocp_enable_time);
+		reg = QPNP_VS_OCP_ENABLE_MASK;
+		rc = qpnp_vreg_write(vreg, QPNP_VS_REG_OCP, &reg, 1);
+		if (rc)
+			goto fail;
+	}
+
+	return rc;
+fail:
+	vreg_err(vreg, "qpnp_vreg_write failed, rc=%d\n", rc);
+
+	return rc;
 }
 
 static int qpnp_regulator_common_disable(struct regulator_dev *rdev)
@@ -540,12 +535,11 @@ static int qpnp_regulator_common_disable(struct regulator_dev *rdev)
 }
 
 static int qpnp_regulator_select_voltage(struct qpnp_regulator *vreg,
-		int min_uV, int max_uV, int *range_sel, int *voltage_sel,
-		unsigned *selector)
+		int min_uV, int max_uV, int *range_sel, int *voltage_sel)
 {
 	struct qpnp_voltage_range *range;
 	int uV = min_uV;
-	int lim_min_uV, lim_max_uV, i, range_id;
+	int lim_min_uV, lim_max_uV, i;
 
 	/* Check if request voltage is outside of physically settable range. */
 	lim_min_uV = vreg->set_points->range[0].set_point_min_uV;
@@ -566,8 +560,7 @@ static int qpnp_regulator_select_voltage(struct qpnp_regulator *vreg,
 	for (i = vreg->set_points->count - 1; i > 0; i--)
 		if (uV > vreg->set_points->range[i - 1].max_uV)
 			break;
-	range_id = i;
-	range = &vreg->set_points->range[range_id];
+	range = &vreg->set_points->range[i];
 	*range_sel = range->range_sel;
 
 	/*
@@ -586,11 +579,6 @@ static int qpnp_regulator_select_voltage(struct qpnp_regulator *vreg,
 		return -EINVAL;
 	}
 
-	*selector = 0;
-	for (i = 0; i < range_id; i++)
-		*selector += vreg->set_points->range[i].n_voltages;
-	*selector += (uV - range->set_point_min_uV) / range->step_uV;
-
 	return 0;
 }
 
@@ -602,7 +590,7 @@ static int qpnp_regulator_common_set_voltage(struct regulator_dev *rdev,
 	u8 buf[2];
 
 	rc = qpnp_regulator_select_voltage(vreg, min_uV, max_uV, &range_sel,
-		&voltage_sel, selector);
+		&voltage_sel);
 	if (rc) {
 		vreg_err(vreg, "could not set voltage, rc=%d\n", rc);
 		return rc;
@@ -666,7 +654,7 @@ static int qpnp_regulator_boost_set_voltage(struct regulator_dev *rdev,
 	int rc, range_sel, voltage_sel;
 
 	rc = qpnp_regulator_select_voltage(vreg, min_uV, max_uV, &range_sel,
-		&voltage_sel, selector);
+		&voltage_sel);
 	if (rc) {
 		vreg_err(vreg, "could not set voltage, rc=%d\n", rc);
 		return rc;
@@ -775,88 +763,6 @@ static int qpnp_regulator_common_enable_time(struct regulator_dev *rdev)
 	return vreg->enable_time;
 }
 
-static int qpnp_regulator_vs_clear_ocp(struct qpnp_regulator *vreg)
-{
-	int rc;
-
-	rc = qpnp_vreg_masked_write(vreg, QPNP_COMMON_REG_ENABLE,
-		QPNP_COMMON_DISABLE, QPNP_COMMON_ENABLE_MASK,
-		&vreg->ctrl_reg[QPNP_COMMON_IDX_ENABLE]);
-	if (rc)
-		vreg_err(vreg, "qpnp_vreg_masked_write failed, rc=%d\n", rc);
-
-	vreg->vs_enable_time = ktime_get();
-
-	rc = qpnp_vreg_masked_write(vreg, QPNP_COMMON_REG_ENABLE,
-		QPNP_COMMON_ENABLE, QPNP_COMMON_ENABLE_MASK,
-		&vreg->ctrl_reg[QPNP_COMMON_IDX_ENABLE]);
-	if (rc)
-		vreg_err(vreg, "qpnp_vreg_masked_write failed, rc=%d\n", rc);
-
-	if (qpnp_vreg_debug_mask & QPNP_VREG_DEBUG_OCP) {
-		pr_info("%s: switch state toggled after OCP event\n",
-			vreg->rdesc.name);
-	}
-
-	return rc;
-}
-
-static void qpnp_regulator_vs_ocp_work(struct work_struct *work)
-{
-	struct delayed_work *dwork
-		= container_of(work, struct delayed_work, work);
-	struct qpnp_regulator *vreg
-		= container_of(dwork, struct qpnp_regulator, ocp_work);
-
-	qpnp_regulator_vs_clear_ocp(vreg);
-
-	return;
-}
-
-static irqreturn_t qpnp_regulator_vs_ocp_isr(int irq, void *data)
-{
-	struct qpnp_regulator *vreg = data;
-	ktime_t ocp_irq_time;
-	s64 ocp_trigger_delay_us;
-
-	ocp_irq_time = ktime_get();
-	ocp_trigger_delay_us = ktime_us_delta(ocp_irq_time,
-						vreg->vs_enable_time);
-
-	/*
-	 * Reset the OCP count if there is a large delay between switch enable
-	 * and when OCP triggers.  This is indicative of a hotplug event as
-	 * opposed to a fault.
-	 */
-	if (ocp_trigger_delay_us > QPNP_VS_OCP_FAULT_DELAY_US)
-		vreg->ocp_count = 0;
-
-	/* Wait for switch output to settle back to 0 V after OCP triggered. */
-	udelay(QPNP_VS_OCP_FALL_DELAY_US);
-
-	vreg->ocp_count++;
-
-	if (qpnp_vreg_debug_mask & QPNP_VREG_DEBUG_OCP) {
-		pr_info("%s: VS OCP triggered, count = %d, delay = %lld us\n",
-			vreg->rdesc.name, vreg->ocp_count,
-			ocp_trigger_delay_us);
-	}
-
-	if (vreg->ocp_count == 1) {
-		/* Immediately clear the over current condition. */
-		qpnp_regulator_vs_clear_ocp(vreg);
-	} else if (vreg->ocp_count <= vreg->ocp_max_retries) {
-		/* Schedule the over current clear task to run later. */
-		schedule_delayed_work(&vreg->ocp_work,
-			msecs_to_jiffies(vreg->ocp_retry_delay_ms) + 1);
-	} else {
-		vreg_err(vreg, "OCP triggered %d times; no further retries\n",
-			vreg->ocp_count);
-	}
-
-	return IRQ_HANDLED;
-}
-
 static const char const *qpnp_print_actions[] = {
 	[QPNP_REGULATOR_ACTION_INIT]	= "initial    ",
 	[QPNP_REGULATOR_ACTION_ENABLE]	= "enable     ",
@@ -906,8 +812,7 @@ static void qpnp_vreg_show_state(struct regulator_dev *rdev,
 
 	if (type == QPNP_REGULATOR_LOGICAL_TYPE_SMPS
 	    || type == QPNP_REGULATOR_LOGICAL_TYPE_LDO
-	    || type == QPNP_REGULATOR_LOGICAL_TYPE_FTSMPS
-	    || type == QPNP_REGULATOR_LOGICAL_TYPE_VS) {
+	    || type == QPNP_REGULATOR_LOGICAL_TYPE_FTSMPS) {
 		mode = qpnp_regulator_common_get_mode(rdev);
 		mode_label = mode == REGULATOR_MODE_NORMAL ? "HPM" : "LPM";
 	}
@@ -976,9 +881,9 @@ static void qpnp_vreg_show_state(struct regulator_dev *rdev,
 		pc_mode_label[1] =
 		     mode_reg & QPNP_COMMON_MODE_FOLLOW_AWAKE_MASK  ? 'W' : '_';
 
-		pr_info("%s %-11s: %s, mode=%s, pc_en=%s, alt_mode=%s\n",
+		pr_info("%s %-11s: %s, pc_en=%s, alt_mode=%s\n",
 			action_label, vreg->rdesc.name, enable_label,
-			mode_label, pc_enable_label, pc_mode_label);
+			pc_enable_label, pc_mode_label);
 		break;
 	case QPNP_REGULATOR_LOGICAL_TYPE_BOOST:
 		pr_info("%s %-11s: %s, v=%7d uV\n",
@@ -1054,79 +959,44 @@ static struct regulator_ops qpnp_ftsmps_ops = {
 	.enable_time		= qpnp_regulator_common_enable_time,
 };
 
-/* Maximum possible digital major revision value */
-#define INF 0xFF
-
 static const struct qpnp_regulator_mapping supported_regulators[] = {
-	/*           type subtype dig_min dig_max ltype ops setpoints hpm_min */
-	QPNP_VREG_MAP(BUCK,  GP_CTL,   0, INF, SMPS,   smps,   smps,   100000),
-	QPNP_VREG_MAP(LDO,   N300,     0, INF, LDO,    ldo,    nldo1,   10000),
-	QPNP_VREG_MAP(LDO,   N600,     0,   0, LDO,    ldo,    nldo2,   10000),
-	QPNP_VREG_MAP(LDO,   N1200,    0,   0, LDO,    ldo,    nldo2,   10000),
-	QPNP_VREG_MAP(LDO,   N600,     1, INF, LDO,    ldo,    nldo3,   10000),
-	QPNP_VREG_MAP(LDO,   N1200,    1, INF, LDO,    ldo,    nldo3,   10000),
-	QPNP_VREG_MAP(LDO,   N600_ST,  0,   0, LDO,    ldo,    nldo2,   10000),
-	QPNP_VREG_MAP(LDO,   N1200_ST, 0,   0, LDO,    ldo,    nldo2,   10000),
-	QPNP_VREG_MAP(LDO,   N600_ST,  1, INF, LDO,    ldo,    nldo3,   10000),
-	QPNP_VREG_MAP(LDO,   N1200_ST, 1, INF, LDO,    ldo,    nldo3,   10000),
-	QPNP_VREG_MAP(LDO,   P50,      0, INF, LDO,    ldo,    pldo,     5000),
-	QPNP_VREG_MAP(LDO,   P150,     0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   P300,     0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   P600,     0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   P1200,    0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   LV_P50,   0, INF, LDO,    ldo,    pldo,     5000),
-	QPNP_VREG_MAP(LDO,   LV_P150,  0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   LV_P300,  0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   LV_P600,  0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(LDO,   LV_P1200, 0, INF, LDO,    ldo,    pldo,    10000),
-	QPNP_VREG_MAP(VS,    LV100,    0, INF, VS,     vs,     none,        0),
-	QPNP_VREG_MAP(VS,    LV300,    0, INF, VS,     vs,     none,        0),
-	QPNP_VREG_MAP(VS,    MV300,    0, INF, VS,     vs,     none,        0),
-	QPNP_VREG_MAP(VS,    MV500,    0, INF, VS,     vs,     none,        0),
-	QPNP_VREG_MAP(VS,    HDMI,     0, INF, VS,     vs,     none,        0),
-	QPNP_VREG_MAP(VS,    OTG,      0, INF, VS,     vs,     none,        0),
-	QPNP_VREG_MAP(BOOST, 5V_BOOST, 0, INF, BOOST,  boost,  boost,       0),
-	QPNP_VREG_MAP(FTS,   FTS_CTL,  0, INF, FTSMPS, ftsmps, ftsmps, 100000),
+	QPNP_VREG_MAP(HF_BUCK,  GP_CTL,    SMPS,   smps,   smps,   100000),
+	QPNP_VREG_MAP(LDO,      N300,      LDO,    ldo,    nldo1,   10000),
+	QPNP_VREG_MAP(LDO,      N600,      LDO,    ldo,    nldo2,   10000),
+	QPNP_VREG_MAP(LDO,      N1200,     LDO,    ldo,    nldo2,   10000),
+	QPNP_VREG_MAP(LDO,      P50,       LDO,    ldo,    pldo,     5000),
+	QPNP_VREG_MAP(LDO,      P150,      LDO,    ldo,    pldo,    10000),
+	QPNP_VREG_MAP(LDO,      P300,      LDO,    ldo,    pldo,    10000),
+	QPNP_VREG_MAP(LDO,      P600,      LDO,    ldo,    pldo,    10000),
+	QPNP_VREG_MAP(LDO,      P1200,     LDO,    ldo,    pldo,    10000),
+	QPNP_VREG_MAP(VS,       LV100,     VS,     vs,     none,        0),
+	QPNP_VREG_MAP(VS,       LV300,     VS,     vs,     none,        0),
+	QPNP_VREG_MAP(VS,       MV300,     VS,     vs,     none,        0),
+	QPNP_VREG_MAP(VS,       MV500,     VS,     vs,     none,        0),
+	QPNP_VREG_MAP(VS,       HDMI,      VS,     vs,     none,        0),
+	QPNP_VREG_MAP(VS,       OTG,       VS,     vs,     none,        0),
+	QPNP_VREG_MAP(BOOST,    5V_BOOST,  BOOST,  boost,  boost,       0),
+	QPNP_VREG_MAP(FTS,      FTS_CTL,   FTSMPS, ftsmps, ftsmps, 100000),
 };
 
 static int qpnp_regulator_match(struct qpnp_regulator *vreg)
 {
 	const struct qpnp_regulator_mapping *mapping;
-	struct device_node *node = vreg->spmi_dev->dev.of_node;
 	int rc, i;
-	u32 type_reg[2], dig_major_rev;
-	u8 version[QPNP_COMMON_REG_SUBTYPE - QPNP_COMMON_REG_DIG_MAJOR_REV + 1];
-	u8 type, subtype;
+	u8 raw_type[2], type, subtype;
 
-	rc = qpnp_vreg_read(vreg, QPNP_COMMON_REG_DIG_MAJOR_REV, version,
-		ARRAY_SIZE(version));
+	rc = qpnp_vreg_read(vreg, QPNP_COMMON_REG_TYPE, raw_type, 2);
 	if (rc) {
-		vreg_err(vreg, "could not read version registers, rc=%d\n", rc);
+		vreg_err(vreg, "could not read type register, rc=%d\n", rc);
 		return rc;
 	}
-	dig_major_rev	= version[QPNP_COMMON_REG_DIG_MAJOR_REV
-					- QPNP_COMMON_REG_DIG_MAJOR_REV];
-	type		= version[QPNP_COMMON_REG_TYPE
-					- QPNP_COMMON_REG_DIG_MAJOR_REV];
-	subtype		= version[QPNP_COMMON_REG_SUBTYPE
-					- QPNP_COMMON_REG_DIG_MAJOR_REV];
-
-	/*
-	 * Override type and subtype register values if qcom,force-type is
-	 * present in the device tree node.
-	 */
-	rc = of_property_read_u32_array(node, "qcom,force-type", type_reg, 2);
-	if (!rc) {
-		type = type_reg[0];
-		subtype = type_reg[1];
-	}
+	type = raw_type[0];
+	subtype = raw_type[1];
 
 	rc = -ENODEV;
 	for (i = 0; i < ARRAY_SIZE(supported_regulators); i++) {
 		mapping = &supported_regulators[i];
-		if (mapping->type == type && mapping->subtype == subtype
-		    && mapping->revision_min <= dig_major_rev
-		    && mapping->revision_max >= dig_major_rev) {
+		if (mapping->type == type && mapping->subtype == subtype) {
 			vreg->logical_type	= mapping->logical_type;
 			vreg->set_points	= mapping->set_points;
 			vreg->hpm_min_load	= mapping->hpm_min_load;
@@ -1170,17 +1040,6 @@ static int qpnp_regulator_init_registers(struct qpnp_regulator *vreg,
 			~QPNP_COMMON_ENABLE_FOLLOW_ALL_MASK;
 		ctrl_reg[QPNP_COMMON_IDX_ENABLE] |=
 		    pdata->pin_ctrl_enable & QPNP_COMMON_ENABLE_FOLLOW_ALL_MASK;
-	}
-
-	/* Set up HPM control. */
-	if ((type == QPNP_REGULATOR_LOGICAL_TYPE_SMPS
-	     || type == QPNP_REGULATOR_LOGICAL_TYPE_LDO
-	     || type == QPNP_REGULATOR_LOGICAL_TYPE_VS
-	     || type == QPNP_REGULATOR_LOGICAL_TYPE_FTSMPS)
-	    && (pdata->hpm_enable != QPNP_REGULATOR_USE_HW_DEFAULT)) {
-		ctrl_reg[QPNP_COMMON_IDX_MODE] &= ~QPNP_COMMON_MODE_HPM_MASK;
-		ctrl_reg[QPNP_COMMON_IDX_MODE] |=
-		     (pdata->hpm_enable ? QPNP_COMMON_MODE_HPM_MASK : 0);
 	}
 
 	/* Set up auto mode control. */
@@ -1227,14 +1086,10 @@ static int qpnp_regulator_init_registers(struct qpnp_regulator *vreg,
 	if (type == QPNP_REGULATOR_LOGICAL_TYPE_BOOST
 		&& pdata->boost_current_limit
 			!= QPNP_BOOST_CURRENT_LIMIT_HW_DEFAULT) {
-		reg = pdata->boost_current_limit;
-		mask = QPNP_BOOST_CURRENT_LIMIT_MASK;
-		rc = qpnp_vreg_masked_read_write(vreg,
-			QPNP_BOOST_REG_CURRENT_LIMIT, reg, mask);
-		if (rc) {
-			vreg_err(vreg, "spmi write failed, rc=%d\n", rc);
-			return rc;
-		}
+		ctrl_reg[QPNP_BOOST_IDX_CURRENT_LIMIT] &=
+			~QPNP_BOOST_CURRENT_LIMIT_MASK;
+		ctrl_reg[QPNP_BOOST_IDX_CURRENT_LIMIT] |=
+		     pdata->boost_current_limit & QPNP_BOOST_CURRENT_LIMIT_MASK;
 	}
 
 	/* Write back any control register values that were modified. */
@@ -1308,8 +1163,7 @@ static int qpnp_regulator_init_registers(struct qpnp_regulator *vreg,
 		}
 
 		if (pdata->ocp_enable != QPNP_REGULATOR_USE_HW_DEFAULT) {
-			reg = pdata->ocp_enable ? QPNP_VS_OCP_NO_OVERRIDE
-						: QPNP_VS_OCP_OVERRIDE;
+			reg = pdata->ocp_enable ? QPNP_VS_OCP_ENABLE_MASK : 0;
 			rc = qpnp_vreg_write(vreg, QPNP_VS_REG_OCP, &reg, 1);
 			if (rc) {
 				vreg_err(vreg, "spmi write failed, rc=%d\n",
@@ -1341,11 +1195,6 @@ static int qpnp_regulator_get_dt_config(struct spmi_device *spmi,
 	}
 	pdata->base_addr = res->start;
 
-	/* OCP IRQ is optional so ignore get errors. */
-	pdata->ocp_irq = spmi_get_irq_byname(spmi, NULL, "ocp");
-	if (pdata->ocp_irq < 0)
-		pdata->ocp_irq = 0;
-
 	/*
 	 * Initialize configuration parameters to use hardware default in case
 	 * no value is specified via device tree.
@@ -1359,7 +1208,6 @@ static int qpnp_regulator_get_dt_config(struct spmi_device *spmi,
 	pdata->pin_ctrl_enable	    = QPNP_REGULATOR_PIN_CTRL_ENABLE_HW_DEFAULT;
 	pdata->pin_ctrl_hpm	    = QPNP_REGULATOR_PIN_CTRL_HPM_HW_DEFAULT;
 	pdata->vs_soft_start_strength	= QPNP_VS_SOFT_START_STR_HW_DEFAULT;
-	pdata->hpm_enable		= QPNP_REGULATOR_USE_HW_DEFAULT;
 
 	/* These bindings are optional, so it is okay if they are not found. */
 	of_property_read_u32(node, "qcom,auto-mode-enable",
@@ -1367,10 +1215,6 @@ static int qpnp_regulator_get_dt_config(struct spmi_device *spmi,
 	of_property_read_u32(node, "qcom,bypass-mode-enable",
 		&pdata->bypass_mode_enable);
 	of_property_read_u32(node, "qcom,ocp-enable", &pdata->ocp_enable);
-	of_property_read_u32(node, "qcom,ocp-max-retries",
-		&pdata->ocp_max_retries);
-	of_property_read_u32(node, "qcom,ocp-retry-delay",
-		&pdata->ocp_retry_delay_ms);
 	of_property_read_u32(node, "qcom,pull-down-enable",
 		&pdata->pull_down_enable);
 	of_property_read_u32(node, "qcom,soft-start-enable",
@@ -1380,11 +1224,12 @@ static int qpnp_regulator_get_dt_config(struct spmi_device *spmi,
 	of_property_read_u32(node, "qcom,pin-ctrl-enable",
 		&pdata->pin_ctrl_enable);
 	of_property_read_u32(node, "qcom,pin-ctrl-hpm", &pdata->pin_ctrl_hpm);
-	of_property_read_u32(node, "qcom,hpm-enable", &pdata->hpm_enable);
 	of_property_read_u32(node, "qcom,vs-soft-start-strength",
 		&pdata->vs_soft_start_strength);
 	of_property_read_u32(node, "qcom,system-load", &pdata->system_load);
 	of_property_read_u32(node, "qcom,enable-time", &pdata->enable_time);
+	of_property_read_u32(node, "qcom,ocp-enable-time",
+		&pdata->ocp_enable_time);
 
 	return rc;
 }
@@ -1458,14 +1303,7 @@ static int __devinit qpnp_regulator_probe(struct spmi_device *spmi)
 	vreg->enable_time	= pdata->enable_time;
 	vreg->system_load	= pdata->system_load;
 	vreg->ocp_enable	= pdata->ocp_enable;
-	vreg->ocp_irq		= pdata->ocp_irq;
-	vreg->ocp_max_retries	= pdata->ocp_max_retries;
-	vreg->ocp_retry_delay_ms = pdata->ocp_retry_delay_ms;
-
-	if (vreg->ocp_max_retries == 0)
-		vreg->ocp_max_retries = QPNP_VS_OCP_DEFAULT_MAX_RETRIES;
-	if (vreg->ocp_retry_delay_ms == 0)
-		vreg->ocp_retry_delay_ms = QPNP_VS_OCP_DEFAULT_RETRY_DELAY_MS;
+	vreg->ocp_enable_time	= pdata->ocp_enable_time;
 
 	rdesc			= &vreg->rdesc;
 	rdesc->id		= spmi->ctrl->nr;
@@ -1515,41 +1353,20 @@ static int __devinit qpnp_regulator_probe(struct spmi_device *spmi)
 		goto bail;
 	}
 
-	if (vreg->logical_type != QPNP_REGULATOR_LOGICAL_TYPE_VS)
-		vreg->ocp_irq = 0;
-
-	if (vreg->ocp_irq) {
-		rc = devm_request_irq(&spmi->dev, vreg->ocp_irq,
-			qpnp_regulator_vs_ocp_isr, IRQF_TRIGGER_RISING, "ocp",
-			vreg);
-		if (rc < 0) {
-			vreg_err(vreg, "failed to request irq %d, rc=%d\n",
-				vreg->ocp_irq, rc);
-			goto bail;
-		}
-
-		INIT_DELAYED_WORK(&vreg->ocp_work, qpnp_regulator_vs_ocp_work);
-	}
-
 	vreg->rdev = regulator_register(rdesc, &spmi->dev,
 			&(pdata->init_data), vreg, spmi->dev.of_node);
 	if (IS_ERR(vreg->rdev)) {
 		rc = PTR_ERR(vreg->rdev);
-		if (rc != -EPROBE_DEFER)
-			vreg_err(vreg, "regulator_register failed, rc=%d\n",
-				rc);
-		goto cancel_ocp_work;
+		vreg_err(vreg, "regulator_register failed, rc=%d\n", rc);
+		goto bail;
 	}
 
 	qpnp_vreg_show_state(vreg->rdev, QPNP_REGULATOR_ACTION_INIT);
 
 	return 0;
 
-cancel_ocp_work:
-	if (vreg->ocp_irq)
-		cancel_delayed_work_sync(&vreg->ocp_work);
 bail:
-	if (rc && rc != -EPROBE_DEFER)
+	if (rc)
 		vreg_err(vreg, "probe failed, rc=%d\n", rc);
 
 	kfree(vreg->rdesc.name);
@@ -1567,8 +1384,6 @@ static int __devexit qpnp_regulator_remove(struct spmi_device *spmi)
 
 	if (vreg) {
 		regulator_unregister(vreg->rdev);
-		if (vreg->ocp_irq)
-			cancel_delayed_work_sync(&vreg->ocp_work);
 		kfree(vreg->rdesc.name);
 		kfree(vreg);
 	}

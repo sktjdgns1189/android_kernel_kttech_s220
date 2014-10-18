@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +14,10 @@
 #define __MSM_CHARGER_H__
 
 #include <linux/power_supply.h>
+
+#ifdef CONFIG_KTTECH_BATTERY
+//#define KTTECH_BATTERY_RECHRGING_WQ
+#endif
 
 enum {
 	CHG_TYPE_USB,
@@ -72,6 +76,9 @@ struct msm_battery_gauge {
 	int (*is_battery_present) (void);
 	int (*is_battery_temp_within_range) (void);
 	int (*is_battery_id_valid) (void);
+#ifdef CONFIG_KTTECH_BATTERY
+	int (*get_battery_soc) (void);
+#endif /*CONFIG_KTTECH_BATTERY*/
 	int (*get_battery_status)(void);
 	int (*get_batt_remaining_capacity) (void);
 	int (*monitor_for_recharging) (void);

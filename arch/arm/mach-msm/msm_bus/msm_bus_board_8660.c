@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -921,8 +921,4 @@ struct msm_bus_fabric_registration msm_bus_cpss_fpb_pdata = {
 int msm_bus_board_rpm_get_il_ids(uint16_t id[])
 {
 	return -ENXIO;
-}
-
-void msm_bus_board_init(struct msm_bus_fabric_registration *pdata)
-{
 }

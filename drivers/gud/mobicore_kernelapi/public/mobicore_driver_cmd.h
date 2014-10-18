@@ -1,5 +1,8 @@
-/*
- * <-- Copyright Giesecke & Devrient GmbH 2009 - 2012 -->
+/** @addtogroup MCD_MCDIMPL_DAEMON
+ * @{
+ * @file
+ *
+ * <!-- Copyright Giesecke & Devrient GmbH 2009 - 2012 -->
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,8 +28,11 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _MOBICORE_DRIVER_CMD_H_
-#define _MOBICORE_DRIVER_CMD_H_
+#ifndef MCDAEMON_H_
+#define MCDAEMON_H_
+
+
+
 
 #include "mcuuid.h"
 
@@ -58,17 +64,19 @@ enum mc_drv_rsp_t {
 
 
 struct mc_drv_command_header_t {
-	uint32_t command_id;
+	uint32_t  command_id;
 };
 
 struct mc_drv_response_header_t {
-	uint32_t response_id;
+	uint32_t  response_id;
 };
 
-#define MC_DEVICE_ID_DEFAULT	0		/* The default device ID */
+#define MC_DEVICE_ID_DEFAULT	0 /**< The default device ID */
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_open_device_payload_t {
-	uint32_t device_id;
+	uint32_t  device_id;
 };
 
 struct mc_drv_cmd_open_device_t {
@@ -86,13 +94,13 @@ struct mc_drv_rsp_open_device_t {
 	struct mc_drv_rsp_open_device_payload_t payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_close_device_t {
 	struct mc_drv_command_header_t header;
-	/*
-	 * no payload here because close has none.
-	 * If we use an empty struct, C++ will count it as 4 bytes.
-	 * This will write too much into the socket at write(cmd,sizeof(cmd))
-	 */
+	/* no payload here because close has none.
+	   If we use an empty struct, C++ will count it as 4 bytes.
+	   This will write too much into the socket at write(cmd,sizeof(cmd)) */
 };
 
 
@@ -105,11 +113,12 @@ struct mc_drv_rsp_close_device_t {
 	struct mc_drv_rsp_close_device_payload_t payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_open_session_payload_t {
 	uint32_t device_id;
 	struct mc_uuid_t uuid;
 	uint32_t tci;
-	uint32_t handle;
 	uint32_t len;
 };
 
@@ -120,8 +129,10 @@ struct mc_drv_cmd_open_session_t {
 
 
 struct mc_drv_rsp_open_session_payload_t {
+	uint32_t device_id;
 	uint32_t session_id;
 	uint32_t device_session_id;
+	uint32_t mc_result;
 	uint32_t session_magic;
 };
 
@@ -130,6 +141,8 @@ struct mc_drv_rsp_open_session_t {
 	struct mc_drv_rsp_open_session_payload_t  payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_close_session_payload_t {
 	uint32_t  session_id;
 };
@@ -149,6 +162,8 @@ struct mc_drv_rsp_close_session_t {
 	struct mc_drv_rsp_close_session_payload_t payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_notify_payload_t {
 	uint32_t session_id;
 };
@@ -168,9 +183,10 @@ struct mc_drv_rsp_notify_t {
 	struct mc_drv_rsp_notify_payload_t  payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_map_bulk_mem_payload_t {
 	uint32_t session_id;
-	uint32_t handle;
 	uint32_t phys_addr_l2;
 	uint32_t offset_payload;
 	uint32_t len_bulk_mem;
@@ -185,6 +201,7 @@ struct mc_drv_cmd_map_bulk_mem_t {
 struct mc_drv_rsp_map_bulk_mem_payload_t {
 	uint32_t session_id;
 	uint32_t secure_virtual_adr;
+	uint32_t mc_result;
 };
 
 struct mc_drv_rsp_map_bulk_mem_t {
@@ -192,9 +209,10 @@ struct mc_drv_rsp_map_bulk_mem_t {
 	struct mc_drv_rsp_map_bulk_mem_payload_t  payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_unmap_bulk_mem_payload_t {
 	uint32_t session_id;
-	uint32_t handle;
 	uint32_t secure_virtual_adr;
 	uint32_t len_bulk_mem;
 };
@@ -208,6 +226,7 @@ struct mc_drv_cmd_unmap_bulk_mem_t {
 struct mc_drv_rsp_unmap_bulk_mem_payload_t {
 	uint32_t response_id;
 	uint32_t session_id;
+	uint32_t mc_result;
 };
 
 struct mc_drv_rsp_unmap_bulk_mem_t {
@@ -215,6 +234,8 @@ struct mc_drv_rsp_unmap_bulk_mem_t {
 	struct mc_drv_rsp_unmap_bulk_mem_payload_t payload;
 };
 
+
+/*****************************************************************************/
 struct mc_drv_cmd_nqconnect_payload_t {
 	uint32_t device_id;
 	uint32_t session_id;
@@ -237,6 +258,8 @@ struct mc_drv_rsp_nqconnect_t {
 	struct mc_drv_rsp_nqconnect_payload_t payload;
 };
 
+
+/*****************************************************************************/
 union mc_drv_command_t {
 	struct mc_drv_command_header_t		header;
 	struct mc_drv_cmd_open_device_t		mc_drv_cmd_open_device;
@@ -261,4 +284,6 @@ union mc_drv_response_t {
 	struct mc_drv_rsp_unmap_bulk_mem_t	mc_drv_rsp_unmap_bulk_mem;
 };
 
-#endif /* _MOBICORE_DRIVER_CMD_H_ */
+#endif /* MCDAEMON_H_ */
+
+/** @} */

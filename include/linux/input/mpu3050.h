@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,7 +25,6 @@ struct mpu3050_gyro_platform_data {
 	int (*power_off)(void);
 
 	int gpio_int;
-	int gpio_en;
 	int gpio_fsync;
 };
 

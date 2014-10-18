@@ -12,25 +12,22 @@ into the watchdog, as well as the bark and bite irqs.
 
 The device tree parameters for the watchdog are:
 
-Required properties:
+Required parameters:
 
 - compatible : "qcom,msm-watchdog"
 - reg : offset and length of the register set for the watchdog block.
 - interrupts : should contain bark and bite irq numbers
 - qcom,pet-time : Non zero time interval at which watchdog should be pet in ms.
 - qcom,bark-time : Non zero timeout value for a watchdog bark in ms.
-
-Optional properties:
-
-- qcom,ipi-ping : (boolean) send keep alive ping to other cpus if present
+- qcom,ipi-ping : send keep alive ping to other cpus if set to 1 else set to 0.
 
 Example:
 
 	qcom,wdt@f9017000 {
 		compatible = "qcom,msm-watchdog";
 		reg = <0xf9017000 0x1000>;
-		interrupts = <0 3 0>, <0 4 0>;
+		interrupts = <0 3 0 0 4 0>;
 		qcom,bark-time = <11000>;
 		qcom,pet-time = <10000>;
-		qcom,ipi-ping;
+		qcom,ipi-ping = <1>;
 	};

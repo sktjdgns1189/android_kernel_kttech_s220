@@ -2,7 +2,7 @@
  * Driver for HighSpeed USB Client Controller in MSM7K
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  * Author: Mike Lockwood <lockwood@android.com>
  *         Brian Swetland <swetland@google.com>
  *
@@ -301,7 +301,7 @@ static inline enum chg_type usb_get_chg_type(struct usb_info *ui)
 			ui->gadget.speed == USB_SPEED_FULL ||
 			ui->gadget.speed == USB_SPEED_HIGH)
 			return USB_CHG_TYPE__SDP;
-		else
+	else
 			return USB_CHG_TYPE__INVALID;
 	} else {
 		return USB_CHG_TYPE__SDP;
@@ -433,6 +433,15 @@ static void usb_chg_detect(struct work_struct *w)
 	enum chg_type temp = USB_CHG_TYPE__INVALID;
 	unsigned long flags;
 	int maxpower;
+	unsigned long PORTSC_VAL = 0x0;
+
+#ifdef CONFIG_KTTECH_BATTERY
+	extern int msm_charger_is_inited(void);
+	if(msm_charger_is_inited() == 0) {
+		schedule_delayed_work(&ui->chg_det,	USB_CHG_DET_DELAY);
+		return;
+	}
+#endif
 
 	spin_lock_irqsave(&ui->lock, flags);
 	if (ui->usb_state == USB_STATE_NOTATTACHED) {
@@ -440,7 +449,21 @@ static void usb_chg_detect(struct work_struct *w)
 		return;
 	}
 
-	temp = usb_get_chg_type(ui);
+	temp = usb_get_chg_type(ui);//Type Detect	
+#ifdef CONFIG_KTTECH_BATTERY
+	//Insert Code
+	PORTSC_VAL = ((readl(USB_PORTSC) & PORTSC_LS)); // Type Detect
+	if ( temp==USB_CHG_TYPE__SDP && (PORTSC_VAL == 0x800) ){
+		printk("*** Detect floating charger ***\n");
+		atomic_set(&ui->configured, 1);//USB State Change
+		ui->b_max_pow = 500; //USB_CHG_CURRENT Define(PC Current);
+		ui->flags = USB_FLAG_CONFIGURED;
+		spin_unlock_irqrestore(&ui->lock, flags);
+		msm_hsusb_set_state(USB_STATE_DEFAULT);//Charging State Change		
+	}else{
+		spin_unlock_irqrestore(&ui->lock, flags);
+	}//End of Code
+#else
 	if (temp != USB_CHG_TYPE__WALLCHARGER && temp != USB_CHG_TYPE__SDP
 					&& !ui->chg_type_retry_cnt) {
 		schedule_delayed_work(&ui->chg_det, USB_CHG_DET_DELAY);
@@ -453,7 +476,7 @@ static void usb_chg_detect(struct work_struct *w)
 		ui->proprietary_chg = true;
 	}
 	spin_unlock_irqrestore(&ui->lock, flags);
-
+#endif
 	atomic_set(&otg->chg_type, temp);
 	maxpower = usb_get_max_power(ui);
 	if (maxpower > 0)
@@ -516,15 +539,6 @@ static void config_ept(struct msm_endpoint *ept)
 {
 	struct usb_info *ui = ept->ui;
 	unsigned cfg = CONFIG_MAX_PKT(ept->ep.maxpacket) | CONFIG_ZLT;
-	const struct usb_endpoint_descriptor *desc = ept->ep.desc;
-	unsigned mult = 0;
-
-	if (desc && ((desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
-				== USB_ENDPOINT_XFER_ISOC)) {
-		cfg &= ~(CONFIG_MULT);
-		mult = ((ept->ep.maxpacket >> CONFIG_MULT_SHIFT) + 1) & 0x03;
-		cfg |= (mult << (ffs(CONFIG_MULT) - 1));
-	}
 
 	/* ep0 out needs interrupt-on-setup */
 	if (ept->bit == 0)
@@ -1259,9 +1273,6 @@ static void flush_endpoint_sw(struct msm_endpoint *ept)
 	struct msm_request *req, *next_req = NULL;
 	unsigned long flags;
 
-	if (!ept->req)
-		return;
-
 	/* inactive endpoints have nothing to do here */
 	if (ept->ep.maxpacket == 0)
 		return;
@@ -1306,12 +1317,8 @@ static void flush_endpoint(struct msm_endpoint *ept)
 static irqreturn_t usb_interrupt(int irq, void *data)
 {
 	struct usb_info *ui = data;
-	struct msm_otg *dev = to_msm_otg(ui->xceiv);
 	unsigned n;
 	unsigned long flags;
-
-	if (atomic_read(&dev->in_lpm))
-		return IRQ_NONE;
 
 	n = readl(USB_USBSTS);
 	writel(n, USB_USBSTS);
@@ -1656,20 +1663,6 @@ static void usb_do_work(struct work_struct *w)
 				usb_phy_set_power(ui->xceiv, 0);
 
 				if (ui->irq) {
-					/* Disable and acknowledge all
-					 * USB interrupts before freeing
-					 * irq, so that no USB spurious
-					 * interrupt occurs during USB cable
-					 * disconnect which may lead to
-					 * IRQ nobody cared error.
-					 */
-					writel_relaxed(0, USB_USBINTR);
-					writel_relaxed(readl_relaxed(USB_USBSTS)
-								, USB_USBSTS);
-					/* Ensure that above STOREs are
-					 * completed before enabling
-					 * interrupts */
-					wmb();
 					free_irq(ui->irq, ui);
 					ui->irq = 0;
 				}
@@ -2209,9 +2202,6 @@ msm72k_queue(struct usb_ep *_ep, struct usb_request *req, gfp_t gfp_flags)
 	struct msm_endpoint *ep = to_msm_endpoint(_ep);
 	struct usb_info *ui = ep->ui;
 
-	if (!atomic_read(&ui->softconnect))
-		return -ENODEV;
-
 	if (ep == &ui->ep0in) {
 		struct msm_request *r = to_msm_request(req);
 		if (!req->length)
@@ -2238,13 +2228,6 @@ static int msm72k_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 
 	struct msm_request *temp_req;
 	unsigned long flags;
-
-	if (ep->num == 0) {
-		/* Flush both out and in control endpoints */
-		flush_endpoint(&ui->ep0out);
-		flush_endpoint(&ui->ep0in);
-		return 0;
-	}
 
 	if (!(ui && req && ep->req))
 		return -EINVAL;

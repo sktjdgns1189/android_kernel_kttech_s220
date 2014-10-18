@@ -1,10 +1,11 @@
-ifeq ($(CONFIG_FB_MSM_MDSS_COMMON),y)
+ifeq ($(CONFIG_FB_MSM_MDSS),y)
 obj-y += mdss/
 else
 obj-y := msm_fb.o
 
 obj-$(CONFIG_FB_MSM_LOGO) += logo.o
 obj-$(CONFIG_FB_BACKLIGHT) += msm_fb_bl.o
+obj-$(CONFIG_FB_MSM_MIPI_DSI) += mipi_novatek_bl.o
 
 ifeq ($(CONFIG_FB_MSM_MDP_HW),y)
 # MDP
@@ -14,6 +15,7 @@ obj-$(CONFIG_DEBUG_FS) += mdp_debugfs.o
 
 ifeq ($(CONFIG_FB_MSM_MDP40),y)
 obj-y += mdp4_util.o
+obj-y += mdp4_hsic.o
 else
 obj-y += mdp_hw_init.o
 obj-y += mdp_ppp.o
@@ -83,6 +85,7 @@ obj-$(CONFIG_FB_MSM_MIPI_DSI_TRULY) += mipi_truly.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_NT35510) += mipi_NT35510.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_NT35516) += mipi_truly_tft540960_1_e.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_SIMULATOR) += mipi_simulator.o
+obj-$(CONFIG_KTTECH_MIPI_NOVATEK) += mipi_dummy.o
 
 # MIPI Bridge
 obj-$(CONFIG_FB_MSM_MIPI_DSI_TC358764_DSI2LVDS) += mipi_tc358764_dsi2lvds.o
@@ -119,15 +122,16 @@ obj-$(CONFIG_FB_MSM_MDDI_QUICKVX) += mddi_quickvx.o
 endif
 
 ifeq ($(CONFIG_FB_MSM_MIPI_PANEL_DETECT),y)
-obj-y += mipi_toshiba_video_wvga_pt.o mipi_toshiba_video_wsvga_pt.o mipi_toshiba_video_wuxga.o
+# obj-y += mipi_toshiba_video_wvga_pt.o mipi_toshiba_video_wsvga_pt.o mipi_toshiba_video_wuxga.o
 obj-y += mipi_novatek_video_qhd_pt.o mipi_novatek_cmd_qhd_pt.o
-obj-y += mipi_orise_video_720p_pt.o mipi_orise_cmd_720p_pt.o
-obj-y += mipi_renesas_video_fwvga_pt.o mipi_renesas_cmd_fwvga_pt.o
-obj-y += mipi_NT35510_video_wvga_pt.o mipi_NT35510_cmd_wvga_pt.o
-obj-y += mipi_truly_tft540960_1_e_video_qhd_pt.o mipi_truly_tft540960_1_e_cmd_qhd_pt.o
-obj-y += mipi_chimei_wxga_pt.o
-obj-y += mipi_chimei_wuxga.o
-obj-y += mipi_truly_video_wvga_pt.o
+#obj-y += mipi_orise_video_720p_pt.o mipi_orise_cmd_720p_pt.o
+#obj-y += mipi_renesas_video_fwvga_pt.o mipi_renesas_cmd_fwvga_pt.o
+#obj-y += mipi_NT35510_video_wvga_pt.o mipi_NT35510_cmd_wvga_pt.o
+#obj-y += mipi_truly_tft540960_1_e_video_qhd_pt.o mipi_truly_tft540960_1_e_cmd_qhd_pt.o
+#obj-y += mipi_chimei_wxga_pt.o
+#obj-y += mipi_chimei_wuxga.o
+#obj-y += mipi_truly_video_wvga_pt.o
+obj-y += mipi_dummy_video_wvga_pt.o
 else
 obj-$(CONFIG_FB_MSM_MIPI_TOSHIBA_VIDEO_WVGA_PT) += mipi_toshiba_video_wvga_pt.o
 obj-$(CONFIG_FB_MSM_MIPI_TOSHIBA_VIDEO_WSVGA_PT) += mipi_toshiba_video_wsvga_pt.o

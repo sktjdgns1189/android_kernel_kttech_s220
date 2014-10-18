@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,8 +24,6 @@ enum subsys_notif_type {
 	SUBSYS_AFTER_SHUTDOWN,
 	SUBSYS_BEFORE_POWERUP,
 	SUBSYS_AFTER_POWERUP,
-	SUBSYS_RAMDUMP_NOTIFICATION,
-	SUBSYS_POWERUP_FAILURE,
 	SUBSYS_NOTIF_TYPE_COUNT
 };
 
@@ -52,8 +50,7 @@ int subsys_notif_unregister_notifier(void *subsys_handle,
  */
 void *subsys_notif_add_subsys(const char *);
 int subsys_notif_queue_notification(void *subsys_handle,
-					enum subsys_notif_type notif_type,
-					void *data);
+					enum subsys_notif_type notif_type);
 #else
 
 static inline void *subsys_notif_register_notifier(
@@ -74,8 +71,7 @@ static inline void *subsys_notif_add_subsys(const char *subsys_name)
 }
 
 static inline int subsys_notif_queue_notification(void *subsys_handle,
-					enum subsys_notif_type notif_type,
-					void *data)
+					enum subsys_notif_type notif_type)
 {
 	return 0;
 }

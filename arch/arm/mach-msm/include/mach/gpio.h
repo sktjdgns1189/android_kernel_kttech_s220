@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  * Author: Mike Lockwood <lockwood@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -16,7 +16,7 @@
 #ifndef __ASM_ARCH_MSM_GPIO_H
 #define __ASM_ARCH_MSM_GPIO_H
 
-#define ARCH_NR_GPIOS 1024
+#define ARCH_NR_GPIOS 512
 
 #include <linux/interrupt.h>
 #include <asm-generic/gpio.h>
@@ -38,11 +38,6 @@ extern struct irq_chip msm_gpio_irq_extn;
 struct msm_gpio {
 	u32 gpio_cfg;
 	const char *label;
-};
-
-struct msm_gpio_pdata {
-	int ngpio;
-	int direct_connect_irqs;
 };
 
 /**
@@ -188,7 +183,6 @@ enum msm_tlmm_pull_tgt {
 	TLMM_PULL_SDC1_CLK,
 	TLMM_PULL_SDC1_CMD,
 	TLMM_PULL_SDC1_DATA,
-	TLMM_PULL_SDC1_RCLK,
 };
 
 #if defined(CONFIG_GPIO_MSM_V2) || defined(CONFIG_GPIO_MSM_V3)

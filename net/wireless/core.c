@@ -26,6 +26,9 @@
 #include "debugfs.h"
 #include "wext-compat.h"
 #include "ethtool.h"
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+#include <linux/vmalloc.h>
+#endif
 
 /* name for sysfs, %d is appended */
 #define PHY_NAME "phy"
@@ -340,8 +343,11 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 	WARN_ON(ops->join_mesh && !ops->leave_mesh);
 
 	alloc_size = sizeof(*rdev) + sizeof_priv;
-
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330 // Try to memory allocate replaced because memory couldn not reallocate wiphy device...
+	rdev = vzalloc(alloc_size);
+#else
 	rdev = kzalloc(alloc_size, GFP_KERNEL);
+#endif
 	if (!rdev)
 		return NULL;
 
@@ -355,7 +361,11 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 		wiphy_counter--;
 		mutex_unlock(&cfg80211_mutex);
 		/* ugh, wrapped! */
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+        vfree(rdev);	
+#else
 		kfree(rdev);
+#endif
 		return NULL;
 	}
 
@@ -392,7 +402,11 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 				   &rdev->rfkill_ops, rdev);
 
 	if (!rdev->rfkill) {
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+		vfree(rdev);		
+#else
 		kfree(rdev);
+#endif
 		return NULL;
 	}
 
@@ -503,11 +517,6 @@ int wiphy_register(struct wiphy *wiphy)
 		    !is_zero_ether_addr(wiphy->perm_addr) &&
 		    memcmp(wiphy->perm_addr, wiphy->addresses[0].addr,
 			   ETH_ALEN)))
-		return -EINVAL;
-
-	if (WARN_ON(wiphy->max_acl_mac_addrs &&
-		    (!(wiphy->flags & WIPHY_FLAG_HAVE_AP_SME) ||
-		     !rdev->ops->set_mac_acl)))
 		return -EINVAL;
 
 	if (wiphy->addresses)
@@ -726,7 +735,11 @@ void cfg80211_dev_free(struct cfg80211_registered_device *rdev)
 	list_for_each_entry_safe(scan, tmp, &rdev->bss_list, list)
 		cfg80211_put_bss(&scan->pub);
 	cfg80211_rdev_free_wowlan(rdev);
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+    vfree(rdev);	
+#else
 	kfree(rdev);
+#endif
 }
 
 void wiphy_free(struct wiphy *wiphy)

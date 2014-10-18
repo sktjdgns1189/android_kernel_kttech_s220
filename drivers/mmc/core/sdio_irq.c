@@ -85,7 +85,6 @@ static int sdio_irq_thread(void *_host)
 	struct sched_param param = { .sched_priority = 1 };
 	unsigned long period, idle_period;
 	int ret;
-	bool ws;
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
 
@@ -119,17 +118,6 @@ static int sdio_irq_thread(void *_host)
 		ret = __mmc_claim_host(host, &host->sdio_irq_thread_abort);
 		if (ret)
 			break;
-		ws = false;
-		/*
-		 * prevent suspend if it has started when scheduled;
-		 * 100 msec (approx. value) should be enough for the system to
-		 * resume and attend to the card's request
-		 */
-		if ((host->dev_status == DEV_SUSPENDING) ||
-		    (host->dev_status == DEV_SUSPENDED)) {
-			pm_wakeup_event(&host->card->dev, 100);
-			ws = true;
-		}
 		ret = process_sdio_pending_irqs(host);
 		host->sdio_irq_pending = false;
 		mmc_release_host(host);
@@ -166,12 +154,6 @@ static int sdio_irq_thread(void *_host)
 			host->ops->enable_sdio_irq(host, 1);
 			mmc_host_clk_release(host);
 		}
-		/*
-		 * function drivers would have processed the event from card
-		 * unless suspended, hence release wake source
-		 */
-		if (ws && (host->dev_status == DEV_RESUMED))
-			pm_relax(&host->card->dev);
 		if (!kthread_should_stop())
 			schedule_timeout(period);
 		set_current_state(TASK_RUNNING);
@@ -233,14 +215,14 @@ static void sdio_single_irq_set(struct mmc_card *card)
 
 	card->sdio_single_irq = NULL;
 	if ((card->host->caps & MMC_CAP_SDIO_IRQ) &&
-	    card->host->sdio_irqs == 1)
+			card->host->sdio_irqs == 1)
 		for (i = 0; i < card->sdio_funcs; i++) {
-		       func = card->sdio_func[i];
-		       if (func && func->irq_handler) {
-			       card->sdio_single_irq = func;
-			       break;
-		       }
-	       }
+			func = card->sdio_func[i];
+			if (func && func->irq_handler) {
+				card->sdio_single_irq = func;
+				break;
+			}
+		}
 }
 
 /**

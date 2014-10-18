@@ -53,9 +53,8 @@ struct gether {
 	bool				is_fixed;
 	u32				fixed_out_len;
 	u32				fixed_in_len;
-
-	unsigned			ul_max_pkts_per_xfer;
-	unsigned			dl_max_pkts_per_xfer;
+/* Max number of SKB packets to be used to create Multi Packet RNDIS */
+#define TX_SKB_HOLD_THRESHOLD		3
 	bool				multi_pkt_xfer;
 	struct sk_buff			*(*wrap)(struct gether *port,
 						struct sk_buff *skb);
@@ -66,8 +65,6 @@ struct gether {
 	/* called on network open/close */
 	void				(*open)(struct gether *);
 	void				(*close)(struct gether *);
-	struct rndis_packet_msg_type	*header;
-
 };
 
 #define	DEFAULT_FILTER	(USB_CDC_PACKET_TYPE_BROADCAST \

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,12 +13,11 @@
 #ifndef __ASM_ARCH_MSM_IRQS_8625_H
 #define __ASM_ARCH_MSM_IRQS_8625_H
 
-#ifdef CONFIG_MSM_FIQ
-#define FIQ_START               0
-#endif
+#define GIC_PPI_START		16
+#define GIC_SPI_START		32
 
 /* As per QGIC2 PPI 16 aka 0 is reserved */
-#define MSM8625_INT_ARMQC_PERFMON	(GIC_PPI_START + 1)
+#define MSM8625_INT_A5_PMU_IRQ		(GIC_PPI_START + 1)
 #define MSM8625_INT_DEBUG_TIMER_EXP	(GIC_PPI_START + 2)
 #define MSM8625_INT_GP_TIMER_EXP	(GIC_PPI_START + 3)
 #define MSM8625_INT_COMMRX		(GIC_PPI_START + 4)
@@ -83,13 +82,11 @@
 #define MSM8625_INT_UART2DM_IRQ		(GIC_SPI_START + 32 + 20)
 #define MSM8625_INT_UART2DM_RX		(GIC_SPI_START + 32 + 21)
 #define MSM8625_INT_L2CC_EM		(GIC_SPI_START + 32 + 22)
-#define MSM8625_INT_SC_SICL2PERFMONIRPTREQ	(GIC_SPI_START + 32 + 23)
+#define MSM8625_INT_L2CC_INTR		(GIC_SPI_START + 32 + 23)
 #define MSM8625_INT_CE_IRQ		(GIC_SPI_START + 32 + 24)
 #define MSM8625_INT_CPR_IRQ0		(GIC_SPI_START + 32 + 25)
 #define MSM8625_INT_CPR_IRQ1		(GIC_SPI_START + 32 + 26)
 #define MSM8625_INT_CPR_IRQ2		(GIC_SPI_START + 32 + 27)
-#define MSM8625_INT_ACSR_MP_CORE_IPC2	(GIC_SPI_START + 32 + 28)
-#define MSM8625_INT_ACSR_MP_CORE_IPC3	(GIC_SPI_START + 32 + 29)
 
 #define MSM8625_INT_ADSP_A11_SMSM	MSM8625_INT_ADSP_A11
 #endif

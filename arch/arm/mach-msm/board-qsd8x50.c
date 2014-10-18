@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,7 +55,6 @@
 #include "timer.h"
 #include "msm-keypad-devices.h"
 #include "acpuclock.h"
-#include "clock.h"
 #include "pm.h"
 #include "irq.h"
 #include "pm-boot.h"
@@ -2522,7 +2521,8 @@ static void __init qsd8x50_map_io(void)
 	msm_map_qsd8x50_io();
 	qsd8x50_allocate_memory_regions();
 	if (socinfo_init() < 0)
-		pr_err("socinfo_init() failed!\n");
+		printk(KERN_ERR "%s: socinfo_init() failed!\n",
+		       __func__);
 }
 
 MACHINE_START(QSD8X50_SURF, "QCT QSD8X50 SURF")

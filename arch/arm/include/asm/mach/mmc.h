@@ -146,10 +146,10 @@ struct mmc_platform_data {
 	unsigned int uhs_caps2;
 	void (*sdio_lpm_gpio_setup)(struct device *, unsigned int);
         unsigned int status_irq;
-	int status_gpio;
+	unsigned int status_gpio;
 	/* Indicates the polarity of the GPIO line when card is inserted */
 	bool is_status_gpio_active_low;
-	int sdiowakeup_irq;
+        unsigned int sdiowakeup_irq;
         unsigned long irq_flags;
         unsigned long mmc_bus_width;
         int (*wpswitch) (struct device *);
@@ -158,7 +158,7 @@ struct mmc_platform_data {
 	unsigned int msmsdcc_fmax;
 	bool nonremovable;
 	unsigned int mpm_sdiowakeup_int;
-	int wpswitch_gpio;
+	unsigned int wpswitch_gpio;
 	bool is_wpswitch_active_low;
 	struct msm_mmc_slot_reg_data *vreg_data;
 	int is_sdio_al_client;

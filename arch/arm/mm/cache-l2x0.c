@@ -2,7 +2,7 @@
  * arch/arm/mm/cache-l2x0.c - L210/L220 cache controller support
  *
  * Copyright (C) 2007 ARM Limited
- * Copyright (c) 2009, 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009, 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -29,7 +29,7 @@
 
 #define CACHE_LINE_SIZE		32
 
-void __iomem *l2x0_base;
+static void __iomem *l2x0_base;
 static DEFINE_RAW_SPINLOCK(l2x0_lock);
 static u32 l2x0_way_mask;	/* Bitmask of active ways */
 static u32 l2x0_size;
@@ -38,8 +38,6 @@ static unsigned int l2x0_sets;
 static unsigned int l2x0_ways;
 static unsigned long sync_reg_offset = L2X0_CACHE_SYNC;
 static void pl310_save(void);
-static void pl310_resume(void);
-static void l2x0_resume(void);
 
 static inline bool is_pl310_rev(int rev)
 {
@@ -380,18 +378,15 @@ void __init l2x0_init(void __iomem *base, u32 aux_val, u32 aux_mask)
 		sync_reg_offset = L2X0_DUMMY_REG;
 #endif
 		outer_cache.set_debug = pl310_set_debug;
-		outer_cache.resume = pl310_resume;
 		break;
 	case L2X0_CACHE_ID_PART_L210:
 		l2x0_ways = (aux >> 13) & 0xf;
 		type = "L210";
-		outer_cache.resume = l2x0_resume;
 		break;
 	default:
 		/* Assume unknown chips have 8 ways */
 		l2x0_ways = 8;
 		type = "L2x0 series";
-		outer_cache.resume = l2x0_resume;
 		break;
 	}
 
@@ -425,9 +420,9 @@ void __init l2x0_init(void __iomem *base, u32 aux_val, u32 aux_mask)
 		writel_relaxed(1, l2x0_base + L2X0_CTRL);
 	}
 
-	outer_cache.inv_range = l2x0_inv_range;
-	outer_cache.clean_range = l2x0_clean_range;
-	outer_cache.flush_range = l2x0_flush_range;
+		outer_cache.inv_range = l2x0_inv_range;
+		outer_cache.clean_range = l2x0_clean_range;
+		outer_cache.flush_range = l2x0_flush_range;
 	outer_cache.sync = l2x0_cache_sync;
 	outer_cache.flush_all = l2x0_flush_all;
 	outer_cache.inv_all = l2x0_inv_all;

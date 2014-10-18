@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -53,12 +53,6 @@
 
 #define MSM8625_SAW1_PHYS		0xC0700000
 #define MSM8625_SAW1_SIZE		SZ_4K
-
-#define MSM8625_SAW2_PHYS		0xC0A00000
-#define MSM8625_SAW2_SIZE		SZ_4K
-
-#define MSM8625_SAW3_PHYS		0xC0B00000
-#define MSM8625_SAW3_SIZE		SZ_4K
 
 #define MSM8625_CFG_CTL_PHYS		0xA9800000
 #define MSM8625_CFG_CTL_SIZE		SZ_4K

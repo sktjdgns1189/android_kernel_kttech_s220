@@ -138,7 +138,7 @@ qh_refresh (struct ehci_hcd *ehci, struct ehci_qh *qh)
 		if (cpu_to_hc32(ehci, qtd->qtd_dma) == qh->hw->hw_current) {
 			qh->hw->hw_qtd_next = qtd->hw_next;
 			qtd = NULL;
-		}
+	}
 	}
 
 	if (qtd)
@@ -637,8 +637,7 @@ qh_urb_transaction (
 	qtd->urb = urb;
 
 	token = QTD_STS_ACTIVE;
-	if (!ehci->disable_cerr)
-		token |= (EHCI_TUNE_CERR << 10);
+	token |= (EHCI_TUNE_CERR << 10);
 	/* for split transactions, SplitXState initialized to zero */
 
 	len = urb->transfer_buffer_length;

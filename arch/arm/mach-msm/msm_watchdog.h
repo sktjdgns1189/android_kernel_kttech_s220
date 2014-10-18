@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,10 +13,6 @@
 #ifndef __ARCH_ARM_MACH_MSM_MSM_WATCHDOG_H
 #define __ARCH_ARM_MACH_MSM_MSM_WATCHDOG_H
 
-/* The base is just address of the WDT_RST register */
-#define WDT0_OFFSET	0x38
-#define WDT1_OFFSET	0x60
-
 struct msm_watchdog_pdata {
 	/* pet interval period in ms */
 	unsigned int pet_time;
@@ -27,7 +23,6 @@ struct msm_watchdog_pdata {
 	bool has_vic;
 	/* You have to be running in secure mode to use FIQ */
 	bool use_kernel_fiq;
-	void __iomem *base;
 };
 
 struct msm_watchdog_dump {
@@ -72,7 +67,6 @@ struct msm_watchdog_dump {
 
 void msm_wdog_fiq_setup(void *stack);
 extern unsigned int msm_wdog_fiq_length, msm_wdog_fiq_start;
-extern unsigned int msm7k_fiq_start, msm7k_fiq_length;
 
 #ifdef CONFIG_MSM_WATCHDOG
 void pet_watchdog(void);

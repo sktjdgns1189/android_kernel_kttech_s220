@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Google, Inc.
- * Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -260,7 +260,6 @@ static long pcm_out_ioctl(struct file *file, unsigned int cmd,
 	case AUDIO_GET_CONFIG: {
 		struct msm_audio_config config;
 		pr_debug("%s: AUDIO_GET_CONFIG\n", __func__);
-		memset(&config, 0, sizeof(config));
 		config.buffer_size = pcm->buffer_size;
 		config.buffer_count = pcm->buffer_count;
 		config.sample_rate = pcm->sample_rate;
@@ -304,6 +303,9 @@ static int pcm_out_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 
+#ifdef CONFIG_MACH_KTTECH  
+	spin_lock_init(&pcm->dsp_lock);
+#endif
 	pcm->channel_count = 2;
 	pcm->sample_rate = 44100;
 	pcm->buffer_size = BUFSZ;
@@ -329,7 +331,9 @@ static int pcm_out_open(struct inode *inode, struct file *file)
 	mutex_init(&pcm->lock);
 	mutex_init(&pcm->write_lock);
 	init_waitqueue_head(&pcm->write_wait);
+#ifndef CONFIG_MACH_KTTECH  
 	spin_lock_init(&pcm->dsp_lock);
+#endif
 	atomic_set(&pcm->out_enabled, 0);
 	atomic_set(&pcm->out_stopped, 0);
 	atomic_set(&pcm->out_count, pcm->buffer_count);

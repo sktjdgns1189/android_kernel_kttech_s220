@@ -78,7 +78,6 @@ void of_device_make_bus_id(struct device *dev)
 	struct device_node *node = dev->of_node;
 	const u32 *reg;
 	u64 addr;
-	const __be32 *addrp;
 	int magic;
 
 #ifdef CONFIG_PPC_DCR
@@ -106,15 +105,7 @@ void of_device_make_bus_id(struct device *dev)
 	 */
 	reg = of_get_property(node, "reg", NULL);
 	if (reg) {
-		if (of_can_translate_address(node)) {
-			addr = of_translate_address(node, reg);
-		} else {
-			addrp = of_get_address(node, 0, NULL, NULL);
-			if (addrp)
-				addr = of_read_number(addrp, 1);
-			else
-				addr = OF_BAD_ADDR;
-		}
+		addr = of_translate_address(node, reg);
 		if (addr != OF_BAD_ADDR) {
 			dev_set_name(dev, "%llx.%s",
 				     (unsigned long long)addr, node->name);
@@ -149,9 +140,8 @@ struct platform_device *of_device_alloc(struct device_node *np,
 		return NULL;
 
 	/* count the io and irq resources */
-	if (of_can_translate_address(np))
-		while (of_address_to_resource(np, num_reg, &temp_res) == 0)
-			num_reg++;
+	while (of_address_to_resource(np, num_reg, &temp_res) == 0)
+		num_reg++;
 	num_irq = of_irq_count(np);
 
 	/* Populate the resource table */
@@ -214,7 +204,7 @@ struct platform_device *of_platform_device_create_pdata(
 #if defined(CONFIG_MICROBLAZE)
 	dev->archdata.dma_mask = 0xffffffffUL;
 #endif
-	dev->dev.coherent_dma_mask = DMA_BIT_MASK(sizeof(dma_addr_t) * 8);
+	dev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 	dev->dev.bus = &platform_bus_type;
 	dev->dev.platform_data = platform_data;
 
@@ -327,9 +317,10 @@ static const struct of_dev_auxdata *of_dev_lookup(const struct of_dev_auxdata *l
 	for(; lookup->compatible != NULL; lookup++) {
 		if (!of_device_is_compatible(np, lookup->compatible))
 			continue;
-		if (!of_address_to_resource(np, 0, &res))
-			if (res.start != lookup->phys_addr)
-				continue;
+		if (of_address_to_resource(np, 0, &res))
+			continue;
+		if (res.start != lookup->phys_addr)
+			continue;
 		pr_debug("%s: devname=%s\n", np->full_name, lookup->name);
 		return lookup;
 	}

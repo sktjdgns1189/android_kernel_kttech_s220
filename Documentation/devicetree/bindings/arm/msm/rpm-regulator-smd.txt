@@ -32,10 +32,6 @@ Optional properties:
 - qcom,enable-time:    Time in us to delay after enabling the regulator
 - qcom,hpm-min-load:   Load current in uA which corresponds to the minimum load
 			which requires the regulator to be in high power mode.
-- qcom,apps-only:      Flag which indicates that the regulator only has
-			consumers on the application processor. If this flag
-			is specified, then voltage and current updates are
-			only sent to the RPM if the regulator is enabled.
 
 [Second Level Nodes]
 
@@ -66,29 +62,6 @@ Optional properties:
 				1.  This value shift is necessary to work around
 				limitations in the regulator framework which
 				treat 0 uV as an error.
-- qcom,use-voltage-floor-corner:  Flag that signifies if regulator_set_voltage
-				calls should modify the floor corner parameter
-				instead of the voltage parameter.  When used,
-				voltages specified inside of the regulator
-				framework represent corners that have been
-				incremented by 1.  The properties
-				qcom,use-voltage-corner and
-				qcom,use-voltage-floor-corner are mutually
-				exclusive.  Only one may be specified for a
-				given regulator.
-- qcom,always-send-voltage:    Flag which indicates that updates to the voltage
-				or voltage corner set point should always be
-				sent immediately to the RPM.  If this flag is
-				not specified, then voltage set point updates
-				are only sent if the given regulator has also
-				been enabled by a Linux consumer.
-- qcom,always-send-current:    Flag which indicates that updates to the load
-				current should always be sent immediately to the
-				RPM.  If this flag is not specified, then load
-				current updates are only sent if the given
-				regulator has also been enabled by a Linux
-				consumer.
-
 The following properties specify initial values for parameters to be sent to the
 RPM in regulator requests.
 - qcom,init-enable:            0 = regulator disabled
@@ -121,17 +94,27 @@ RPM in regulator requests.
 					BIT(2) = follow HW2_EN signal
 					BIT(3) = follow HW3_EN signal
 					BIT(4) = follow PMIC awake state
-- qcom,init-frequency:         Switching frequency divisor for SMPS regulators.
-				Supported values are n = 0 to 31 where
-				freq = 19.2 MHz / (n + 1).
-- qcom,init-head-room:         Voltage head room in mV required for the
-				regulator.  This head room value should be used
-				in situations where the device connected to the
-				output of the regulator has low noise tolerance.
-				Note that the RPM independently enforces a
-				safety head room value for subregulated LDOs
-				which is sufficient to account for LDO drop-out
-				voltage.
+- qcom,init-frequency:         Switching frequency in MHz for SMPS regulators.
+				Supported values are:
+					 0 = Don't care about frequency used
+					 1 = 19.20
+					 2 = 9.60
+					 3 = 6.40
+					 4 = 4.80
+					 5 = 3.84
+					 6 = 3.20
+					 7 = 2.74
+					 8 = 2.40
+					 9 = 2.13
+					10 = 1.92
+					11 = 1.75
+					12 = 1.60
+					13 = 1.48
+					14 = 1.37
+					15 = 1.28
+					16 = 1.20
+- qcom,init-head-room:         Voltage head room in uV required for the
+				regulator
 - qcom,init-quiet-mode:        Specify that quiet mode is needed for an SMPS
 				regulator in order to have lower output noise.
 				Supported values are:
@@ -157,29 +140,12 @@ RPM in regulator requests.
 				corner values supported on MSM8974 for PMIC
 				PM8841 SMPS 2 (VDD_Dig); nominal voltages for
 				these corners are also shown:
-					0 = None         (don't care)
-					1 = Retention    (0.5000 V)
-					2 = SVS Krait    (0.7250 V)
-					3 = SVS SOC      (0.8125 V)
-					4 = Normal       (0.9000 V)
-					5 = Turbo        (0.9875 V)
-					6 = Super Turbo  (1.0500 V)
-- qcom,init-disallow-bypass:   Specify that bypass mode should not be used for a
-				given LDO regulator.  When in bypass mode, an
-				LDO performs no regulation and acts as a simple
-				switch.  The RPM can utilize this mode for an
-				LDO that is subregulated from an SMPS when it is
-				possible to reduce the SMPS voltage to the
-				desired LDO output level.  Bypass mode may be
-				disallowed if lower LDO output noise is
-				required.  Supported values are:
-					0 = Allow RPM to utilize LDO bypass mode
-						if possible
-					1 = Disallow LDO bypass mode
-- qcom,init-voltage-floor-corner:  Minimum performance corner to use if any
-				processor in the system is awake.  This property
-				supports the same values as
-				qcom,init-voltage-corner.
+					0 = Retention    (0.5000 V)
+					1 = SVS Krait    (0.7250 V)
+					2 = SVS SOC      (0.8125 V)
+					3 = Normal       (0.9000 V)
+					4 = Turbo        (0.9875 V)
+					5 = Super Turbo  (1.0500 V)
 
 All properties specified within the core regulator framework can also be used in
 second level nodes.  These bindings can be found in:

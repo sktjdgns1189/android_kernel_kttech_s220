@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,7 +43,6 @@ struct sysmon_subsys {
 	struct completion	resp_ready;
 	char			rx_buf[RX_BUF_SIZE];
 	enum transports		transport;
-	struct device		*dev;
 };
 
 static struct sysmon_subsys subsys[SYSMON_NUM_SS] = {
@@ -139,9 +138,6 @@ int sysmon_send_event(enum subsys_id dest_ss, const char *event_ss,
 	char tx_buf[TX_BUF_SIZE];
 	int ret;
 
-	if (ss->dev == NULL)
-		return -ENODEV;
-
 	if (dest_ss < 0 || dest_ss >= SYSMON_NUM_SS ||
 	    notif < 0 || notif >= SUBSYS_NOTIF_TYPE_COUNT ||
 	    event_ss == NULL)
@@ -156,44 +152,6 @@ int sysmon_send_event(enum subsys_id dest_ss, const char *event_ss,
 		goto out;
 
 	if (strncmp(ss->rx_buf, "ssr:ack", ARRAY_SIZE(ss->rx_buf)))
-		ret = -ENOSYS;
-out:
-	mutex_unlock(&ss->lock);
-	return ret;
-}
-
-/**
- * sysmon_send_shutdown() - send shutdown command to a
- * subsystem.
- * @dest_ss:	ID of subsystem to send to.
- *
- * Returns 0 for success, -EINVAL for an invalid destination, -ENODEV if
- * the SMD transport channel is not open, -ETIMEDOUT if the destination
- * subsystem does not respond, and -ENOSYS if the destination subsystem
- * responds with something unexpected.
- *
- * If CONFIG_MSM_SYSMON_COMM is not defined, always return success (0).
- */
-int sysmon_send_shutdown(enum subsys_id dest_ss)
-{
-	struct sysmon_subsys *ss = &subsys[dest_ss];
-	const char tx_buf[] = "system:shutdown";
-	const char expect[] = "system:ack";
-	size_t prefix_len = ARRAY_SIZE(expect) - 1;
-	int ret;
-
-	if (ss->dev == NULL)
-		return -ENODEV;
-
-	if (dest_ss < 0 || dest_ss >= SYSMON_NUM_SS)
-		return -EINVAL;
-
-	mutex_lock(&ss->lock);
-	ret = sysmon_send_msg(ss, tx_buf, ARRAY_SIZE(tx_buf));
-	if (ret)
-		goto out;
-
-	if (strncmp(ss->rx_buf, expect, prefix_len))
 		ret = -ENOSYS;
 out:
 	mutex_unlock(&ss->lock);
@@ -220,9 +178,6 @@ int sysmon_get_reason(enum subsys_id dest_ss, char *buf, size_t len)
 	const char expect[] = "ssr:return:";
 	size_t prefix_len = ARRAY_SIZE(expect) - 1;
 	int ret;
-
-	if (ss->dev == NULL)
-		return -ENODEV;
 
 	if (dest_ss < 0 || dest_ss >= SYSMON_NUM_SS ||
 	    buf == NULL || len == 0)
@@ -303,7 +258,6 @@ static int sysmon_probe(struct platform_device *pdev)
 	default:
 		return -EINVAL;
 	}
-	ss->dev = &pdev->dev;
 
 	return 0;
 }
@@ -312,9 +266,6 @@ static int __devexit sysmon_remove(struct platform_device *pdev)
 {
 	struct sysmon_subsys *ss = &subsys[pdev->id];
 
-	ss->dev = NULL;
-
-	mutex_lock(&ss->lock);
 	switch (ss->transport) {
 	case TRANSPORT_SMD:
 		smd_close(ss->chan);
@@ -323,7 +274,6 @@ static int __devexit sysmon_remove(struct platform_device *pdev)
 		hsic_sysmon_close(HSIC_SYSMON_DEV_EXT_MODEM);
 		break;
 	}
-	mutex_unlock(&ss->lock);
 
 	return 0;
 }

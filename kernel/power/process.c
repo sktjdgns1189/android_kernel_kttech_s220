@@ -35,7 +35,6 @@ static int try_to_freeze_tasks(bool user_only)
 	u64 elapsed_csecs64;
 	unsigned int elapsed_csecs;
 	bool wakeup = false;
-	int sleep_usecs = USEC_PER_MSEC;
 
 	do_gettimeofday(&start);
 
@@ -72,6 +71,10 @@ static int try_to_freeze_tasks(bool user_only)
 			todo += wq_busy;
 		}
 
+		if (todo && has_wake_lock(WAKE_LOCK_SUSPEND)) {
+			wakeup = 1;
+			break;
+		}
 		if (!todo || time_after(jiffies, end_time))
 			break;
 
@@ -82,12 +85,9 @@ static int try_to_freeze_tasks(bool user_only)
 
 		/*
 		 * We need to retry, but first give the freezing tasks some
-		 * time to enter the refrigerator.  Start with an initial
-		 * 1 ms sleep followed by exponential backoff until 8 ms.
+		 * time to enter the regrigerator.
 		 */
-		usleep_range(sleep_usecs / 2, sleep_usecs);
-		if (sleep_usecs < 8 * USEC_PER_MSEC)
-			sleep_usecs *= 2;
+		msleep(10);
 	}
 
 	do_gettimeofday(&end);
@@ -176,6 +176,10 @@ int freeze_processes(void)
 int freeze_kernel_threads(void)
 {
 	int error;
+
+	error = suspend_sys_sync_wait();
+	if (error)
+		return error;
 
 	printk("Freezing remaining freezable tasks ... ");
 	pm_nosig_freezing = true;

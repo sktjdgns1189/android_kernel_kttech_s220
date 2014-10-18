@@ -2,7 +2,7 @@
  *  linux/drivers/mmc/host/msmsdcc.h - QCT MSM7K SDC Controller
  *
  *  Copyright (C) 2008 Google, All Rights Reserved.
- *  Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ *  Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,6 +25,7 @@
 #include <linux/scatterlist.h>
 #include <linux/dma-mapping.h>
 #include <linux/wakelock.h>
+#include <linux/earlysuspend.h>
 #include <linux/pm_qos.h>
 #include <mach/sps.h>
 
@@ -64,7 +65,6 @@
 #define MCI_CSPM_CCSENABLE	(1 << 14)
 #define MCI_CSPM_CCSDISABLE	(1 << 15)
 #define MCI_CSPM_AUTO_CMD19	(1 << 16)
-#define MCI_CSPM_AUTO_CMD21	(1 << 21)
 
 
 #define MMCIRESPCMD		0x010
@@ -192,15 +192,6 @@
 
 #define MCI_TEST_INPUT		0x0D4
 
-#define MCI_TESTBUS_CONFIG	0x0CC
-#define MCI_TESTBUS_SEL_MASK	(0x7)
-#define MAX_TESTBUS		8
-#define MCI_TESTBUS_ENA		(1 << 3)
-
-#define MCI_CORE_HC_MODE	0x78
-
-#define MCI_SDCC_DEBUG_REG	0x124
-
 #define MCI_IRQENABLE	\
 	(MCI_CMDCRCFAILMASK|MCI_DATACRCFAILMASK|MCI_CMDTIMEOUTMASK|	\
 	MCI_DATATIMEOUTMASK|MCI_TXUNDERRUNMASK|MCI_RXOVERRUNMASK|	\
@@ -261,12 +252,6 @@
 #define MMC_MAX_DMA_BOX_LENGTH (MMC_MAX_DMA_ROWS * MCI_FIFOSIZE)
 #define MMC_MAX_DMA_CMDS (MAX_NR_SG_DMA_PIO * (MMC_MAX_REQ_SIZE / \
 		MMC_MAX_DMA_BOX_LENGTH))
-
-/*
- * Peripheral bus clock scaling vote rates
- */
-#define MSMSDCC_BUS_VOTE_MAX_RATE	64000000 /* Hz */
-#define MSMSDCC_BUS_VOTE_MIN_RATE	32000000 /* Hz */
 
 struct clk;
 
@@ -335,7 +320,7 @@ struct msmsdcc_sps_data {
 	unsigned int			dest_pipe_index;
 	unsigned int			busy;
 	unsigned int			xfer_req_cnt;
-	bool				reset_bam;
+	bool				pipe_reset_pending;
 	struct tasklet_struct		tlet;
 };
 
@@ -360,7 +345,7 @@ struct msmsdcc_host {
 	void __iomem		*dml_base;
 	void __iomem		*bam_base;
 
-	struct platform_device	*pdev;
+	int			pdev_id;
 
 	struct msmsdcc_curr_req	curr;
 
@@ -368,7 +353,6 @@ struct msmsdcc_host {
 	struct clk		*clk;		/* main MMC bus clock */
 	struct clk		*pclk;		/* SDCC peripheral bus clock */
 	struct clk		*bus_clk;	/* SDCC bus voter clock */
-	unsigned long		bus_clk_rate;	/* peripheral bus clk rate */
 	atomic_t		clks_on;	/* set if clocks are enabled */
 
 	unsigned int		eject;		/* eject state */
@@ -377,6 +361,7 @@ struct msmsdcc_host {
 
 	unsigned int		clk_rate;	/* Current clock rate */
 	unsigned int		pclk_rate;
+	unsigned int		ddr_doubled_clk_rate;
 
 	u32			pwr;
 	struct mmc_platform_data *plat;
@@ -387,6 +372,11 @@ struct msmsdcc_host {
 	struct msmsdcc_dma_data	dma;
 	struct msmsdcc_sps_data sps;
 	struct msmsdcc_pio_data	pio;
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	struct early_suspend early_suspend;
+	int polling_enabled;
+#endif
 
 	struct tasklet_struct 	dma_tlet;
 
@@ -410,9 +400,7 @@ struct msmsdcc_host {
 	bool io_pad_pwr_switch;
 	bool tuning_in_progress;
 	bool tuning_needed;
-	bool tuning_done;
 	bool en_auto_cmd19;
-	bool en_auto_cmd21;
 	bool sdio_gpio_lpm;
 	bool irq_wake_enabled;
 	struct pm_qos_request pm_qos_req_dma;
@@ -423,27 +411,15 @@ struct msmsdcc_host {
 	bool sdio_wakeupirq_disabled;
 	struct mutex clk_mutex;
 	bool pending_resume;
-	unsigned int idle_tout;			/* Timeout in msecs */
-	bool enforce_pio_mode;
-	bool print_pm_stats;
+	unsigned int idle_tout_ms;			/* Timeout in msecs */
 	struct msmsdcc_msm_bus_vote msm_bus_vote;
 	struct device_attribute	max_bus_bw;
 	struct device_attribute	polling;
 	struct device_attribute idle_timeout;
 	struct device_attribute auto_cmd19_attr;
-	struct device_attribute auto_cmd21_attr;
-	struct dentry *debugfs_host_dir;
-	struct dentry *debugfs_idle_tout;
-	struct dentry *debugfs_pio_mode;
-	struct dentry *debugfs_pm_stats;
-	int saved_tuning_phase;
 };
 
-#define MSMSDCC_VERSION_STEP_MASK	0x0000FFFF
-#define MSMSDCC_VERSION_MINOR_MASK	0x0FFF0000
-#define MSMSDCC_VERSION_MINOR_SHIFT	16
-#define MSMSDCC_VERSION_MAJOR_MASK	0xF0000000
-#define MSMSDCC_VERSION_MAJOR_SHIFT	28
+#define MSMSDCC_VERSION_MASK	0xFFFF
 #define MSMSDCC_DMA_SUP	(1 << 0)
 #define MSMSDCC_SPS_BAM_SUP	(1 << 1)
 #define MSMSDCC_SOFT_RESET	(1 << 2)
@@ -454,11 +430,6 @@ struct msmsdcc_host {
 #define MSMSDCC_WAIT_FOR_TX_RX	(1 << 7)
 #define MSMSDCC_IO_PAD_PWR_SWITCH	(1 << 8)
 #define MSMSDCC_AUTO_CMD19	(1 << 9)
-#define MSMSDCC_AUTO_CMD21	(1 << 10)
-#define MSMSDCC_SW_RST_CFG_BROKEN	(1 << 11)
-#define MSMSDCC_DATA_PEND_FOR_CMD53	(1 << 12)
-#define MSMSDCC_TESTBUS_DEBUG		(1 << 13)
-#define MSMSDCC_SDHCI_MODE_SUPPORTED	(1 << 14)
 
 #define set_hw_caps(h, val)		((h)->hw_caps |= val)
 #define is_sps_mode(h)			((h)->hw_caps & MSMSDCC_SPS_BAM_SUP)
@@ -471,19 +442,11 @@ struct msmsdcc_host {
 #define is_wait_for_tx_rx_active(h)	((h)->hw_caps & MSMSDCC_WAIT_FOR_TX_RX)
 #define is_io_pad_pwr_switch(h)	((h)->hw_caps & MSMSDCC_IO_PAD_PWR_SWITCH)
 #define is_auto_cmd19(h)		((h)->hw_caps & MSMSDCC_AUTO_CMD19)
-#define is_auto_cmd21(h)		((h)->hw_caps & MSMSDCC_AUTO_CMD21)
-#define is_sw_reset_save_config_broken(h) \
-				((h)->hw_caps & MSMSDCC_SW_RST_CFG_BROKEN)
-#define is_data_pend_for_cmd53(h) ((h)->hw_caps & MSMSDCC_DATA_PEND_FOR_CMD53)
-#define is_testbus_debug(h) ((h)->hw_caps & MSMSDCC_TESTBUS_DEBUG)
-#define is_sdhci_supported(h) ((h)->hw_caps & MSMSDCC_SDHCI_MODE_SUPPORTED)
 
 /* Set controller capabilities based on version */
 static inline void set_default_hw_caps(struct msmsdcc_host *host)
 {
 	u32 version;
-	u16 step, minor;
-
 	/*
 	 * Lookup the Controller Version, to identify the supported features
 	 * Version number read as 0 would indicate SDCC3 or earlier versions.
@@ -494,29 +457,15 @@ static inline void set_default_hw_caps(struct msmsdcc_host *host)
 	if (!version)
 		return;
 
-	step = version & MSMSDCC_VERSION_STEP_MASK;
-	minor = (version & MSMSDCC_VERSION_MINOR_MASK) >>
-			MSMSDCC_VERSION_MINOR_SHIFT;
-
+	version &= MSMSDCC_VERSION_MASK;
 	if (version) /* SDCC v4 and greater */
 		host->hw_caps |= MSMSDCC_AUTO_PROG_DONE |
 			MSMSDCC_SOFT_RESET | MSMSDCC_REG_WR_ACTIVE
 			| MSMSDCC_WAIT_FOR_TX_RX | MSMSDCC_IO_PAD_PWR_SWITCH
 			| MSMSDCC_AUTO_CMD19;
 
-	if ((step == 0x18) && (minor >= 3)) {
-		host->hw_caps |= MSMSDCC_AUTO_CMD21;
-		/* Version 0x06000018 need hard reset on errors */
-		host->hw_caps &= ~MSMSDCC_SOFT_RESET;
-	}
-
-	if (step >= 0x2b) /* SDCC v4 2.1.0 and greater */
-		host->hw_caps |= MSMSDCC_SW_RST | MSMSDCC_SW_RST_CFG |
-				 MSMSDCC_AUTO_CMD21 |
-				 MSMSDCC_DATA_PEND_FOR_CMD53 |
-				 MSMSDCC_TESTBUS_DEBUG |
-				 MSMSDCC_SW_RST_CFG_BROKEN |
-				 MSMSDCC_SDHCI_MODE_SUPPORTED;
+	if (version >= 0x2D) /* SDCC v4 2.1.0 and greater */
+		host->hw_caps |= MSMSDCC_SW_RST | MSMSDCC_SW_RST_CFG;
 }
 
 int msmsdcc_set_pwrsave(struct mmc_host *mmc, int pwrsave);

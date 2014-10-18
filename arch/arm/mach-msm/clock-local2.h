@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,8 +15,7 @@
 #define __ARCH_ARM_MACH_MSM_CLOCK_LOCAL_2_H
 
 #include <linux/spinlock.h>
-#include <mach/clk-provider.h>
-#include <mach/clk.h>
+#include "clock.h"
 
 /*
  * Generic frequency-definition structs and macros
@@ -34,10 +33,10 @@
 struct clk_freq_tbl {
 	unsigned long	freq_hz;
 	struct clk	*src_clk;
-	u32	m_val;
-	u32	n_val;
-	u32	d_val;
-	u32	div_src_val;
+	const u32	m_val;
+	const u32	n_val;
+	const u32	d_val;
+	const u32	div_src_val;
 	const unsigned	sys_vdd;
 };
 
@@ -87,6 +86,7 @@ struct fixed_clk {
 /**
  * struct branch_clk - branch clock
  * @set_rate: Set the frequency of this branch clock.
+ * @parent: clock source
  * @c: clk
  * @cbcr_reg: branch control register
  * @bcr_reg: block reset register
@@ -98,12 +98,13 @@ struct fixed_clk {
  */
 struct branch_clk {
 	void   (*set_rate)(struct branch_clk *, struct clk_freq_tbl *);
+	struct clk *parent;
 	struct clk c;
 	const u32 cbcr_reg;
 	const u32 bcr_reg;
 	int has_sibling;
 	u32 cur_div;
-	u32 max_div;
+	const u32 max_div;
 	const u32 halt_check;
 	void *const __iomem *base;
 };
@@ -168,30 +169,10 @@ void set_rate_hid(struct rcg_clk *clk, struct clk_freq_tbl *nf);
  */
 extern spinlock_t local_clock_reg_lock;
 
-extern struct clk_ops clk_ops_empty;
 extern struct clk_ops clk_ops_rcg;
 extern struct clk_ops clk_ops_rcg_mnd;
 extern struct clk_ops clk_ops_branch;
 extern struct clk_ops clk_ops_vote;
-extern struct clk_ops clk_ops_rcg_hdmi;
-extern struct clk_ops clk_ops_rcg_edp;
-extern struct clk_ops clk_ops_byte;
-extern struct clk_ops clk_ops_pixel;
-extern struct clk_mux_ops mux_reg_ops;
-extern struct clk_ops clk_ops_edppixel;
-
-enum handoff pixel_rcg_handoff(struct clk *clk);
-enum handoff byte_rcg_handoff(struct clk *clk);
-
-/*
- * Clock definition macros
- */
-#define DEFINE_CLK_MEASURE(name) \
-	struct clk name = { \
-		.ops = &clk_ops_empty, \
-		.dbg_name = #name, \
-		CLK_INIT(name), \
-	}; \
 
 #endif /* __ARCH_ARM_MACH_MSM_CLOCK_LOCAL_2_H */
 

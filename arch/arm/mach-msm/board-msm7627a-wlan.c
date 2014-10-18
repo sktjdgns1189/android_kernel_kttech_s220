@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -53,8 +53,7 @@ static void gpio_wlan_config(void)
 					|| machine_is_msm8625_evb()
 					|| machine_is_msm8625_evt()
 					|| machine_is_msm7627a_qrd3()
-					|| machine_is_msm8625_qrd7()
-					|| machine_is_qrd_skud_prime())
+					|| machine_is_msm8625_qrd7())
 		gpio_wlan_sys_rest_en = 124;
 }
 
@@ -244,8 +243,7 @@ static unsigned int msm_AR600X_setup_power(bool on)
 					|| machine_is_msm8625_evb()
 					|| machine_is_msm8625_evt()
 					|| machine_is_msm7627a_qrd3()
-					|| machine_is_msm8625_qrd7()
-					|| machine_is_qrd_skud_prime()) {
+					|| machine_is_msm8625_qrd7()) {
 		rc = gpio_tlmm_config(GPIO_CFG(gpio_wlan_sys_rest_en, 0,
 					GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL,
 					GPIO_CFG_2MA), GPIO_CFG_ENABLE);
@@ -297,7 +295,7 @@ gpio_fail:
 	if (!(machine_is_msm7627a_qrd1() || machine_is_msm7627a_evb() ||
 	    machine_is_msm8625_evb() || machine_is_msm8625_evt() ||
 	    machine_is_msm7627a_qrd3() || machine_is_msm8625_qrd7()))
-			gpio_free(gpio_wlan_sys_rest_en);
+	gpio_free(gpio_wlan_sys_rest_en);
 qrd_gpio_fail:
 	/* GPIO_WLAN_3V3_EN is only required for the QRD7627a */
 	if (machine_is_msm7627a_qrd1())
@@ -334,8 +332,7 @@ static unsigned int msm_AR600X_shutdown_power(bool on)
 					|| machine_is_msm8625_evb()
 					|| machine_is_msm8625_evt()
 					|| machine_is_msm7627a_qrd3()
-					|| machine_is_msm8625_qrd7()
-					|| machine_is_qrd_skud_prime()) {
+					|| machine_is_msm8625_qrd7()) {
 		rc = gpio_tlmm_config(GPIO_CFG(gpio_wlan_sys_rest_en, 0,
 					GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL,
 					GPIO_CFG_2MA), GPIO_CFG_ENABLE);
@@ -346,12 +343,12 @@ static unsigned int msm_AR600X_shutdown_power(bool on)
 		}
 		gpio_set_value(gpio_wlan_sys_rest_en, 0);
 	} else {
-		rc = setup_wlan_gpio(on);
-		if (rc) {
+			rc = setup_wlan_gpio(on);
+			if (rc) {
 			pr_err("%s: setup_wlan_gpio = %d\n", __func__, rc);
-			goto set_gpio_fail;
-		}
-		gpio_free(gpio_wlan_sys_rest_en);
+				goto set_gpio_fail;
+			}
+			gpio_free(gpio_wlan_sys_rest_en);
 	}
 
 	/* GPIO_WLAN_3V3_EN is only required for the QRD7627a */
@@ -384,7 +381,7 @@ gpio_fail:
 	if (!(machine_is_msm7627a_qrd1() || machine_is_msm7627a_evb() ||
 	    machine_is_msm8625_evb() || machine_is_msm8625_evt() ||
 	    machine_is_msm7627a_qrd3() || machine_is_msm8625_qrd7()))
-			gpio_free(gpio_wlan_sys_rest_en);
+	gpio_free(gpio_wlan_sys_rest_en);
 qrd_gpio_fail:
 	/* GPIO_WLAN_3V3_EN is only required for the QRD7627a */
 	if (machine_is_msm7627a_qrd1())

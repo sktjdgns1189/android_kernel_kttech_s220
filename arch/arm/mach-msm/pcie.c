@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,7 +46,6 @@
 #define PCIE20_PARF_PHY_REFCLK         0x4C
 #define PCIE20_PARF_CONFIG_BITS        0x50
 
-#define PCIE20_ELBI_VERSION            0x00
 #define PCIE20_ELBI_SYS_CTRL           0x04
 
 #define PCIE20_CAP                     0x70
@@ -56,8 +55,6 @@
 #define PCIE20_BUSNUMBERS              0x18
 #define PCIE20_MEMORY_BASE_LIMIT       0x20
 
-#define PCIE20_PLR_AXI_MSTR_RESP_COMP_CTRL0 0x818
-#define PCIE20_PLR_AXI_MSTR_RESP_COMP_CTRL1 0x81c
 #define PCIE20_PLR_IATU_VIEWPORT       0x900
 #define PCIE20_PLR_IATU_CTRL1          0x904
 #define PCIE20_PLR_IATU_CTRL2          0x908
@@ -203,16 +200,6 @@ static int msm_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 static int msm_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 			    int where, int size, u32 val)
 {
-	/*
-	 *Attempt to reset secondary bus is causing PCIE core to reset.
-	 *Disable secondary bus reset functionality.
-	 */
-	if ((bus->number == 0) && (where == PCI_BRIDGE_CONTROL) &&
-	    (val & PCI_BRIDGE_CTL_BUS_RESET)) {
-		pr_info("PCIE secondary bus reset not supported\n");
-		val &= ~PCI_BRIDGE_CTL_BUS_RESET;
-	}
-
 	return msm_pcie_oper_conf(bus, devfn, WR, where, size, &val);
 }
 
@@ -265,7 +252,7 @@ static int __init msm_pcie_vreg_init(struct device *dev)
 	struct regulator *vreg;
 	struct msm_pcie_vreg_info_t *info;
 
-	for (i = 0; i < msm_pcie_dev.vreg_n; i++) {
+	for (i = 0; i < MSM_PCIE_MAX_VREG; i++) {
 		info = &msm_pcie_dev.vreg[i];
 
 		vreg = regulator_get(dev, info->name);
@@ -319,7 +306,7 @@ static void msm_pcie_vreg_deinit(void)
 {
 	int i;
 
-	for (i = 0; i < msm_pcie_dev.vreg_n; i++) {
+	for (i = 0; i < MSM_PCIE_MAX_VREG; i++) {
 		regulator_disable(msm_pcie_dev.vreg[i].hdl);
 		regulator_put(msm_pcie_dev.vreg[i].hdl);
 		msm_pcie_dev.vreg[i].hdl = NULL;
@@ -481,24 +468,6 @@ static void msm_pcie_release_resources(void)
 	msm_pcie_dev.axi_conf = NULL;
 }
 
-static void msm_pcie_adjust_tlp_size(struct msm_pcie_dev_t *dev)
-{
-	/*
-	 * Set the Max TLP size to 2K, instead of using default of 4K
-	 * to avoid a RAM problem in PCIE20 core of that version.
-	 */
-
-	/*
-	 * CFG_REMOTE_RD_REQ_BRIDGE_SIZE:
-	 *   5=4KB/4=2KB/3=1KB/2=512B/1=256B/0=128B
-	 */
-	writel_relaxed(4, dev->pcie20 +
-				 PCIE20_PLR_AXI_MSTR_RESP_COMP_CTRL0);
-
-	writel_relaxed(1, dev->pcie20 +
-				 PCIE20_PLR_AXI_MSTR_RESP_COMP_CTRL1);
-};
-
 static int __init msm_pcie_setup(int nr, struct pci_sys_data *sys)
 {
 	int rc;
@@ -549,8 +518,8 @@ static int __init msm_pcie_setup(int nr, struct pci_sys_data *sys)
 	msm_pcie_write_mask(dev->parf + PCIE20_PARF_PHY_CTRL, BIT(0), 0);
 
 	/* PARF programming */
-	writel_relaxed(dev->parf_deemph, dev->parf + PCIE20_PARF_PCS_DEEMPH);
-	writel_relaxed(dev->parf_swing, dev->parf + PCIE20_PARF_PCS_SWING);
+	writel_relaxed(0x282828, dev->parf + PCIE20_PARF_PCS_DEEMPH);
+	writel_relaxed(0x7F7F, dev->parf + PCIE20_PARF_PCS_SWING);
 	writel_relaxed((4<<24), dev->parf + PCIE20_PARF_CONFIG_BITS);
 	/* ensure that hardware registers the PARF configuration */
 	wmb();
@@ -575,12 +544,6 @@ static int __init msm_pcie_setup(int nr, struct pci_sys_data *sys)
 	/* de-assert PCIe reset link to bring EP out of reset */
 	gpio_set_value_cansleep(dev->gpio[MSM_PCIE_GPIO_RST_N].num,
 				!dev->gpio[MSM_PCIE_GPIO_RST_N].on);
-
-	/*
-	 * adjust tlp size before link comes up
-	 * so there will be no transactions.
-	 */
-	msm_pcie_adjust_tlp_size(dev);
 
 	/* enable link training */
 	msm_pcie_write_mask(dev->elbi + PCIE20_ELBI_SYS_CTRL, 0, BIT(0));
@@ -646,10 +609,6 @@ static int __init msm_pcie_probe(struct platform_device *pdev)
 	msm_pcie_dev.pdev = pdev;
 	pdata = pdev->dev.platform_data;
 	msm_pcie_dev.gpio = pdata->gpio;
-	msm_pcie_dev.wake_n = pdata->wake_n;
-	msm_pcie_dev.vreg_n = pdata->vreg_n;
-	msm_pcie_dev.parf_deemph = pdata->parf_deemph;
-	msm_pcie_dev.parf_swing = pdata->parf_swing;
 	msm_pcie_dev.vreg = msm_pcie_vreg_info;
 	msm_pcie_dev.clk = msm_pcie_clk_info;
 	msm_pcie_dev.res = msm_pcie_res_info;
@@ -736,26 +695,6 @@ static void __devinit msm_pcie_fixup_early(struct pci_dev *dev)
 }
 DECLARE_PCI_FIXUP_EARLY(PCIE_VENDOR_ID_RCP, PCIE_DEVICE_ID_RCP,
 			msm_pcie_fixup_early);
-
-/* enable wake_n interrupt during suspend */
-static void msm_pcie_fixup_suspend(struct pci_dev *dev)
-{
-	PCIE_DBG("enabling wake_n\n");
-	if (dev->pcie_type == PCI_EXP_TYPE_ROOT_PORT)
-		enable_irq(msm_pcie_dev.wake_n);
-}
-DECLARE_PCI_FIXUP_SUSPEND(PCIE_VENDOR_ID_RCP, PCIE_DEVICE_ID_RCP,
-			  msm_pcie_fixup_suspend);
-
-/* disable wake_n interrupt when system is not in suspend */
-static void msm_pcie_fixup_resume(struct pci_dev *dev)
-{
-	PCIE_DBG("disabling wake_n\n");
-	if (dev->pcie_type == PCI_EXP_TYPE_ROOT_PORT)
-		disable_irq(msm_pcie_dev.wake_n);
-}
-DECLARE_PCI_FIXUP_RESUME(PCIE_VENDOR_ID_RCP, PCIE_DEVICE_ID_RCP,
-			 msm_pcie_fixup_resume);
 
 /*
  * actual physical (BAR) address of the device resources starts from

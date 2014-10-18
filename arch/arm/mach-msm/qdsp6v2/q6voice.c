@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -30,7 +30,7 @@
 #include <mach/qdsp6v2/rtac.h>
 #include <mach/qdsp6v2/audio_acdb.h>
 
-#include <mach/qdsp6v2/q6core.h>
+#include "q6core.h"
 
 
 #define TIMEOUT_MS 3000

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -81,7 +81,6 @@ void msm8960_init_fb(void);
 void msm8960_init_pmic(void);
 void msm8960_init_mmc(void);
 int msm8960_init_gpiomux(void);
-void __init configure_msm8960_power_grid(void);
 unsigned char msm8960_hdmi_as_primary_selected(void);
 void msm8960_allocate_fb_region(void);
 void msm8960_set_display_params(char *prim_panel, char *ext_panel);
@@ -93,4 +92,3 @@ void msm8960_mdp_writeback(struct memtype_reserve *reserve_table);
 
 extern struct msm_rtb_platform_data msm8960_rtb_pdata;
 extern struct msm_cache_dump_platform_data msm8960_cache_dump_pdata;
-extern void msm8960_add_vidc_device(void);
