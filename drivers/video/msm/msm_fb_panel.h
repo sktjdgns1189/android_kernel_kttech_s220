@@ -201,6 +201,9 @@ struct msm_fb_panel_data {
 	int (*power_ctrl) (boolean enable);
 	struct platform_device *next;
 	int (*clk_func) (int enable);
+#ifdef CONFIG_MACH_KTTECH
+	void (*pre_bl_conrol) (struct msm_fb_data_type *, bool on);
+#endif
 };
 
 /*===========================================================================

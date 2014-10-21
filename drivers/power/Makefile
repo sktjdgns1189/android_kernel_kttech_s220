@@ -44,13 +44,8 @@ obj-$(CONFIG_CHARGER_MANAGER)	+= charger-manager.o
 obj-$(CONFIG_CHARGER_MAX8997)	+= max8997_charger.o
 obj-$(CONFIG_CHARGER_MAX8998)	+= max8998_charger.o
 obj-$(CONFIG_BATTERY_MSM)       += msm_battery.o
-ifdef CONFIG_KTTECH_MODEL_O4
-obj-$(CONFIG_BATTERY_MSM8X60)   += msm_charger-o4.o
-obj-$(CONFIG_PM8058_CHARGER)	+= pmic8058-charger-o4.o
-else
 obj-$(CONFIG_BATTERY_MSM8X60)   += msm_charger.o
 obj-$(CONFIG_PM8058_CHARGER)    += pmic8058-charger.o
-endif
 obj-$(CONFIG_ISL9519_CHARGER)   += isl9519q.o
 obj-$(CONFIG_SMB349_CHARGER)   += smb349.o
 obj-$(CONFIG_PM8058_FIX_USB)    += pm8058_usb_fix.o
@@ -59,7 +54,6 @@ obj-$(CONFIG_BATTERY_BQ27520)	+= bq27520_fuelgauger.o
 obj-$(CONFIG_BATTERY_BQ27541)	+= bq27541_fuelgauger.o
 obj-$(CONFIG_SMB137B_CHARGER)   += smb137b.o
 obj-$(CONFIG_KTTECH_BATTERY_GAUGE_MAXIM)   += max17040-kttech.o
-obj-$(CONFIG_KTTECH_BATTERY_GAUGE_TI)   += bq27410-kttech.o
 obj-$(CONFIG_PM8XXX_CCADC)	+= pm8xxx-ccadc.o
 obj-$(CONFIG_PM8921_BMS)	+= pm8921-bms.o
 obj-$(CONFIG_PM8921_CHARGER)	+= pm8921-charger.o

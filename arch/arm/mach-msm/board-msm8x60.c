@@ -1568,7 +1568,7 @@ static struct msm_camera_sensor_flash_src msm_flash_src = {
 	._fsrc.pmic_src.pmic_set_current = pm8058_set_flash_led_current,
 };
 #else
-#ifdef CONFIG_MSM_CAMERA_FLASH
+#if 0 //htdo_0503 #ifdef CONFIG_MSM_CAMERA_FLASH
 #define VFE_CAMIF_TIMER1_GPIO 29
 #define VFE_CAMIF_TIMER2_GPIO 30
 #define VFE_CAMIF_TIMER3_GPIO_INT 31
@@ -1582,7 +1582,7 @@ static struct msm_camera_sensor_flash_src msm_flash_src = {
 	._fsrc.pmic_src.led_src_1 = PMIC8058_ID_FLASH_LED_0,
 	._fsrc.pmic_src.led_src_2 = PMIC8058_ID_FLASH_LED_1,
 	._fsrc.pmic_src.pmic_set_current = pm8058_set_flash_led_current,
-};*/ 
+};
 #ifdef CONFIG_IMX074
 static struct msm_camera_sensor_strobe_flash_data strobe_flash_xenon = {
 	.flash_trigger = VFE_CAMIF_TIMER2_GPIO,
@@ -3203,17 +3203,14 @@ static void __init msm8x60_init_dsps(void)
 }
 #endif /* CONFIG_MSM_DSPS */
 
+#ifdef CONFIG_KTTECH_MODEL_O4
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
-#ifdef CONFIG_MACH_KTTECH
 #define MSM_FB_PRIM_BUF_SIZE \
 		(roundup((800 * 480 * 4), 4096) * 3) /* 4 bpp x 3 pages */
 #else
 #define MSM_FB_PRIM_BUF_SIZE \
-		(roundup((1024 * 600 * 4), 4096) * 3) /* 4 bpp x 3 pages */
+		(roundup((800 * 480 * 4), 4096) * 2) /* 4 bpp x 2 pages */
 #endif
-#else
-#define MSM_FB_PRIM_BUF_SIZE \
-		(roundup((1024 * 600 * 4), 4096) * 2) /* 4 bpp x 2 pages */
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -3241,7 +3238,7 @@ unsigned char hdmi_is_primary;
 
 #ifdef CONFIG_FB_MSM_OVERLAY0_WRITEBACK
 #ifdef CONFIG_MACH_KTTECH
-#define MSM_FB_OVERLAY0_WRITEBACK_SIZE roundup((960 * 544 * 3 * 2), 4096)
+#define MSM_FB_OVERLAY0_WRITEBACK_SIZE roundup((800 * 480 * 3 * 2), 4096)
 #else
 #define MSM_FB_OVERLAY0_WRITEBACK_SIZE roundup((1376 * 768 * 3 * 2), 4096)
 #endif
@@ -5141,7 +5138,7 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&msm_kgsl_3d0,
 	&msm_kgsl_2d0,
 	&msm_kgsl_2d1,
-#ifndef CONFIG_KTTECH_MIPI_NOVATEK
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WSVGA_PANEL
 	&lcdc_samsung_panel_device,
 #endif
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -10063,6 +10060,7 @@ static void __init msm8x60_init_mmc(void)
 #endif
 }
 
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WSVGA_PANEL
 #if !defined(CONFIG_GPIO_SX150X) && !defined(CONFIG_GPIO_SX150X_MODULE)
 static inline void display_common_power(int on) {}
 #else
@@ -10395,7 +10393,6 @@ out:
 
 static int mipi_dsi_panel_power(int on);
 
-#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_OLED_PT
 #define LCDC_NUM_GPIO 28
 #define LCDC_GPIO_START 0
 
@@ -11042,11 +11039,10 @@ static struct lcdc_platform_data dtv_hdmi_prim_pdata = {
 };
 #endif
 
-#ifdef CONFIG_FB_MSM_LCDC_DSUB
+#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WSVGA_PANEL
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_power_save   = lcdc_panel_power,
 };
-#endif
 
 #define MDP_VSYNC_GPIO			28
 
@@ -11055,10 +11051,6 @@ static struct lcdc_platform_data lcdc_pdata = {
  * therefore it need to be put at low power mode if
  * it was not used instead of turn it off.
  */
-#ifdef CONFIG_KTTECH_MIPI_NOVATEK
-/* KT Tech O3/O6 MIPI-DSI pdata */
-#include "devices-kttech-o6/devices-mipi-novatek-kttech.c"
-#else /* CONFIG_KTTECH_MIPI_NOVATEK */
 static int mipi_dsi_panel_power(int on)
 {
 	int flag_on = !!on;
@@ -11112,6 +11104,7 @@ static struct mipi_dsi_platform_data mipi_dsi_pdata = {
 	.vsync_gpio = MDP_VSYNC_GPIO,
 	.dsi_power_save   = mipi_dsi_panel_power,
 };
+#endif /*#ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_WSVGA_PANEL */
 
 #ifdef CONFIG_FB_MSM_TVOUT
 static struct regulator *reg_8058_l13;
@@ -11157,7 +11150,8 @@ static int atv_dac_power(int on)
 
 }
 #endif
-#endif /* CONFIG_KTTECH_MIPI_NOVATEK */
+
+#define MDP_VSYNC_GPIO 28
 
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
@@ -11261,9 +11255,7 @@ static void __init msm_fb_add_devices(void)
 	else
 		msm_fb_register_device("mdp", &mdp_pdata);
 
-#ifdef CONFIG_FB_MSM_LCDC_DSUB
 	msm_fb_register_device("lcdc", &lcdc_pdata);
-#endif
 #ifdef CONFIG_FB_MSM_MIPI_DSI
 	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
 #endif

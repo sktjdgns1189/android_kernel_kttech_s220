@@ -61,6 +61,10 @@ struct msm_camera_device_platform_data {
 	struct msm_camera_io_ext ioext;
 	struct msm_camera_io_clk ioclk;
 	uint8_t csid_core;
+	uint8_t is_csiphy;
+	uint8_t is_csic;
+	uint8_t is_csid;
+	uint8_t is_ispif;
 	uint8_t is_vpe;
 	struct msm_bus_scale_pdata *cam_bus_scale_table;
 };
@@ -369,7 +373,7 @@ enum msm_adspdec_concurrency {
 // !!!! NOTICE !!!!
 #define MSM_RAM_CONSOLE_ADDR (0x42d00000)
 #define MSM_RAM_CONSOLE_SIZE	(255 * SZ_4K)
-#define MSM_BOOTMEM_RESTART_MAGIC_ADDR (MSM_RAM_CONSOLE_ADDR+MSM_RAM_CONSOLE_SIZE)
+#define MSM_BOOTMEM_RESTART_MAGIC_ADDR (0x41db4000)//(0x41d34000)//(0x42539000)//(0x4243a000)
 #define MSM_BOOTMEM_RESTART_MAGIC_SIZE (SZ_4K)
 #endif
 
@@ -649,6 +653,17 @@ void msm_snddev_tx_route_deconfig(void);
 extern unsigned int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 
 #ifdef CONFIG_MACH_KTTECH
+enum O3_HW_VER {
+	O3_UNKNOWN=-1,
+	O3_PROTO = 0,
+	O3_ES1,
+	O3_ES2,
+	O3_PP1,
+	O3_PP2,
+	O3_MP,
+	O3_MP2
+};
+
 enum HW_VER {
 	UNKNOWN_EVENT=-1,
 	PROTO = 0,

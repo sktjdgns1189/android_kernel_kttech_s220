@@ -18,6 +18,7 @@
 #include <linux/spi/spi.h>
 #else
 #include <mach/gpio.h>
+#include <linux/gpio.h>
 #endif
 #include "msm_fb.h"
 #include "tps61161_bl.h"
@@ -32,10 +33,10 @@ extern u32 msm_fb_debug_enabled;
 #define LCDC_SAMSUNG_SPI_DEVICE_NAME	"lcdc_samsung_db7430"
 static struct spi_device *lcdc_spi_client;
 #else
-static int spi_cs;
-static int spi_sclk;
-static int spi_sdi;
-static int spi_mosi;
+static int spi_cs = 0;
+static int spi_sclk = 0;
+static int spi_sdi = 0;
+static int spi_mosi = 0;
 #endif
 
 struct samsung_state_type {
