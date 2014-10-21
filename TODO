@@ -1,1 +1,11 @@
-arch/arm/mach-msm/board-msm8x60.c
+- FIX BUILD ERROR
+
+
+
+  LD      .tmp_vmlinux1
+drivers/built-in.o: In function `handle_charger_ready':
+/sh/Work/Tachy/Kernel/android_kernel_kttech_s220/drivers/power/msm_charger.c:934: undefined reference to `o3_inform_charger_connection'
+drivers/built-in.o: In function `handle_charger_removed':
+/sh/Work/Tachy/Kernel/android_kernel_kttech_s220/drivers/power/msm_charger.c:1016: undefined reference to `o3_inform_charger_connection'
+make: *** [.tmp_vmlinux1] 오류 1
+
