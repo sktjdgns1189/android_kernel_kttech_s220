@@ -866,6 +866,10 @@ config KTTECH_HEADSET
 	help
 	  If you use a KT Tech O6 Headset, say Y. Otherwise, say N.
 
+config KTTECH_RAM_CONSOLE
+	default y
+	bool "KT Tech RAM buffer console"
+
 config KTTECH_CAMERA
 	default n
 	bool "KT Tech O6 Camera Drivers"
