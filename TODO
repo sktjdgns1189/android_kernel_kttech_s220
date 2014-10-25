@@ -1,11 +1,14 @@
-- FIX BUILD ERROR
+zImage build finished.
 
+Fix Module build error.
 
-
-  LD      .tmp_vmlinux1
-drivers/built-in.o: In function `handle_charger_ready':
-/sh/Work/Tachy/Kernel/android_kernel_kttech_s220/drivers/power/msm_charger.c:934: undefined reference to `o3_inform_charger_connection'
-drivers/built-in.o: In function `handle_charger_removed':
-/sh/Work/Tachy/Kernel/android_kernel_kttech_s220/drivers/power/msm_charger.c:1016: undefined reference to `o3_inform_charger_connection'
-make: *** [.tmp_vmlinux1] 오류 1
+drivers/net/wireless/bcm4329-kttech/wl/sys/wl_iw.c: In function 'wl_iw_set_pmksa':
+drivers/net/wireless/bcm4329-kttech/wl/sys/wl_iw.c:5578:5: error: array subscript is above array bounds [-Werror=array-bounds]
+drivers/net/wireless/bcm4329-kttech/wl/sys/wl_iw.c:5581:5: error: array subscript is above array bounds [-Werror=array-bounds]
+cc1: all warnings being treated as errors
+make[4]: *** [drivers/net/wireless/bcm4329-kttech/wl/sys/wl_iw.o] 오류 1
+make[3]: *** [drivers/net/wireless/bcm4329-kttech] 오류 2
+make[2]: *** [drivers/net/wireless] 오류 2
+make[1]: *** [drivers/net] 오류 2
+make: *** [drivers] 오류 2
 
