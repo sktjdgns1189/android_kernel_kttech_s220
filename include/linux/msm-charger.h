@@ -78,6 +78,9 @@ struct msm_battery_gauge {
 	int (*is_battery_id_valid) (void);
 #ifdef CONFIG_KTTECH_BATTERY
 	int (*get_battery_soc) (void);
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_TI
+	int (*get_battery_current) (void);
+#endif
 #endif /*CONFIG_KTTECH_BATTERY*/
 	int (*get_battery_status)(void);
 	int (*get_batt_remaining_capacity) (void);

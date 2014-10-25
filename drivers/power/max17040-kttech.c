@@ -124,16 +124,6 @@ int kttech_battery_gauge_get_soc(void)
 	{
 		err = maxim_read_reg(MAX17040_SOC_MSB, &soc[0]);
 		if(err >= 0) {
-#ifdef CONFIG_KTTECH_MODEL_O3
-			SOCValue = (( (soc[0] << 8) + soc[1] ) );
-			DisplayedSOC = (SOCValue - 256) / 500;
-			DisplayedSOC = (DisplayedSOC * 100) / 98; //FullSoc = 98%
-			if(DisplayedSOC > 100)
-				DisplayedSOC = 100;
-			else if(DisplayedSOC < 0)
-				DisplayedSOC = 0;
-			
-#else //CONFIG_KTTECH_MODEL_O3
 #ifdef KTTECH_MAXIM_BATT_MODEL_18BIT
 			// Model : RCOMP = 0xB700, FullSoc = 98.45, EmptySoc = 1.68, 18bit mode
 			SOCValue = (( (soc[0] << 8) + soc[1] ) );
@@ -154,7 +144,6 @@ int kttech_battery_gauge_get_soc(void)
 			else if(DisplayedSOC < 0)
 				DisplayedSOC = 0;
 #endif
-#endif //CONFIG_KTTECH_MODEL_O3
 			// printk(KERN_INFO "kttech-charger %s: %d %x %x\n", __func__, DisplayedSOC, soc[0], soc[1]); 
 			return DisplayedSOC;
 		}

@@ -34,8 +34,17 @@
 #define UPDATE_TIME_MS			60000
 #define RESUME_CHECK_PERIOD_MS		60000
 
+#ifdef CONFIG_KTTECH_BATTERY
+#ifdef CONFIG_BOARDREV_PP
+#define DEFAULT_BATT_MAX_V		4350
+#else
+#define DEFAULT_BATT_MAX_V		4200
+#endif
+#define DEFAULT_BATT_MIN_V		3400
+#else
 #define DEFAULT_BATT_MAX_V		4200
 #define DEFAULT_BATT_MIN_V		3200
+#endif
 
 #define MSM_CHARGER_GAUGE_MISSING_VOLTS 3500
 #define MSM_CHARGER_GAUGE_MISSING_TEMP  35
@@ -67,7 +76,9 @@ struct msm_hardware_charger_priv {
 	struct msm_hardware_charger *hw_chg;
 	enum msm_hardware_charger_state hw_chg_state;
 	unsigned int max_source_current;
+#ifndef CONFIG_KTTECH_BATTERY
 	struct power_supply psy;
+#endif
 };
 
 struct msm_charger_event {
@@ -88,6 +99,12 @@ struct msm_charger_mux {
 
 	unsigned int safety_time;
 	struct delayed_work teoc_work;
+	
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+	int stop_resume_check;
+	int resume_count;
+	struct delayed_work resume_work;
+#endif
 
 	unsigned int update_time;
 	int stop_update;
@@ -113,6 +130,34 @@ struct msm_charger_mux {
 static struct msm_charger_mux msm_chg;
 
 static struct msm_battery_gauge *msm_batt_gauge;
+
+#ifdef CONFIG_KTTECH_BATTERY
+static struct msm_hardware_charger * msm_hw_charger = NULL;
+#if defined(CONFIG_KTTECH_TOUCH_QT602240V3) || defined(CONFIG_KTTECH_TOUCH_QT602240V3E)
+#define CHG_MODE_AC	1
+#define CHG_MODE_VBATT	0
+#if defined(CONFIG_KTTECH_MODEL_O4)
+extern void o4_inform_charger_connection(int mode);
+#else
+extern void o3_inform_charger_connection(int mode);
+#endif
+#endif
+#ifdef CONFIG_KTTECH_SENSOR_AVAGO_O6
+#define CHG_MODE_USB	0
+#define CHG_MODE_WALL_CHARGER	1
+#define CHG_CONNECTED	1
+#define CHG_DISCONNECTED	0
+static int bmm_charger_connected = CHG_DISCONNECTED;
+extern void bmm_inform_charger_connection(int mode, int connected);
+#endif
+int last_battery_soc = 0; /*ë§ˆì?ë§‰ìœ¼ë¡??½ì–´??soc ê°?*/ 
+static unsigned long soc_last_time = 0;
+#endif
+
+#ifdef KTTECH_FINAL_BUILD //log blocking
+#undef dev_info
+#define dev_info(fmt, args...)
+#endif
 
 static int is_chg_capable_of_charging(struct msm_hardware_charger_priv *priv)
 {
@@ -180,6 +225,28 @@ static int get_prop_battery_mvolts(void)
 		return MSM_CHARGER_GAUGE_MISSING_VOLTS;
 	}
 }
+
+#ifdef CONFIG_KTTECH_BATTERY
+static int get_battery_soc(void)
+{
+	if (msm_batt_gauge && msm_batt_gauge->get_battery_soc)
+		return msm_batt_gauge->get_battery_soc();
+	else {
+		pr_err("msm-charger no batt soc assuming 0\n");
+		return -1;
+	}
+}
+
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_TI
+static int get_battery_current(void)
+{
+	if (msm_batt_gauge && msm_batt_gauge->get_battery_current)
+		return msm_batt_gauge->get_battery_current();
+
+	return 0;
+}
+#endif
+#endif /*CONFIG_KTTECH_BATTERY*/
 
 static int get_battery_temperature(void)
 {
@@ -264,6 +331,9 @@ static void update_batt_status(void)
 			if (msm_chg.batt_status == BATT_STATUS_ABSENT
 				|| msm_chg.batt_status
 					== BATT_STATUS_ID_INVALID) {
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+				msm_chg.stop_resume_check = 0;
+#endif
 				msm_chg.batt_status = BATT_STATUS_DISCHARGING;
 			}
 		} else
@@ -287,20 +357,114 @@ static int msm_power_get_property(struct power_supply *psy,
 {
 	struct msm_hardware_charger_priv *priv;
 
+#ifdef CONFIG_KTTECH_BATTERY
+	int is_ac;
+
+	if(msm_hw_charger == NULL) {
+		if((psp == POWER_SUPPLY_PROP_PRESENT) || (psp == POWER_SUPPLY_PROP_ONLINE))
+		{
+			val->intval = 0;
+			return 0;
+		}
+		return -EINVAL;
+	}
+
+	if(msm_hw_charger->charger_private == NULL) {
+		if((psp == POWER_SUPPLY_PROP_PRESENT) || (psp == POWER_SUPPLY_PROP_ONLINE))
+		{
+			val->intval = 0;
+			return 0;
+		}
+		return -EINVAL;
+	}
+
+	priv = (struct msm_hardware_charger_priv *)msm_hw_charger->charger_private;
+
+	/* AC ï¿½ï¿½ï¿½ï¿½ï¿½â¿¡ ï¿½ï¿½ï¿½ï¿½ï¿½Ï´ï¿½ ï¿½ï¿½ï¿½ì¿¡ï¿½ï¿½ ï¿½Ö´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 500 mAï¿½ï¿½ï¿½ï¿½ Å©ï¿½ï¿½. */ 
+	if(priv->max_source_current > 500)
+		is_ac = 1;
+	else
+		is_ac = 0;
+#ifdef CONFIG_KTTECH_SENSOR_AVAGO_O6
+	if((priv->hw_chg_state == CHG_CHARGING_STATE) && (is_ac == 1) && 
+		(bmm_charger_connected == CHG_DISCONNECTED)) /* Wall Charger */
+	{
+		bmm_inform_charger_connection(CHG_MODE_WALL_CHARGER, CHG_CONNECTED);
+		bmm_charger_connected = CHG_CONNECTED;
+	}
+	else if((priv->hw_chg_state == CHG_CHARGING_STATE) && (is_ac == 0) && 
+		(bmm_charger_connected == CHG_DISCONNECTED)) /* USB Charger */
+	{
+		bmm_inform_charger_connection(CHG_MODE_USB, CHG_CONNECTED);
+		bmm_charger_connected = CHG_CONNECTED;
+	}
+	else if((priv->hw_chg_state == CHG_ABSENT_STATE) && 
+		(bmm_charger_connected == CHG_CONNECTED)) /* Cable disconnected of no current flowing*/
+	{
+		bmm_inform_charger_connection(CHG_MODE_WALL_CHARGER, CHG_DISCONNECTED);
+		bmm_charger_connected = CHG_DISCONNECTED;
+	}	
+#endif	
+#else
 	priv = container_of(psy, struct msm_hardware_charger_priv, psy);
+#endif
 	switch (psp) {
 	case POWER_SUPPLY_PROP_PRESENT:
+#ifdef CONFIG_KTTECH_BATTERY
+		if (psy->type == POWER_SUPPLY_TYPE_MAINS) /* AC */ 
+		{
+			val->intval  = (is_ac) && (!(priv->hw_chg_state == CHG_ABSENT_STATE));
+		}
+		else /* PC USB */
+		{
+			val->intval  = (!is_ac) && (!(priv->hw_chg_state == CHG_ABSENT_STATE));
+		}
+#else
 		val->intval = !(priv->hw_chg_state == CHG_ABSENT_STATE);
+#endif
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
+#ifdef CONFIG_KTTECH_BATTERY
+		if (psy->type == POWER_SUPPLY_TYPE_MAINS) /* AC */ 
+		{
+			val->intval =  (is_ac) && ((priv->hw_chg_state == CHG_READY_STATE)  || (priv->hw_chg_state == CHG_CHARGING_STATE));
+		}
+		else /* PC USB */
+		{
+			val->intval =  (!is_ac) && ((priv->hw_chg_state == CHG_READY_STATE)  || (priv->hw_chg_state == CHG_CHARGING_STATE));
+		}
+#else
 		val->intval = (priv->hw_chg_state == CHG_READY_STATE)
 			|| (priv->hw_chg_state == CHG_CHARGING_STATE);
+#endif
 		break;
 	default:
 		return -EINVAL;
 	}
 	return 0;
 }
+
+#ifdef CONFIG_KTTECH_BATTERY
+static struct power_supply ac_supply = {
+	.name = "ac",
+	.type = POWER_SUPPLY_TYPE_MAINS,
+	.supplied_to = msm_power_supplied_to,
+	.num_supplicants = ARRAY_SIZE(msm_power_supplied_to),
+	.properties = msm_power_props,
+	.num_properties = ARRAY_SIZE(msm_power_props),
+	.get_property = msm_power_get_property,
+};
+
+static struct power_supply usb_supply = {
+	.name = "usb",
+	.type = POWER_SUPPLY_TYPE_USB,
+	.supplied_to = msm_power_supplied_to,
+	.num_supplicants = ARRAY_SIZE(msm_power_supplied_to),
+	.properties = msm_power_props,
+	.num_properties = ARRAY_SIZE(msm_power_props),
+	.get_property = msm_power_get_property,
+};
+#endif
 
 static enum power_supply_property msm_batt_power_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -311,6 +475,13 @@ static enum power_supply_property msm_batt_power_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_TI
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+#elif defined(CONFIG_KTTECH_BATTERY)
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+#endif	
 	POWER_SUPPLY_PROP_CAPACITY,
 };
 
@@ -318,6 +489,10 @@ static int msm_batt_power_get_property(struct power_supply *psy,
 				       enum power_supply_property psp,
 				       union power_supply_propval *val)
 {
+#ifdef CONFIG_KTTECH_BATTERY
+	struct timespec curr_ts;
+#endif
+//    printk("msm_batt_power_get_property psp=%d \n",psp);
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = get_prop_batt_status();
@@ -332,7 +507,11 @@ static int msm_batt_power_get_property(struct power_supply *psy,
 		val->intval = !(msm_chg.batt_status == BATT_STATUS_ABSENT);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
+#ifdef CONFIG_KTTECH_BATTERY
+		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+#else
 		val->intval = POWER_SUPPLY_TECHNOLOGY_NiMH;
+#endif /*CONFIG_KTTECH_BATTERY*/
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
 		val->intval = msm_chg.max_voltage * 1000;
@@ -341,10 +520,50 @@ static int msm_batt_power_get_property(struct power_supply *psy,
 		val->intval = msm_chg.min_voltage * 1000;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+#ifdef CONFIG_KTTECH_BATTERY
+		val->intval = get_prop_battery_mvolts() * 1000;
+#else
 		val->intval = get_prop_battery_mvolts();
+#endif
 		break;
+#ifdef CONFIG_KTTECH_BATTERY
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+#if defined(CONFIG_KTTECH_MODEL_O4)
+		val->intval = 1540000; /* 1540mAh */
+#elif defined(CONFIG_KTTECH_MODEL_O3) 
+		val->intval = 1540000; /* 1540mAh */
+#elif defined(CONFIG_KTTECH_MODEL_O6)   
+#ifdef CONFIG_BOARDREV_PP
+		val->intval = 1900000; /* 1900mAh */
+#else
+		val->intval = 1710000; /* 1710mAh */
+
+#endif
+#else
+		val->intval = 1540000; /* 1540mAh */
+#endif
+		break;//kyuhak.choi/2012/0628/kt_tech require.
+#endif
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_TI
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = get_battery_current() * 1000;
+		break;
+
+	case POWER_SUPPLY_PROP_TEMP:
+		val->intval = get_battery_temperature()*10;
+		if(val->intval > 640)
+			val->intval = 640;
+		else if(val->intval < 0)
+			val->intval = 0;
+		break;
+#endif		
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = get_prop_batt_capacity();
+#ifdef CONFIG_KTTECH_BATTERY
+		getnstimeofday(&curr_ts);
+		soc_last_time = curr_ts.tv_sec;
+		last_battery_soc = val->intval;
+#endif
 		break;
 	default:
 		return -EINVAL;
@@ -409,17 +628,27 @@ static void notify_usb_of_the_plugin_event(struct msm_hardware_charger_priv
 
 static unsigned int msm_chg_get_batt_capacity_percent(void)
 {
-	unsigned int current_voltage = get_prop_battery_mvolts();
-	unsigned int low_voltage = msm_chg.min_voltage;
-	unsigned int high_voltage = msm_chg.max_voltage;
+#ifdef CONFIG_KTTECH_BATTERY
+	unsigned int current_soc = get_battery_soc();
 
-	if (current_voltage <= low_voltage)
-		return 0;
-	else if (current_voltage >= high_voltage)
-		return 100;
-	else
-		return (current_voltage - low_voltage) * 100
-		    / (high_voltage - low_voltage);
+	// socï¿½ï¿½ ï¿½ï¿½ï¿?ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ì¸¸ voltageï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ percent ï¿½ï¿½ï¿½ï¿½.
+	if(current_soc >= 0) {
+		return current_soc;
+	} else
+#endif
+	{
+		unsigned int current_voltage = get_prop_battery_mvolts();
+		unsigned int low_voltage = msm_chg.min_voltage;
+		unsigned int high_voltage = msm_chg.max_voltage;
+
+		if (current_voltage <= low_voltage)
+			return 0;
+		else if (current_voltage >= high_voltage)
+			return 100;
+		else
+			return (current_voltage - low_voltage) * 100
+				    / (high_voltage - low_voltage);
+	}
 }
 
 #ifdef DEBUG
@@ -535,12 +764,19 @@ static void handle_charging_done(struct msm_hardware_charger_priv *priv)
 		dev_info(msm_chg.dev, "%s: stopping safety timer work\n",
 				__func__);
 		cancel_delayed_work(&msm_chg.teoc_work);
-
+		
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+		queue_delayed_work(msm_chg.event_wq_thread,
+					&msm_chg.resume_work,
+				      round_jiffies_relative(msecs_to_jiffies
+						     (RESUME_CHECK_PERIOD_MS)));		
+#else
 		if (msm_batt_gauge && msm_batt_gauge->monitor_for_recharging)
 			msm_batt_gauge->monitor_for_recharging();
 		else
 			dev_err(msm_chg.dev,
 			      "%s: no batt gauge recharge monitor\n", __func__);
+#endif    
 	}
 }
 
@@ -559,6 +795,9 @@ static void teoc(struct work_struct *work)
 
 static void handle_battery_inserted(void)
 {
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+	msm_chg.stop_resume_check = 0;
+#endif
 	/* if a charger is already present start charging */
 	if (msm_chg.current_chg_priv != NULL &&
 	    is_batt_status_capable_of_charging() &&
@@ -572,6 +811,10 @@ static void handle_battery_inserted(void)
 
 		dev_info(msm_chg.dev, "%s: starting safety timer work\n",
 				__func__);
+
+		if(delayed_work_pending(&msm_chg.teoc_work))
+			cancel_delayed_work_sync(&msm_chg.teoc_work);
+		
 		queue_delayed_work(msm_chg.event_wq_thread,
 					&msm_chg.teoc_work,
 				      round_jiffies_relative(msecs_to_jiffies
@@ -579,6 +822,57 @@ static void handle_battery_inserted(void)
 							      safety_time)));
 	}
 }
+
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+#define MSM_CHARGER_RESUME_COUNT 5
+static void resume_charging(struct work_struct *work)
+{
+	dev_dbg(msm_chg.dev, "%s resuming charging %d", __func__,
+						msm_chg.resume_count);
+
+	if (msm_chg.stop_resume_check) {
+		msm_chg.stop_resume_check = 0;
+		pr_err("%s stopping resume", __func__);
+		return;
+	}
+
+	update_batt_status();
+	if (msm_chg.batt_status != BATT_STATUS_JUST_FINISHED_CHARGING) {
+		pr_err("%s called outside JFC state", __func__);
+		return;
+	}
+
+	if(msm_chg_get_batt_capacity_percent() < 100)
+		msm_chg.resume_count += MSM_CHARGER_RESUME_COUNT + 1;
+	else
+		msm_chg.resume_count = 0;
+
+	if (msm_chg.resume_count > MSM_CHARGER_RESUME_COUNT) {
+		/* the battery has dropped below 4.1V for 5 mins
+		 * straight- resume charging */
+		/* act as if the battery was just plugged in */
+		mutex_lock(&msm_chg.status_lock);
+		msm_chg.batt_status = BATT_STATUS_DISCHARGING;
+		msm_chg.resume_count = 0;
+		handle_battery_inserted();
+		power_supply_changed(&msm_psy_batt);
+		if (msm_chg.current_chg_priv != NULL) {
+			power_supply_changed(&ac_supply);
+			power_supply_changed(&usb_supply);
+		}
+		mutex_unlock(&msm_chg.status_lock);
+	} else {
+		/* reschedule resume check */
+		dev_info(msm_chg.dev, "%s: rescheduling resume timer work [%d]\n ",
+				__func__, msm_chg.resume_count);
+		queue_delayed_work(msm_chg.event_wq_thread,
+					&msm_chg.resume_work,
+				      round_jiffies_relative(msecs_to_jiffies
+						     (RESUME_CHECK_PERIOD_MS)));
+	}
+}
+#endif
+
 
 static void handle_battery_removed(void)
 {
@@ -595,6 +889,10 @@ static void handle_battery_removed(void)
 				__func__);
 		cancel_delayed_work(&msm_chg.teoc_work);
 	}
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+	msm_chg.stop_resume_check = 1;
+	cancel_delayed_work_sync(&msm_chg.resume_work);
+#endif
 }
 
 static void update_heartbeat(struct work_struct *work)
@@ -641,6 +939,10 @@ static void update_heartbeat(struct work_struct *work)
 		msm_chg.stop_update = 0;
 		return;
 	}
+
+	if(delayed_work_pending(&msm_chg.update_heartbeat_work))
+		cancel_delayed_work_sync(&msm_chg.update_heartbeat_work);
+
 	queue_delayed_work(msm_chg.event_wq_thread,
 				&msm_chg.update_heartbeat_work,
 			      round_jiffies_relative(msecs_to_jiffies
@@ -653,6 +955,21 @@ static void handle_charger_ready(struct msm_hardware_charger_priv *hw_chg_priv)
 	struct msm_hardware_charger_priv *old_chg_priv = NULL;
 
 	debug_print(__func__, hw_chg_priv);
+
+#ifdef CONFIG_KTTECH_BATTERY
+	if (msm_chg.batt_status == BATT_STATUS_JUST_FINISHED_CHARGING)
+	{
+		if(msm_chg_get_batt_capacity_percent() < 100)
+			msm_chg.batt_status = BATT_STATUS_DISCHARGING;
+	}
+#if defined(CONFIG_KTTECH_TOUCH_QT602240V3) || defined(CONFIG_KTTECH_TOUCH_QT602240V3E)
+#if defined(CONFIG_KTTECH_MODEL_O4)
+	o4_inform_charger_connection(CHG_MODE_AC);
+#else
+	o3_inform_charger_connection(CHG_MODE_AC);
+#endif
+#endif
+#endif
 
 	if (msm_chg.current_chg_priv != NULL
 	    && hw_chg_priv->hw_chg->rating >
@@ -704,6 +1021,10 @@ static void handle_charger_ready(struct msm_hardware_charger_priv *hw_chg_priv)
 			if (!is_batt_status_charging()) {
 				dev_info(msm_chg.dev,
 				       "%s: starting safety timer\n", __func__);
+
+				if(delayed_work_pending(&msm_chg.teoc_work))
+					cancel_delayed_work_sync(&msm_chg.teoc_work);
+		
 				queue_delayed_work(msm_chg.event_wq_thread,
 							&msm_chg.teoc_work,
 						      round_jiffies_relative
@@ -727,10 +1048,20 @@ static void handle_charger_removed(struct msm_hardware_charger_priv
 
 	debug_print(__func__, hw_chg_removed);
 
+#ifdef CONFIG_KTTECH_BATTERY
+#if defined(CONFIG_KTTECH_TOUCH_QT602240V3) || defined(CONFIG_KTTECH_TOUCH_QT602240V3E)
+#if defined(CONFIG_KTTECH_MODEL_O4)
+	o4_inform_charger_connection(CHG_MODE_VBATT);
+#else
+	o3_inform_charger_connection(CHG_MODE_VBATT);
+#endif    //CONFIG_KTTECH_MODEL_O4
+#endif
+#endif
+
 	if (msm_chg.current_chg_priv == hw_chg_removed) {
 		msm_disable_system_current(hw_chg_removed);
-		if (msm_chg.current_chg_priv->hw_chg_state
-						== CHG_CHARGING_STATE) {
+		if (msm_chg.current_chg_priv->hw_chg_state == CHG_CHARGING_STATE
+			|| msm_chg.current_chg_priv->hw_chg_state == CHG_READY_STATE) {
 			if (msm_stop_charging(hw_chg_removed)) {
 				dev_err(msm_chg.dev, "%s couldnt stop chg\n",
 					msm_chg.current_chg_priv->hw_chg->name);
@@ -744,7 +1075,7 @@ static void handle_charger_removed(struct msm_hardware_charger_priv
 	if (msm_chg.current_chg_priv == NULL) {
 		hw_chg_priv = find_best_charger();
 		if (hw_chg_priv == NULL) {
-			dev_info(msm_chg.dev, "%s: no chargers\n", __func__);
+			dev_warn(msm_chg.dev, "%s: no chargers\n", __func__);
 			/* if the battery was Just finished charging
 			 * we keep that state as is so that we dont rush
 			 * in to charging the battery when a charger is
@@ -772,7 +1103,7 @@ static void handle_charger_removed(struct msm_hardware_charger_priv
 	if (!is_batt_status_charging()) {
 		dev_info(msm_chg.dev, "%s: stopping safety timer work\n",
 				__func__);
-		cancel_delayed_work(&msm_chg.teoc_work);
+		cancel_delayed_work_sync(&msm_chg.teoc_work);
 	}
 }
 
@@ -923,8 +1254,15 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 	/* update userspace */
 	if (msm_batt_gauge)
 		power_supply_changed(&msm_psy_batt);
+#ifdef CONFIG_KTTECH_BATTERY
+	if (priv) {
+		power_supply_changed(&ac_supply);
+		power_supply_changed(&usb_supply);
+	}
+#else
 	if (priv)
 		power_supply_changed(&priv->psy);
+#endif
 
 	mutex_unlock(&msm_chg.status_lock);
 }
@@ -934,7 +1272,8 @@ static int msm_chg_dequeue_event(struct msm_charger_event **event)
 	unsigned long flags;
 
 	spin_lock_irqsave(&msm_chg.queue_lock, flags);
-	if (msm_chg.queue_count == 0) {
+	if (msm_chg.queue_count <= 0) {
+		msm_chg.queue_count = 0;
 		spin_unlock_irqrestore(&msm_chg.queue_lock, flags);
 		return -EINVAL;
 	}
@@ -991,6 +1330,14 @@ void msm_charger_vbus_draw(unsigned int mA)
 		usb_chg_current = mA;
 }
 
+#ifdef CONFIG_KTTECH_BATTERY
+extern int pm8058_chg_is_inited(void);
+int msm_charger_is_inited(void)
+{
+	return pm8058_chg_is_inited();
+}
+#endif
+
 static int __init determine_initial_batt_status(void)
 {
 	if (is_battery_present())
@@ -1044,7 +1391,6 @@ static int __devinit msm_charger_probe(struct platform_device *pdev)
 			milli_secs = jiffies_to_msecs(MAX_JIFFY_OFFSET);
 		}
 		msm_chg.update_time = milli_secs;
-
 		msm_chg.max_voltage = pdata->max_voltage;
 		msm_chg.min_voltage = pdata->min_voltage;
 		msm_chg.get_batt_capacity_percent =
@@ -1065,8 +1411,11 @@ static int __devinit msm_charger_probe(struct platform_device *pdev)
 	mutex_init(&msm_chg.status_lock);
 	INIT_DELAYED_WORK(&msm_chg.teoc_work, teoc);
 	INIT_DELAYED_WORK(&msm_chg.update_heartbeat_work, update_heartbeat);
-
+#ifdef KTTECH_BATTERY_RECHRGING_WQ
+	INIT_DELAYED_WORK(&msm_chg.resume_work, resume_charging);
+#endif
 	wake_lock_init(&msm_chg.wl, WAKE_LOCK_SUSPEND, "msm_charger");
+	printk("%s : OK\n",__func__);
 	return 0;
 }
 
@@ -1111,6 +1460,7 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 		return -ENOMEM;
 	}
 
+#ifndef CONFIG_KTTECH_BATTERY
 	priv->psy.name = hw_chg->name;
 	if (hw_chg->type == CHG_TYPE_USB)
 		priv->psy.type = POWER_SUPPLY_TYPE_USB;
@@ -1122,8 +1472,14 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 	priv->psy.properties = msm_power_props;
 	priv->psy.num_properties = ARRAY_SIZE(msm_power_props);
 	priv->psy.get_property = msm_power_get_property;
+#endif
 
+#ifdef CONFIG_KTTECH_BATTERY
+	rc = power_supply_register(NULL, &ac_supply);
+	rc = power_supply_register(NULL, &usb_supply);
+#else
 	rc = power_supply_register(NULL, &priv->psy);
+#endif
 	if (rc) {
 		dev_err(msm_chg.dev, "%s power_supply_register failed\n",
 			__func__);
@@ -1137,6 +1493,10 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 	list_add_tail(&priv->list, &msm_chg.msm_hardware_chargers);
 	mutex_unlock(&msm_chg.msm_hardware_chargers_lock);
 	hw_chg->charger_private = (void *)priv;
+#ifdef CONFIG_KTTECH_BATTERY
+	msm_hw_charger = hw_chg;
+#endif
+
 	return 0;
 
 out:
@@ -1181,7 +1541,13 @@ int msm_charger_unregister(struct msm_hardware_charger *hw_chg)
 	mutex_lock(&msm_chg.msm_hardware_chargers_lock);
 	list_del(&priv->list);
 	mutex_unlock(&msm_chg.msm_hardware_chargers_lock);
+#ifdef CONFIG_KTTECH_BATTERY
+	power_supply_unregister(&ac_supply);
+	power_supply_unregister(&usb_supply);
+	msm_hw_charger  = NULL;
+#else
 	power_supply_unregister(&priv->psy);
+#endif
 	kfree(priv);
 	return 0;
 }
@@ -1191,7 +1557,7 @@ static int msm_charger_suspend(struct device *dev)
 {
 	dev_dbg(msm_chg.dev, "%s suspended\n", __func__);
 	msm_chg.stop_update = 1;
-	cancel_delayed_work(&msm_chg.update_heartbeat_work);
+	cancel_delayed_work_sync(&msm_chg.update_heartbeat_work);
 	mutex_lock(&msm_chg.status_lock);
 	handle_battery_removed();
 	mutex_unlock(&msm_chg.status_lock);
@@ -1204,6 +1570,9 @@ static int msm_charger_resume(struct device *dev)
 	msm_chg.stop_update = 0;
 	/* start updaing the battery powersupply every msm_chg.update_time
 	 * milliseconds */
+	if(delayed_work_pending(&msm_chg.update_heartbeat_work))
+		cancel_delayed_work_sync(&msm_chg.update_heartbeat_work);
+		
 	queue_delayed_work(msm_chg.event_wq_thread,
 				&msm_chg.update_heartbeat_work,
 			      round_jiffies_relative(msecs_to_jiffies
@@ -1211,6 +1580,17 @@ static int msm_charger_resume(struct device *dev)
 	mutex_lock(&msm_chg.status_lock);
 	handle_battery_inserted();
 	mutex_unlock(&msm_chg.status_lock);
+#ifdef CONFIG_KTTECH_BATTERY
+	{
+		struct timespec curr_ts;
+
+		getnstimeofday(&curr_ts);
+		if(curr_ts.tv_sec > soc_last_time + 900) /* 15ºÐ¿¡ ÇÑ¹ø */
+		{
+			power_supply_changed(&msm_psy_batt);
+		}
+	}
+#endif
 	return 0;
 }
 

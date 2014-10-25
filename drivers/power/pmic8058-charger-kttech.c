@@ -32,6 +32,19 @@
 #include <mach/msm_xo.h>
 #include <mach/msm_hsusb.h>
 
+#ifdef CONFIG_MACH_KTTECH
+#include <mach/board.h>
+#endif
+
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE
+extern void kttech_battery_gauge_init(void);
+extern void kttech_battery_gauge_reset(void);
+extern int kttech_battery_gauge_get_soc(void);
+extern int kttech_battery_gauge_get_voltage(void);
+extern int kttech_battery_gauge_get_current(void);
+extern int kttech_battery_gauge_get_temperature(void);
+#endif
+
 /* Config Regs  and their bits*/
 #define PM8058_CHG_TEST			0x75
 #define IGNORE_LL			2
@@ -102,16 +115,25 @@
 #define PM8058_CHG_ITRIM		0x1F
 #define PM8058_CHG_TTRIM		0x20
 
+#if defined (CONFIG_KTTECH_BATTERY) && defined(CONFIG_BOARDREV_PP)
+#define AUTO_CHARGING_VMAXSEL				4350
+#define AUTO_CHARGING_RESUME_MV				4220
+#define AUTO_CHARGING_VBATDET				4250
+#define AUTO_CHARGING_VEOC_VBATDET			4240
+bool vbatdet_is_changed = false;
+#else
 #define AUTO_CHARGING_VMAXSEL				4200
+#define AUTO_CHARGING_RESUME_MV				4100
+#define AUTO_CHARGING_VBATDET				4150
+#define AUTO_CHARGING_VEOC_VBATDET			4100
+#endif
+
 #define AUTO_CHARGING_FAST_TIME_MAX_MINUTES		512
 #define AUTO_CHARGING_TRICKLE_TIME_MINUTES		30
 #define AUTO_CHARGING_VEOC_ITERM			100
 #define AUTO_CHARGING_IEOC_ITERM			160
-#define AUTO_CHARGING_RESUME_MV				4100
 
-#define AUTO_CHARGING_VBATDET				4150
 #define AUTO_CHARGING_VBATDET_DEBOUNCE_TIME_MS		3000
-#define AUTO_CHARGING_VEOC_VBATDET			4100
 #define AUTO_CHARGING_VEOC_TCHG				16
 #define AUTO_CHARGING_VEOC_TCHG_FINAL_CYCLE		32
 #define AUTO_CHARGING_VEOC_BEGIN_TIME_MS		5400000
@@ -205,14 +227,21 @@ static struct pm8058_charger pm8058_chg;
 static struct msm_hardware_charger usb_hw_chg;
 static struct pmic8058_charger_data chg_data;
 
+#ifdef KTTECH_FINAL_BUILD //log blocking
+#undef dev_info
+#define dev_info(fmt, args...)
+#endif
+#ifndef KTTECH_BATTERY_RECHRGING_WQ
 static int msm_battery_gauge_alarm_notify(struct notifier_block *nb,
 					  unsigned long status, void *unused);
 
 static struct notifier_block alarm_notifier = {
 	.notifier_call = msm_battery_gauge_alarm_notify,
 };
-
+#endif
 static int resume_mv = AUTO_CHARGING_RESUME_MV;
+
+
 static DEFINE_MUTEX(batt_alarm_lock);
 static int resume_mv_set(const char *val, struct kernel_param *kp);
 module_param_call(resume_mv, resume_mv_set, param_get_int,
@@ -232,7 +261,8 @@ static int resume_mv_set(const char *val, struct kernel_param *kp)
 			PM8XXX_BATT_ALARM_LOWER_COMPARATOR, resume_mv);
 	if (!rc)
 		rc = pm8xxx_batt_alarm_threshold_set(
-			PM8XXX_BATT_ALARM_UPPER_COMPARATOR, 4300);
+			PM8XXX_BATT_ALARM_UPPER_COMPARATOR, 4300);//kyuhak.choi/2012/0628/kt_tech require.
+			//PM8XXX_BATT_ALARM_UPPER_COMPARATOR, 4300);
 
 out:
 	mutex_unlock(&batt_alarm_lock);
@@ -558,6 +588,41 @@ static int pm_chg_enum_done_enable(int value)
 	return pm8xxx_writeb(pm8058_chg.dev->parent, PM8058_CHG_CNTRL_2, temp);
 }
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+static int pm_chg_kttech_factmode_set(int value)
+{
+	u8 old, temp, data;
+	int ret;
+
+	pm8xxx_readb(pm8058_chg.dev->parent, PM8058_CHG_TRICKLE, &old);
+
+	data = (uint8_t)((3200-1800)/100) ;
+	temp = (old &0x0F) | (data<<4);
+
+	pm8xxx_writeb(pm8058_chg.dev->parent, PM8058_CHG_TRICKLE, temp);
+
+	ret = pm8xxx_readb(pm8058_chg.dev->parent, PM8058_CHG_CNTRL, &temp);
+
+   if(ret)
+      temp = 0;
+
+	if (value)
+		temp &= ~BIT(CHG_VCP_EN);
+	else
+		temp |= BIT(CHG_VCP_EN);
+
+	if (value)
+		temp &= ~BIT(CHG_CHARGE_DIS);
+	else
+		temp |= BIT(CHG_CHARGE_DIS);
+
+
+	pm8xxx_writeb(pm8058_chg.dev->parent, PM8058_CHG_CNTRL, temp);
+  
+	return 0;
+}
+#endif
+
 static uint32_t get_fsm_state(void)
 {
 	u8 temp;
@@ -635,8 +700,17 @@ static int __pm8058_start_charging(int chg_current, int termination_current,
 	if (pm8058_chg.disabled)
 		goto out;
 
-	dev_info(pm8058_chg.dev, "%s %dmA %dmin\n",
+	dev_warn(pm8058_chg.dev, "%s %dmA %dmin\n",
 			__func__, chg_current, time);
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+      	      	if (pm8058_chg.voter == NULL)
+      			pm8058_chg.voter = msm_xo_get(MSM_XO_TCXO_D1, "pm8058_charger");
+      	      	msm_xo_mode_vote(pm8058_chg.voter, MSM_XO_MODE_ON);
+      	      	return 0;
+	}
+#endif
 
 	ret = pm_chg_auto_disable(1);
 	if (ret)
@@ -666,7 +740,11 @@ static int __pm8058_start_charging(int chg_current, int termination_current,
 	if (ret)
 		goto out;
 
+#ifdef CONFIG_KTTECH_BATTERY 
+	ret = pm_chg_batt_temp_disable(1);
+#else
 	ret = pm_chg_batt_temp_disable(0);
+#endif
 	if (ret)
 		goto out;
 
@@ -741,6 +819,23 @@ static void charging_check_work(struct work_struct *work)
 		if (rc)
 			dev_err(pm8058_chg.dev,
 				"%s: unable to set alarm state\n", __func__);
+		
+#if defined (CONFIG_KTTECH_BATTERY) && defined(CONFIG_BOARDREV_PP)
+		if(vbatdet_is_changed){		
+			rc = pm_chg_vbatdet_set(AUTO_CHARGING_VBATDET);
+			if (rc){
+				dev_err(pm8058_chg.dev,
+					"%s: Do not set vbat to  CC to CV threshold (%d), fsm_state is %d, rc is %d\n",
+					__func__,AUTO_CHARGING_VBATDET,fsm_state, rc);
+			}else{
+				pm8058_chg.vbatdet = AUTO_CHARGING_VBATDET;
+				dev_info(pm8058_chg.dev, "%s set vbat to  CC to CV threshold (%d), fsm_state is %d\n",
+					__func__,AUTO_CHARGING_VBATDET,fsm_state);
+				pm8058_chg_enable_irq(VBATDET_IRQ);
+				vbatdet_is_changed = false;
+			}
+		}
+#endif	
 		break;
 	default:
 		/* Still not charging, so update driver state */
@@ -761,12 +856,22 @@ static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 	 * adjust the max current for PC USB connection - set the higher limit
 	 * to 450 and make sure we never cross it
 	 */
+#ifdef CONFIG_MACH_KTTECH // PC USB : 500mA, Wall Charger : 800mA (HW ?�구?�항)
+	if (chg_current > 850)
+		chg_current = 850;
+#endif
 	if (chg_current == 500)
 		chg_current = 450;
 
 	if (hw_chg->type == CHG_TYPE_AC && chg_data.max_source_current)
 		chg_current = chg_data.max_source_current;
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return 0;
+	}
+#endif
 	pm8058_chg.current_charger_current = chg_current;
 	pm8058_chg_enable_irq(FASTCHG_IRQ);
 
@@ -780,6 +885,8 @@ static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 		goto out;
 
 	pm8058_chg.vbatdet = AUTO_CHARGING_VBATDET;
+	dev_info(pm8058_chg.dev, "%s set vbat to  CC to CV threshold (%d) \n", __func__,AUTO_CHARGING_VBATDET);
+
 	/*
 	 * get the state of vbat and if it is higher than
 	 * AUTO_CHARGING_VBATDET we start the veoc start timer
@@ -795,9 +902,23 @@ static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 		 * else we enable VEOC
 		 */
 		dev_info(pm8058_chg.dev, "%s begin veoc timer\n", __func__);
+
+        if(delayed_work_pending(&pm8058_chg.veoc_begin_work))
+			cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work); 
 		schedule_delayed_work(&pm8058_chg.veoc_begin_work,
 				      round_jiffies_relative(msecs_to_jiffies
 				     (AUTO_CHARGING_VEOC_BEGIN_TIME_MS)));
+		
+#if defined (CONFIG_KTTECH_BATTERY) && defined(CONFIG_BOARDREV_PP)
+		vbatdet_is_changed = true;
+		pm8058_chg_disable_irq(VBATDET_IRQ);
+		ret = pm_chg_vbatdet_set(chg_voltage);
+			if (ret)
+				goto out;
+		pm8058_chg.vbatdet = chg_voltage;
+		dev_info(pm8058_chg.dev, "%s set vbat to  CC to CV threshold (%d) \n", __func__,chg_voltage);
+#endif		
+
 	} else
 		pm8058_chg_enable_irq(VBATDET_IRQ);
 
@@ -811,6 +932,9 @@ static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 	 * case for this is two seconds. The batt alarm does not have this
 	 * delay.
 	 */
+	 if(delayed_work_pending(&pm8058_chg.charging_check_work))
+		cancel_delayed_work_sync(&pm8058_chg.charging_check_work); 
+
 	schedule_delayed_work(&pm8058_chg.charging_check_work,
 				      round_jiffies_relative(msecs_to_jiffies
 			     (AUTO_CHARGING_VBATDET_DEBOUNCE_TIME_MS)));
@@ -858,6 +982,13 @@ static irqreturn_t pm8058_chg_chgval_handler(int irq, void *dev_id)
 	u8 old, temp;
 	int ret;
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
+
 	if (is_chg_plugged_in()) {	/* this debounces it */
 		if (!pm8058_chg.present) {
 			msm_charger_notify_event(&usb_hw_chg,
@@ -901,6 +1032,13 @@ static irqreturn_t pm8058_chg_chginval_handler(int irq, void *dev_id)
 {
 	u8 old, temp;
 	int ret;
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
 
 	if (pm8058_chg.present) {
 		pm8058_chg_disable_irq(CHGINVAL_IRQ);
@@ -957,6 +1095,13 @@ static irqreturn_t pm8058_chg_auto_chgfail_handler(int irq, void *dev_id)
 {
 	pm8058_chg_disable_irq(AUTO_CHGFAIL_IRQ);
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
+
 	if (pm8058_chg.waiting_for_topoff == 1) {
 		dev_info(pm8058_chg.dev, "%s topoff done, charging done\n",
 			__func__);
@@ -967,13 +1112,16 @@ static irqreturn_t pm8058_chg_auto_chgfail_handler(int irq, void *dev_id)
 		/* start one minute timer and monitor VBATDET_LOW */
 		dev_info(pm8058_chg.dev, "%s monitoring vbat_low for a"
 			"minute\n", __func__);
+
+		if(delayed_work_pending(&pm8058_chg.check_vbat_low_work))
+			cancel_delayed_work_sync(&pm8058_chg.check_vbat_low_work); 
+
 		schedule_delayed_work(&pm8058_chg.check_vbat_low_work,
 				      round_jiffies_relative(msecs_to_jiffies
 			     (AUTO_CHARGING_VEOC_VBAT_LOW_CHECK_TIME_MS)));
 
 		/* note we are waiting on veoc */
 		pm8058_chg.waiting_for_veoc = 1;
-
 		pm_chg_vbatdet_set(AUTO_CHARGING_VEOC_VBATDET);
 		pm8058_chg.vbatdet = AUTO_CHARGING_VEOC_VBATDET;
 		pm8058_chg_enable_irq(VBATDET_LOW_IRQ);
@@ -984,6 +1132,13 @@ static irqreturn_t pm8058_chg_auto_chgfail_handler(int irq, void *dev_id)
 static irqreturn_t pm8058_chg_chgstate_handler(int irq, void *dev_id)
 {
 	u8 temp;
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
 
 	temp = 0x00;
 	if (!pm8xxx_writeb(pm8058_chg.dev->parent, PM8058_CHG_TEST_3, temp)) {
@@ -997,8 +1152,15 @@ static irqreturn_t pm8058_chg_fastchg_handler(int irq, void *dev_id)
 {
 	pm8058_chg_disable_irq(FASTCHG_IRQ);
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
+
 	/* we have begun the fast charging state */
-	dev_info(pm8058_chg.dev, "%s begin fast charging"
+	dev_warn(pm8058_chg.dev, "%s begin fast charging\n"
 		, __func__);
 	msm_charger_notify_event(&usb_hw_chg, CHG_BATT_BEGIN_FAST_CHARGING);
 	return IRQ_HANDLED;
@@ -1007,6 +1169,13 @@ static irqreturn_t pm8058_chg_fastchg_handler(int irq, void *dev_id)
 static irqreturn_t pm8058_chg_batttemp_handler(int irq, void *dev_id)
 {
 	int ret;
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
 
 	/* we could get temperature
 	 * interrupt when the battery is plugged out
@@ -1034,10 +1203,29 @@ static irqreturn_t pm8058_chg_vbatdet_handler(int irq, void *dev_id)
 	int ret;
 
 	/* settling time */
+#ifdef CONFIG_KTTECH_BATTERY	
+	pm8058_chg_disable_irq(VBATDET_IRQ);
+	msleep(500);
+	pm8058_chg_enable_irq(VBATDET_IRQ);
+#else
 	msleep(20);
+#endif
 	ret = pm_chg_get_rt_status(pm8058_chg.pmic_chg_irq[VBATDET_IRQ]);
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
+	printk("%s : Start irq => vbatdet, ret = %d\n",__func__,ret);
+	if(delayed_work_pending(&pm8058_chg.veoc_begin_work)){
+		printk("%s : pm8058_chg_disable_irq(VBATDET_IRQ)\n",__func__);
+		pm8058_chg_disable_irq(VBATDET_IRQ);
+	}
+
 	if (ret) {
+		
 		if (pm8058_chg.vbatdet == AUTO_CHARGING_VBATDET
 			&& !delayed_work_pending(&pm8058_chg.veoc_begin_work)) {
 			/*
@@ -1047,12 +1235,19 @@ static irqreturn_t pm8058_chg_vbatdet_handler(int irq, void *dev_id)
 			 */
 			dev_info(pm8058_chg.dev, "%s entered constant voltage"
 				"begin veoc timer\n", __func__);
+
+			if(delayed_work_pending(&pm8058_chg.veoc_begin_work))
+				cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work); 
+
 			schedule_delayed_work(&pm8058_chg.veoc_begin_work,
 				      round_jiffies_relative
 				      (msecs_to_jiffies
 				      (AUTO_CHARGING_VEOC_BEGIN_TIME_MS)));
+			pm8058_chg_disable_irq(VBATDET_IRQ);
+			
 		}
 	} else {
+
 		if (pm8058_chg.vbatdet == AUTO_CHARGING_VEOC_VBATDET) {
 			cancel_delayed_work_sync(
 				&pm8058_chg.check_vbat_low_work);
@@ -1084,6 +1279,14 @@ static irqreturn_t pm8058_chg_batt_replace_handler(int irq, void *dev_id)
 	int ret;
 
 	pm8058_chg_disable_irq(BATT_REPLACE_IRQ);
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
+
 	ret = pm_chg_get_rt_status(pm8058_chg.pmic_chg_irq[BATT_REPLACE_IRQ]);
 	if (ret) {
 		msm_charger_notify_event(&usb_hw_chg, CHG_BATT_INSERTED);
@@ -1101,6 +1304,14 @@ static irqreturn_t pm8058_chg_battconnect_handler(int irq, void *dev_id)
 	int ret;
 
 	ret = pm_chg_get_rt_status(pm8058_chg.pmic_chg_irq[BATTCONNECT_IRQ]);
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return IRQ_HANDLED;
+	}
+#endif
+
 	if (ret) {
 		msm_charger_notify_event(&usb_hw_chg, CHG_BATT_REMOVED);
 	} else {
@@ -1403,13 +1614,20 @@ DEFINE_SIMPLE_ATTRIBUTE(fet_fops, get_charge_batt, set_charge_batt, "%llu\n");
 
 static void pm8058_chg_determine_initial_state(void)
 {
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		msm_charger_notify_event(&usb_hw_chg, CHG_INSERTED_EVENT);
+		return;
+	}
+#endif
 	if (is_chg_plugged_in()) {
 		pm8058_chg.present = 1;
 		msm_charger_notify_event(&usb_hw_chg, CHG_INSERTED_EVENT);
-		dev_info(pm8058_chg.dev, "%s charger present\n", __func__);
+		dev_warn(pm8058_chg.dev, "%s charger present\n", __func__);
 	} else {
 		pm8058_chg.present = 0;
-		dev_info(pm8058_chg.dev, "%s charger absent\n", __func__);
+		dev_warn(pm8058_chg.dev, "%s charger absent\n", __func__);
 	}
 	pm8058_chg_enable_irq(CHGVAL_IRQ);
 }
@@ -1418,7 +1636,14 @@ static int pm8058_stop_charging(struct msm_hardware_charger *hw_chg)
 {
 	int ret;
 
-	dev_info(pm8058_chg.dev, "%s stopping charging\n", __func__);
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return 0;
+	}
+#endif
+
+	dev_warn(pm8058_chg.dev, "%s stopping charging\n", __func__);
 
 	/* disable the irqs enabled while charging */
 	pm8058_chg_disable_irq(AUTO_CHGFAIL_IRQ);
@@ -1475,6 +1700,13 @@ DEFINE_SIMPLE_ATTRIBUTE(chg_fops, get_status, set_status, "%llu\n");
 static int set_disable_status_param(const char *val, struct kernel_param *kp)
 {
 	int ret;
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+	{
+		return 0;
+	}
+#endif
 
 	ret = param_set_int(val, kp);
 	if (ret)
@@ -1713,7 +1945,7 @@ static int batt_read_adc(int channel, int *mv_reading)
 						__func__, channel, ret);
 		goto out;
 	}
-	wait_for_completion(&conv_complete_evt);
+	wait_for_completion_timeout(&conv_complete_evt, HZ);
 	ret = adc_channel_read_result(h, &adc_chan_result);
 	if (ret) {
 		pr_err("%s: couldnt read result channel %d ret=%d\n",
@@ -1736,29 +1968,90 @@ out:
 
 }
 
+#ifdef CONFIG_KTTECH_BATTERY
+#define BATT_THERM_OPEN_MV  1600
+#else
 #define BATT_THERM_OPEN_MV  2000
+#endif
 static int pm8058_is_battery_present(void)
 {
+#ifdef CONFIG_KTTECH_MODEL_O3 
+#define O3_BATT_ID_MAX_MV  500
+#define O3_BATT_ID_MIN_MV  1
+#endif 
+#ifdef CONFIG_MACH_KTTECH  // 20110128 by ssgun - disable temperature
+#ifdef CONFIG_KTTECH_MODEL_O3 
+	enum HW_VER hw_ver = get_kttech_hw_version();
+#endif
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+    if(get_kttech_ftm_mode())
+      return 1;
+#endif
+
+	// Proto and ES1 don't support Battery ID.
+#ifdef CONFIG_KTTECH_MODEL_O3 
+	if( (hw_ver == PROTO) || (hw_ver == ES1))
+	{
+		return 1;
+	}
+	else
+#endif
+	{	
+#ifdef CONFIG_KTTECH_MODEL_O3 
+		int batt_id_mv;
+		batt_id_mv = batt_read_adc(CHANNEL_ADC_BATT_ID, NULL);
+
+		if (batt_id_mv > 0
+			&& batt_id_mv > O3_BATT_ID_MIN_MV
+			&& batt_id_mv < O3_BATT_ID_MAX_MV)
+			return 1;
+
+		dev_info(pm8058_chg.dev, "%s %dmv\n", __func__, batt_id_mv);
+#else
+		int mv_reading;
+
+		mv_reading = 0;
+		batt_read_adc(CHANNEL_ADC_BATT_THERM, &mv_reading);
+		//printk("%s: therm_raw is %d\n", __func__, mv_reading);		
+		if (mv_reading > 0 && mv_reading < BATT_THERM_OPEN_MV)
+			return 1;
+
+		dev_info(pm8058_chg.dev, "%s %dmv\n", __func__, mv_reading);
+#endif
+
+		return 0;
+	}
+#else
 	int mv_reading;
 
 	mv_reading = 0;
 	batt_read_adc(CHANNEL_ADC_BATT_THERM, &mv_reading);
 	pr_debug("%s: therm_raw is %d\n", __func__, mv_reading);
+	//printk("Battery ID is Not\n");
 	if (mv_reading > 0 && mv_reading < BATT_THERM_OPEN_MV)
 		return 1;
 
 	return 0;
+#endif
 }
 
 static int pm8058_get_battery_temperature(void)
 {
+#ifdef CONFIG_MACH_KTTECH // 20110130 by ssgun - disable temperature
+	return 30;
+#else
 	return batt_read_adc(CHANNEL_ADC_BATT_THERM, NULL);
+#endif
 }
 
 #define BATT_THERM_OPERATIONAL_MAX_CELCIUS 40
 #define BATT_THERM_OPERATIONAL_MIN_CELCIUS 0
 static int pm8058_is_battery_temp_within_range(void)
 {
+#ifdef CONFIG_MACH_KTTECH // 20110128 by ssgun - disable temperature
+	return 1;
+#else
 	int therm_celcius;
 
 	therm_celcius = pm8058_get_battery_temperature();
@@ -1769,12 +2062,16 @@ static int pm8058_is_battery_temp_within_range(void)
 		return 1;
 
 	return 0;
+#endif
 }
 
 #define BATT_ID_MAX_MV  800
 #define BATT_ID_MIN_MV  600
 static int pm8058_is_battery_id_valid(void)
 {
+#ifdef CONFIG_MACH_KTTECH // 20110128 by ssgun - disable temperature
+	return 1;
+#else
 	int batt_id_mv;
 
 	batt_id_mv = batt_read_adc(CHANNEL_ADC_BATT_ID, NULL);
@@ -1792,12 +2089,27 @@ static int pm8058_is_battery_id_valid(void)
 		return 1;
 
 	return 0;
+#endif
 }
+
+#ifdef CONFIG_KTTECH_BATTERY
+int pm8058_chg_is_inited(void)
+{
+	return pm8058_chg.inited;
+}
+#endif
+
+/////////////////////////////////////////////////////////////////
 
 /* returns voltage in mV */
 static int pm8058_get_battery_mvolts(void)
 {
 	int vbatt_mv;
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+	if(get_kttech_ftm_mode())
+		return 3800;
+#endif
 
 	vbatt_mv = batt_read_adc(CHANNEL_ADC_VBATT, NULL);
 	pr_debug("%s: vbatt_mv is %d\n", __func__, vbatt_mv);
@@ -1809,7 +2121,7 @@ static int pm8058_get_battery_mvolts(void)
 	 */
 	return 0;
 }
-
+#ifndef KTTECH_BATTERY_RECHRGING_WQ
 static int msm_battery_gauge_alarm_notify(struct notifier_block *nb,
 		unsigned long status, void *unused)
 {
@@ -1845,7 +2157,7 @@ static int msm_battery_gauge_alarm_notify(struct notifier_block *nb,
 
 	return 0;
 }
-
+#endif
 static int pm8058_monitor_for_recharging(void)
 {
 	int rc;
@@ -1859,6 +2171,84 @@ static int pm8058_monitor_for_recharging(void)
 
 }
 
+#ifdef CONFIG_KTTECH_BATTERY
+/* returns soc */
+
+int old_soc;
+static int pm8058_get_battery_soc(void)
+{
+	int batt_soc = 0;
+//#if defined(CONFIG_KTTECH_BATTERY_GAUGE) && !defined(CONFIG_KTTECH_MODEL_O4) //tempo4	
+#if defined(CONFIG_KTTECH_BATTERY_GAUGE)	
+	int vbatt_mv = 0;
+	int pmic_vbatt_mv = 0;
+#endif
+
+#ifdef CONFIG_MACH_KTTECH // FTM
+    if(get_kttech_ftm_mode())
+      return 85;
+#endif
+
+//#if defined(CONFIG_KTTECH_BATTERY_GAUGE) && !defined(CONFIG_KTTECH_MODEL_O4)//tempo4
+#if defined(CONFIG_KTTECH_BATTERY_GAUGE)
+	batt_soc = kttech_battery_gauge_get_soc();
+	vbatt_mv = kttech_battery_gauge_get_voltage();
+	pmic_vbatt_mv = pm8058_get_battery_mvolts();
+	//printk(KERN_INFO "kttech-charger soc [%d], soc_mv [%d]mv, pmic [%d]mv\n", batt_soc, vbatt_mv,pmic_vbatt_mv);
+
+	if(pmic_vbatt_mv < 3100){
+		printk(KERN_WARNING "If do not charging mode, need to power off. (pmic_vbtt_mv : [%d]mv) \n", pmic_vbatt_mv);
+		return 0;
+	}
+
+	if(vbatt_mv > 0) {
+		if((vbatt_mv < 3600 || batt_soc < 5 ) &&( pmic_vbatt_mv < 3100)){
+			printk(KERN_WARNING "If do not charging mode, need to power off. (pmic_vbatt_mv : [%d]mv, vbatt_mv : [%d]mv, SOC : [%d]) \n", pmic_vbatt_mv,vbatt_mv,batt_soc);
+			return 0;
+		}
+		if((batt_soc == 0) && (vbatt_mv > 3500)) {
+			printk(KERN_WARNING "kttech-charger soc [%d] [%d]mv\n", batt_soc, vbatt_mv); 
+			batt_soc = 1;
+		} else if ((batt_soc != 0) && (vbatt_mv < 3400)) {
+			printk(KERN_WARNING "kttech-charger soc [%d] [%d]mv\n", batt_soc, vbatt_mv);
+			batt_soc = 0;
+		}
+	}else if(batt_soc < 0){
+		 printk(KERN_ERR "SOC error (pmic_vbatt_mv : [%d]mv, vbatt_mv : [%d]mv, SOC : [%d]) \n",pmic_vbatt_mv,vbatt_mv,batt_soc);
+		if(pmic_vbatt_mv > 3100)
+			return old_soc;
+		else
+			return 0;
+	}
+
+	
+#endif
+
+	//SOC Error Check
+	if (batt_soc >= 0){
+		old_soc = batt_soc;
+		return batt_soc;
+	}
+	/*
+	 * return -1 to tell the upper layers
+	 * we couldnt read the battery soc
+	 */
+
+	return -1;
+}
+
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_TI
+static int pm8058_get_battery_current(void)
+{
+	int battery_current = 0;
+
+	battery_current = kttech_battery_gauge_get_current();
+
+	return battery_current;
+}
+#endif
+#endif /*CONFIG_KTTECH_BATTERY*/
+
 static struct msm_battery_gauge pm8058_batt_gauge = {
 	.get_battery_mvolts = pm8058_get_battery_mvolts,
 	.get_battery_temperature = pm8058_get_battery_temperature,
@@ -1866,6 +2256,12 @@ static struct msm_battery_gauge pm8058_batt_gauge = {
 	.is_battery_temp_within_range = pm8058_is_battery_temp_within_range,
 	.is_battery_id_valid = pm8058_is_battery_id_valid,
 	.monitor_for_recharging = pm8058_monitor_for_recharging,
+#ifdef CONFIG_KTTECH_BATTERY
+	.get_battery_soc = pm8058_get_battery_soc,
+#ifdef CONFIG_KTTECH_BATTERY_GAUGE_TI
+	.get_battery_current = pm8058_get_battery_current,
+#endif
+#endif /*CONFIG_KTTECH_BATTERY*/
 };
 
 static int pm8058_usb_voltage_lower_limit(void)
@@ -1923,7 +2319,15 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 		goto free_irq;
 	}
 
+
+
+#ifdef CONFIG_KTTECH_BATTERY 
+		pm_chg_batt_temp_disable(1);
+#else
 	pm_chg_batt_temp_disable(0);
+#endif
+
+
 	msm_battery_gauge_register(&pm8058_batt_gauge);
 	__dump_chg_regs();
 
@@ -1936,9 +2340,35 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 	/* determine what state the charger is in */
 	pm8058_chg_determine_initial_state();
 
+#ifdef CONFIG_MACH_KTTECH // FTM
+    if(get_kttech_ftm_mode())
+    {
+       pm_chg_auto_disable(1);
+       pm_chg_suspend(0);
+       pm_chg_imaxsel_set(1500);
+       pm_chg_failed_clear(1);
+       pm_chg_batt_temp_disable(1);
+       pm_chg_vmaxsel_set(4200);
+       pm_chg_vbatdet_set(4100);
+       pm_chg_kttech_factmode_set(1);
+       pm_chg_iterm_set(AUTO_CHARGING_IEOC_ITERM);
+       pm_chg_tchg_set(AUTO_CHARGING_FAST_TIME_MAX_MINUTES);
+       pm_chg_ttrkl_set(AUTO_CHARGING_TRICKLE_TIME_MINUTES);
+    	if (pm8058_chg.voter == NULL)
+    		pm8058_chg.voter = msm_xo_get(MSM_XO_TCXO_D1, "pm8058_charger");
+    	msm_xo_mode_vote(pm8058_chg.voter, MSM_XO_MODE_ON);
+       msleep(20);
+       //pm8058_chg.inited = 1;
+       pm_chg_enum_done_enable(1);
+       wmb();
+       pm_chg_auto_disable(0);
+       return 0;
+    }
+#endif
 	pm8058_chg_enable_irq(BATTTEMP_IRQ);
 	pm8058_chg_enable_irq(BATTCONNECT_IRQ);
 
+#ifndef KTTECH_BATTERY_RECHRGING_WQ
 	rc = pm8xxx_batt_alarm_disable(PM8XXX_BATT_ALARM_UPPER_COMPARATOR);
 	if (!rc)
 		rc = pm8xxx_batt_alarm_disable(
@@ -1947,7 +2377,6 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 		pr_err("%s: unable to set batt alarm state\n", __func__);
 		goto free_irq;
 	}
-
 	/*
 	 * The batt-alarm driver requires sane values for both min / max,
 	 * regardless of whether they're both activated.
@@ -1981,9 +2410,11 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 		pr_err("%s: unable to register alarm notifier\n", __func__);
 		goto free_irq;
 	}
+#endif
 
 	pm8058_chg.inited = 1;
 
+	printk("%s : OK\n",__func__);
 	return 0;
 
 free_irq:
@@ -1995,8 +2426,9 @@ out:
 static int __devexit pm8058_charger_remove(struct platform_device *pdev)
 {
 	struct pm8058_charger_chip *chip = platform_get_drvdata(pdev);
+#ifndef KTTECH_BATTERY_RECHRGING_WQ
 	int rc;
-
+#endif
 	msm_charger_notify_event(&usb_hw_chg, CHG_REMOVED_EVENT);
 	msm_charger_unregister(&usb_hw_chg);
 	cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work);
@@ -2005,7 +2437,7 @@ static int __devexit pm8058_charger_remove(struct platform_device *pdev)
 	free_irqs();
 	remove_debugfs_entries();
 	kfree(chip);
-
+#ifndef KTTECH_BATTERY_RECHRGING_WQ
 	rc = pm8xxx_batt_alarm_disable(PM8XXX_BATT_ALARM_UPPER_COMPARATOR);
 	if (!rc)
 		rc = pm8xxx_batt_alarm_disable(
@@ -2016,7 +2448,11 @@ static int __devexit pm8058_charger_remove(struct platform_device *pdev)
 	rc |= pm8xxx_batt_alarm_unregister_notifier(&alarm_notifier);
 	if (rc)
 		pr_err("%s: unable to register alarm notifier\n", __func__);
+
 	return rc;
+#else
+    return 0;
+#endif
 }
 
 static struct platform_driver pm8058_charger_driver = {
