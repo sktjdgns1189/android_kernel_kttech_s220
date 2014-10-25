@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -519,6 +519,10 @@ struct cvs_start_record_cmd {
 #define VSS_NETWORK_ID_VOIP_NB				0x00011240
 #define VSS_NETWORK_ID_VOIP_WB				0x00011241
 #define VSS_NETWORK_ID_VOIP_WV				0x00011242
+#ifdef CONFIG_KTTECH_SOUND // 20110329 by ssgun - qualcomm bug
+#define VSS_NETWORK_ID_CDMA_NB				0x00010021
+#define VSS_NETWORK_ID_CDMA_WB				0x00010022
+#endif
 
 /* Media types */
 #define VSS_MEDIA_ID_13K_MODEM		0x00010FC1

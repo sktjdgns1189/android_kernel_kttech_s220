@@ -16,7 +16,7 @@
 
 #include <linux/bitops.h>
 #include <linux/compiler.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #include <linux/netfilter/nf_conntrack_tcp.h>
 #include <linux/netfilter/nf_conntrack_dccp.h>
@@ -100,11 +100,6 @@ struct nf_conn_help {
 #include <net/netfilter/ipv4/nf_conntrack_ipv4.h>
 #include <net/netfilter/ipv6/nf_conntrack_ipv6.h>
 
-/* Handle NATTYPE Stuff,only if NATTYPE module was defined */
-#if defined(CONFIG_IP_NF_TARGET_NATTYPE_MODULE)
-#include <linux/netfilter_ipv4/ipt_NATTYPE.h>
-#endif
-
 struct nf_conn {
 	/* Usage count in here is 1 for hash table/destruct timer, 1 per skb,
            plus 1 for any connection(s) we are `master' for */
@@ -137,10 +132,6 @@ struct nf_conn {
 	struct nf_ct_ext *ext;
 #ifdef CONFIG_NET_NS
 	struct net *ct_net;
-#endif
-
-#if defined(CONFIG_IP_NF_TARGET_NATTYPE_MODULE)
-	unsigned long nattype_entry;
 #endif
 
 	/* Storage reserved for other modules, must be the last member */
@@ -218,7 +209,7 @@ extern struct nf_conntrack_tuple_hash *
 __nf_conntrack_find(struct net *net, u16 zone,
 		    const struct nf_conntrack_tuple *tuple);
 
-extern int nf_conntrack_hash_check_insert(struct nf_conn *ct);
+extern void nf_conntrack_hash_insert(struct nf_conn *ct);
 extern void nf_ct_delete_from_lists(struct nf_conn *ct);
 extern void nf_ct_insert_dying_list(struct nf_conn *ct);
 
@@ -321,8 +312,6 @@ static inline bool nf_is_loopback_packet(const struct sk_buff *skb)
 {
 	return skb->dev && skb->skb_iif && skb->dev->flags & IFF_LOOPBACK;
 }
-
-struct kernel_param;
 
 extern int nf_conntrack_set_hashsize(const char *val, struct kernel_param *kp);
 extern unsigned int nf_conntrack_htable_size;

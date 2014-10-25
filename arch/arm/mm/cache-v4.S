@@ -103,6 +103,20 @@ ENTRY(v4_flush_kern_dcache_area)
 	/* FALLTHROUGH */
 
 /*
+ *	dma_inv_range(start, end)
+ *
+ *	Invalidate (discard) the specified virtual address range.
+ *	May not write back any entries.  If 'start' or 'end'
+ *	are not cache line aligned, those lines must be written
+ *	back.
+ *
+ *	- start  - virtual start address
+ *	- end	 - virtual end address
+ */
+ENTRY(v4_dma_inv_range)
+	/* FALLTHROUGH */
+
+/*
  *	dma_flush_range(start, end)
  *
  *	Clean and invalidate the specified virtual address range.
@@ -115,6 +129,17 @@ ENTRY(v4_dma_flush_range)
 	mov	r0, #0
 	mcr	p15, 0, r0, c7, c7, 0		@ flush ID cache
 #endif
+	/* FALLTHROUGH */
+
+/*
+ *	dma_clean_range(start, end)
+ *
+ *	Clean (write back) the specified virtual address range.
+ *
+ *	- start  - virtual start address
+ *	- end	 - virtual end address
+ */
+ENTRY(v4_dma_clean_range)
 	mov	pc, lr
 
 /*
@@ -125,7 +150,7 @@ ENTRY(v4_dma_flush_range)
  */
 ENTRY(v4_dma_unmap_area)
 	teq	r2, #DMA_TO_DEVICE
-	bne	v4_dma_flush_range
+	bne	v4_dma_inv_range
 	/* FALLTHROUGH */
 
 /*
@@ -139,10 +164,20 @@ ENTRY(v4_dma_map_area)
 ENDPROC(v4_dma_unmap_area)
 ENDPROC(v4_dma_map_area)
 
-	.globl	v4_flush_kern_cache_louis
-	.equ	v4_flush_kern_cache_louis, v4_flush_kern_cache_all
-
 	__INITDATA
 
-	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
-	define_cache_functions v4
+	.type	v4_cache_fns, #object
+ENTRY(v4_cache_fns)
+	.long	v4_flush_icache_all
+	.long	v4_flush_kern_cache_all
+	.long	v4_flush_user_cache_all
+	.long	v4_flush_user_cache_range
+	.long	v4_coherent_kern_range
+	.long	v4_coherent_user_range
+	.long	v4_flush_kern_dcache_area
+	.long	v4_dma_map_area
+	.long	v4_dma_unmap_area
+	.long	v4_dma_inv_range
+	.long	v4_dma_clean_range
+	.long	v4_dma_flush_range
+	.size	v4_cache_fns, . - v4_cache_fns

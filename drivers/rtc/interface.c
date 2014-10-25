@@ -13,7 +13,6 @@
 
 #include <linux/rtc.h>
 #include <linux/sched.h>
-#include <linux/module.h>
 #include <linux/log2.h>
 #include <linux/workqueue.h>
 
@@ -73,8 +72,6 @@ int rtc_set_time(struct rtc_device *rtc, struct rtc_time *tm)
 		err = -EINVAL;
 
 	mutex_unlock(&rtc->ops_lock);
-	/* A timer might have just expired */
-	schedule_work(&rtc->irqwork);
 	return err;
 }
 EXPORT_SYMBOL_GPL(rtc_set_time);
@@ -114,8 +111,6 @@ int rtc_set_mmss(struct rtc_device *rtc, unsigned long secs)
 		err = -EINVAL;
 
 	mutex_unlock(&rtc->ops_lock);
-	/* A timer might have just expired */
-	schedule_work(&rtc->irqwork);
 
 	return err;
 }
@@ -232,11 +227,11 @@ int __rtc_read_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 		alarm->time.tm_hour = now.tm_hour;
 
 	/* For simplicity, only support date rollover for now */
-	if (alarm->time.tm_mday < 1 || alarm->time.tm_mday > 31) {
+	if (alarm->time.tm_mday == -1) {
 		alarm->time.tm_mday = now.tm_mday;
 		missing = day;
 	}
-	if ((unsigned)alarm->time.tm_mon >= 12) {
+	if (alarm->time.tm_mon == -1) {
 		alarm->time.tm_mon = now.tm_mon;
 		if (missing == none)
 			missing = month;
@@ -384,14 +379,9 @@ EXPORT_SYMBOL_GPL(rtc_set_alarm);
 int rtc_initialize_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 {
 	int err;
-	struct rtc_time now;
 
 	err = rtc_valid_tm(&alarm->time);
 	if (err != 0)
-		return err;
-
-	err = rtc_read_time(rtc, &now);
-	if (err)
 		return err;
 
 	err = mutex_lock_interruptible(&rtc->ops_lock);
@@ -400,11 +390,7 @@ int rtc_initialize_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 
 	rtc->aie_timer.node.expires = rtc_tm_to_ktime(alarm->time);
 	rtc->aie_timer.period = ktime_set(0, 0);
-
-	/* Alarm has to be enabled & in the futrure for us to enqueue it */
-	if (alarm->enabled && (rtc_tm_to_ktime(now).tv64 <
-			 rtc->aie_timer.node.expires.tv64)) {
-
+	if (alarm->enabled) {
 		rtc->aie_timer.enabled = 1;
 		timerqueue_add(&rtc->timerqueue, &rtc->aie_timer.node);
 	}
@@ -457,11 +443,6 @@ int rtc_update_irq_enable(struct rtc_device *rtc, unsigned int enabled)
 	/* make sure we're changing state */
 	if (rtc->uie_rtctimer.enabled == enabled)
 		goto out;
-
-	if (rtc->uie_unsupported) {
-		err = -EINVAL;
-		goto out;
-	}
 
 	if (enabled) {
 		struct rtc_time tm;
@@ -658,7 +639,7 @@ EXPORT_SYMBOL_GPL(rtc_irq_unregister);
 static int rtc_update_hrtimer(struct rtc_device *rtc, int enabled)
 {
 	/*
-	 * We always cancel the timer here first, because otherwise
+	 * We unconditionally cancel the timer here, because otherwise
 	 * we could run into BUG_ON(timer->state != HRTIMER_STATE_CALLBACK);
 	 * when we manage to start the timer before the callback
 	 * returns HRTIMER_RESTART.
@@ -781,14 +762,6 @@ static int rtc_timer_enqueue(struct rtc_device *rtc, struct rtc_timer *timer)
 	return 0;
 }
 
-static void rtc_alarm_disable(struct rtc_device *rtc)
-{
-	if (!rtc->ops || !rtc->ops->alarm_irq_enable)
-		return;
-
-	rtc->ops->alarm_irq_enable(rtc->dev.parent, false);
-}
-
 /**
  * rtc_timer_remove - Removes a rtc_timer from the rtc_device timerqueue
  * @rtc rtc device
@@ -810,10 +783,8 @@ static void rtc_timer_remove(struct rtc_device *rtc, struct rtc_timer *timer)
 		struct rtc_wkalrm alarm;
 		int err;
 		next = timerqueue_getnext(&rtc->timerqueue);
-		if (!next) {
-			rtc_alarm_disable(rtc);
+		if (!next)
 			return;
-		}
 		alarm.time = rtc_ktime_to_tm(next->expires);
 		alarm.enabled = 1;
 		err = __rtc_set_alarm(rtc, &alarm);
@@ -875,8 +846,7 @@ again:
 		err = __rtc_set_alarm(rtc, &alarm);
 		if (err == -ETIME)
 			goto again;
-	} else
-		rtc_alarm_disable(rtc);
+	}
 
 	mutex_unlock(&rtc->ops_lock);
 }

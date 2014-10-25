@@ -21,9 +21,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <net/x25.h>
-#ifdef KW_TAINT_ANALYSIS
-   extern void * get_tainted_stuff();
-#endif
+
 LIST_HEAD(x25_route_list);
 DEFINE_RWLOCK(x25_route_list_lock);
 
@@ -136,7 +134,7 @@ struct net_device *x25_dev_get(char *devname)
 
 	if (dev &&
 	    (!(dev->flags & IFF_UP) || (dev->type != ARPHRD_X25
-#if IS_ENABLED(CONFIG_LLC)
+#if defined(CONFIG_LLC) || defined(CONFIG_LLC_MODULE)
 					&& dev->type != ARPHRD_ETHER
 #endif
 					))){
@@ -181,16 +179,12 @@ struct x25_route *x25_get_route(struct x25_address *addr)
 /*
  *	Handle the ioctls that control the routing functions.
  */
-int x25_route_ioctl(unsigned int cmd, void __user *arg_actual)
+int x25_route_ioctl(unsigned int cmd, void __user *arg)
 {
 	struct x25_route_struct rt;
 	struct net_device *dev;
 	int rc = -EINVAL;
-	#ifdef KW_TAINT_ANALYSIS
-	void __user *arg = (void __user *)get_tainted_stuff();
-	#else
-	void __user *arg = arg_actual;
-	#endif
+
 	if (cmd != SIOCADDRT && cmd != SIOCDELRT)
 		goto out;
 

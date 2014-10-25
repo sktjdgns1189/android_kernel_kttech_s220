@@ -1,7 +1,7 @@
 /* linux/include/asm-arm/arch-msm/msm_smd.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -19,12 +19,9 @@
 #define __ASM_ARCH_MSM_SMD_H
 
 #include <linux/io.h>
-#include <linux/notifier.h>
-
-#include <mach/msm_smem.h>
+#include <mach/msm_smsm.h>
 
 typedef struct smd_channel smd_channel_t;
-struct cpumask;
 
 #define SMD_MAX_CH_NAME_LEN 20 /* includes null char at end */
 
@@ -43,14 +40,12 @@ struct cpumask;
  * SMD, the entry will only exist in this enum.
  */
 enum {
-	SMD_APPS = SMEM_APPS,
-	SMD_MODEM = SMEM_MODEM,
-	SMD_Q6 = SMEM_Q6,
-	SMD_DSPS = SMEM_DSPS,
-	SMD_TZ = SMEM_DSPS,
-	SMD_WCNSS = SMEM_WCNSS,
-	SMD_MODEM_Q6_FW = SMEM_MODEM_Q6_FW,
-	SMD_RPM = SMEM_RPM,
+	SMD_APPS = SMSM_APPS,
+	SMD_MODEM = SMSM_MODEM,
+	SMD_Q6 = SMSM_Q6,
+	SMD_WCNSS = SMSM_WCNSS,
+	SMD_DSPS = SMSM_DSPS,
+	SMD_MODEM_Q6_FW,
 	NUM_SMD_SUBSYSTEMS,
 };
 
@@ -70,11 +65,6 @@ enum {
 	SMD_QDSP_Q6FW,
 	SMD_DSPS_Q6FW,
 	SMD_WCNSS_Q6FW,
-	SMD_APPS_RPM,
-	SMD_MODEM_RPM,
-	SMD_QDSP_RPM,
-	SMD_WCNSS_RPM,
-	SMD_TZ_RPM,
 	SMD_NUM_TYPE,
 	SMD_LOOPBACK_TYPE = 100,
 
@@ -128,19 +118,9 @@ struct smd_subsystem_config {
 
 };
 
-/*
- * Subsystem Restart Configuration
- *
- * @disable_smsm_reset_handshake
- */
-struct smd_subsystem_restart_config {
-	int disable_smsm_reset_handshake;
-};
-
 struct smd_platform {
 	uint32_t num_ss_configs;
 	struct smd_subsystem_config *smd_ss_configs;
-	struct smd_subsystem_restart_config *smd_ssr_config;
 };
 
 #ifdef CONFIG_MSM_SMD
@@ -213,21 +193,6 @@ void smd_enable_read_intr(smd_channel_t *ch);
  */
 void smd_disable_read_intr(smd_channel_t *ch);
 
-/**
- * Enable/disable receive interrupts for the remote processor used by a
- * particular channel.
- * @ch:      open channel handle to use for the edge
- * @mask:    1 = mask interrupts; 0 = unmask interrupts
- * @cpumask  cpumask for the next cpu scheduled to be woken up
- * @returns: 0 for success; < 0 for failure
- *
- * Note that this enables/disables all interrupts from the remote subsystem for
- * all channels.  As such, it should be used with care and only for specific
- * use cases such as power-collapse sequencing.
- */
-int smd_mask_receive_interrupt(smd_channel_t *ch, bool mask,
-		const struct cpumask *cpumask);
-
 /* Starts a packet transaction.  The size of the packet may exceed the total
  * size of the smd ring buffer.
  *
@@ -270,63 +235,6 @@ int smd_write_segment(smd_channel_t *ch, void *data, int len, int user_buf);
  *      -E2BIG - some ammount of packet is not yet written
  */
 int smd_write_end(smd_channel_t *ch);
-
-/**
- * smd_write_segment_avail() - available write space for packet transactions
- * @ch: channel to write packet to
- * @returns: number of bytes available to write to, or -ENODEV for invalid ch
- *
- * This is a version of smd_write_avail() intended for use with packet
- * transactions.  This version correctly accounts for any internal reserved
- * space at all stages of the transaction.
- */
-int smd_write_segment_avail(smd_channel_t *ch);
-
-/*
- * Returns a pointer to the subsystem name or NULL if no
- * subsystem name is available.
- *
- * @type - Edge definition
- */
-const char *smd_edge_to_subsystem(uint32_t type);
-
-/*
- * Returns a pointer to the subsystem name given the
- * remote processor ID.
- *
- * @pid     Remote processor ID
- * @returns Pointer to subsystem name or NULL if not found
- */
-const char *smd_pid_to_subsystem(uint32_t pid);
-
-/*
- * Checks to see if a new packet has arrived on the channel.  Only to be
- * called with interrupts disabled.
- *
- * @ch: channel to check if a packet has arrived
- *
- * Returns:
- *      0 - packet not available
- *      1 - packet available
- *      -EINVAL - NULL parameter or non-packet based channel provided
- */
-int smd_is_pkt_avail(smd_channel_t *ch);
-
-/*
- * SMD initialization function that registers for a SMD platform driver.
- *
- * returns success on successful driver registration.
- */
-int __init msm_smd_init(void);
-
-/**
- * smd_remote_ss_to_edge() - return edge type from remote ss type
- * @name:	remote subsystem name
- *
- * Returns the edge type connected between the local subsystem(APPS)
- * and remote subsystem @name.
- */
-int smd_remote_ss_to_edge(const char *name);
 
 #else
 
@@ -414,12 +322,6 @@ static inline void smd_disable_read_intr(smd_channel_t *ch)
 {
 }
 
-static inline int smd_mask_receive_interrupt(smd_channel_t *ch, bool mask,
-		struct cpumask *cpumask)
-{
-	return -ENODEV;
-}
-
 static inline int smd_write_start(smd_channel_t *ch, int len)
 {
 	return -ENODEV;
@@ -434,36 +336,6 @@ smd_write_segment(smd_channel_t *ch, void *data, int len, int user_buf)
 static inline int smd_write_end(smd_channel_t *ch)
 {
 	return -ENODEV;
-}
-
-static inline int smd_write_segment_avail(smd_channel_t *ch)
-{
-	return -ENODEV;
-}
-
-static inline const char *smd_edge_to_subsystem(uint32_t type)
-{
-	return NULL;
-}
-
-static inline const char *smd_pid_to_subsystem(uint32_t pid)
-{
-	return NULL;
-}
-
-static inline int smd_is_pkt_avail(smd_channel_t *ch)
-{
-	return -ENODEV;
-}
-
-static inline int __init msm_smd_init(void)
-{
-	return 0;
-}
-
-static inline int smd_remote_ss_to_edge(const char *name)
-{
-	return -EINVAL;
 }
 #endif
 

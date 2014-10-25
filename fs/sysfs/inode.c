@@ -136,13 +136,12 @@ static int sysfs_sd_setsecdata(struct sysfs_dirent *sd, void **secdata, u32 *sec
 	void *old_secdata;
 	size_t old_secdata_len;
 
-	if (!sd->s_iattr) {
-		sd->s_iattr = sysfs_init_inode_attrs(sd);
-		if (!sd->s_iattr)
-			return -ENOMEM;
-	}
-
 	iattrs = sd->s_iattr;
+	if (!iattrs)
+		iattrs = sysfs_init_inode_attrs(sd);
+	if (!iattrs)
+		return -ENOMEM;
+
 	old_secdata = iattrs->ia_secdata;
 	old_secdata_len = iattrs->ia_secdata_len;
 
@@ -188,7 +187,7 @@ out:
 	return error;
 }
 
-static inline void set_default_inode_attr(struct inode * inode, umode_t mode)
+static inline void set_default_inode_attr(struct inode * inode, mode_t mode)
 {
 	inode->i_mode = mode;
 	inode->i_atime = inode->i_mtime = inode->i_ctime = CURRENT_TIME;
@@ -201,6 +200,18 @@ static inline void set_inode_attr(struct inode * inode, struct iattr * iattr)
 	inode->i_atime = iattr->ia_atime;
 	inode->i_mtime = iattr->ia_mtime;
 	inode->i_ctime = iattr->ia_ctime;
+}
+
+static int sysfs_count_nlink(struct sysfs_dirent *sd)
+{
+	struct sysfs_dirent *child;
+	int nr = 0;
+
+	for (child = sd->s_dir.children; child; child = child->s_sibling)
+		if (sysfs_type(child) == SYSFS_DIR)
+			nr++;
+
+	return nr + 2;
 }
 
 static void sysfs_refresh_inode(struct sysfs_dirent *sd, struct inode *inode)
@@ -219,7 +230,7 @@ static void sysfs_refresh_inode(struct sysfs_dirent *sd, struct inode *inode)
 	}
 
 	if (sysfs_type(sd) == SYSFS_DIR)
-		set_nlink(inode, sd->s_dir.subdirs + 2);
+		inode->i_nlink = sysfs_count_nlink(sd);
 }
 
 int sysfs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
@@ -319,15 +330,14 @@ int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const void *ns, const cha
 	struct sysfs_addrm_cxt acxt;
 	struct sysfs_dirent *sd;
 
-	if (!dir_sd) {
-		WARN(1, KERN_WARNING "sysfs: can not remove '%s', no directory\n",
-			name);
+	if (!dir_sd)
 		return -ENOENT;
-	}
 
 	sysfs_addrm_start(&acxt, dir_sd);
 
 	sd = sysfs_find_dirent(dir_sd, ns, name);
+	if (sd && (sd->s_ns != ns))
+		sd = NULL;
 	if (sd)
 		sysfs_remove_one(&acxt, sd);
 
@@ -339,11 +349,11 @@ int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const void *ns, const cha
 		return -ENOENT;
 }
 
-int sysfs_permission(struct inode *inode, int mask)
+int sysfs_permission(struct inode *inode, int mask, unsigned int flags)
 {
 	struct sysfs_dirent *sd;
 
-	if (mask & MAY_NOT_BLOCK)
+	if (flags & IPERM_FLAG_RCU)
 		return -ECHILD;
 
 	sd = inode->i_private;
@@ -352,5 +362,5 @@ int sysfs_permission(struct inode *inode, int mask)
 	sysfs_refresh_inode(sd, inode);
 	mutex_unlock(&sysfs_mutex);
 
-	return generic_permission(inode, mask);
+	return generic_permission(inode, mask, flags, NULL);
 }

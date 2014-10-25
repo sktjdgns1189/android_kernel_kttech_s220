@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,34 +16,6 @@
 #define _SPS_H_
 
 #include <linux/types.h>	/* u32 */
-
-#ifdef CONFIG_ARM_LPAE
-
-/* Returns upper 4bits of 36bits physical address */
-#define SPS_GET_UPPER_ADDR(addr) ((addr & 0xF00000000ULL) >> 32)
-
-/* Returns 36bits physical address from 32bit address &
- * flags word */
-#define DESC_FULL_ADDR(flags, addr) (((flags & 0xF) << 32) | addr)
-
-/* Returns flags word with flags and 4bit upper address
- * from flags and 36bit physical address */
-#define DESC_FLAG_WORD(flags, addr) (((addr & 0xF00000000ULL) >> 32) | flags)
-
-#else
-
-#define SPS_GET_UPPER_ADDR(addr) (0)
-#define DESC_FULL_ADDR(flags, addr) (addr)
-#define DESC_FLAG_WORD(flags, addr) (flags)
-
-#endif
-
-/* Returns upper 4bits of 36bits physical address from
- * flags word */
-#define DESC_UPPER_ADDR(flags) ((flags & 0xF))
-
-/* Returns lower 32bits of 36bits physical address */
-#define SPS_GET_LOWER_ADDR(addr) ((u32)(addr & 0xFFFFFFFF))
 
 /* SPS device handle indicating use of system memory */
 #define SPS_DEV_HANDLE_MEM       ((u32)0x7ffffffful)
@@ -79,16 +51,8 @@
 #define SPS_IOVEC_FLAG_INT  0x8000  /* Generate interrupt */
 #define SPS_IOVEC_FLAG_EOT  0x4000  /* Generate end-of-transfer indication */
 #define SPS_IOVEC_FLAG_EOB  0x2000  /* Generate end-of-block indication */
-#define SPS_IOVEC_FLAG_NWD  0x1000  /* notify when done */
-#define SPS_IOVEC_FLAG_CMD  0x0800  /* command descriptor */
-#define SPS_IOVEC_FLAG_LOCK  0x0400  /* pipe lock */
-#define SPS_IOVEC_FLAG_UNLOCK  0x0200  /* pipe unlock */
-#define SPS_IOVEC_FLAG_IMME 0x0100  /* immediate command descriptor */
-#define SPS_IOVEC_FLAG_NO_SUBMIT 0x0020  /* Do not submit descriptor to HW */
-#define SPS_IOVEC_FLAG_DEFAULT   0x0010  /* Use driver default */
-
-/* Maximum descriptor/iovec size */
-#define SPS_IOVEC_MAX_SIZE   (32 * 1024 - 1)  /* 32K-1 bytes due to HW limit */
+#define SPS_IOVEC_FLAG_NO_SUBMIT 0x0100  /* Do not submit descriptor to HW */
+#define SPS_IOVEC_FLAG_DEFAULT   0x0001  /* Use driver default */
 
 /* BAM device options flags */
 
@@ -103,13 +67,6 @@
 #define SPS_BAM_OPT_BAMDMA          (1UL << 2)
 /* BAM IRQ is registered for apps wakeup */
 #define SPS_BAM_OPT_IRQ_WAKEUP      (1UL << 3)
-/* Ignore external block pipe reset */
-#define SPS_BAM_NO_EXT_P_RST        (1UL << 4)
-/* Don't enable local clock gating */
-#define SPS_BAM_NO_LOCAL_CLK_GATING (1UL << 5)
-/* Don't enable writeback cancel*/
-#define SPS_BAM_CANCEL_WB           (1UL << 6)
-
 
 /* BAM device management flags */
 
@@ -141,9 +98,6 @@
 #define SPS_BAM_SEC_DO_NOT_CONFIG   0
 #define SPS_BAM_SEC_DO_CONFIG       0x0A434553
 
-/* BAM pipe selection */
-#define SPS_BAM_PIPE(n)             (1UL << (n))
-
 /* This enum specifies the operational mode for an SPS connection */
 enum sps_mode {
 	SPS_MODE_SRC = 0,  /* end point is the source (producer) */
@@ -168,19 +122,13 @@ enum sps_option {
 	SPS_O_OUT_OF_DESC = 0x00000008,/* Out of descriptors */
 	SPS_O_ERROR     = 0x00000010,  /* Error */
 	SPS_O_EOT       = 0x00000020,  /* End-of-transfer */
-	SPS_O_RST_ERROR = 0x00000040,  /* Pipe reset unsucessful error */
-	SPS_O_HRESP_ERROR = 0x00000080,/* Errorneous Hresponse by AHB MASTER */
 
 	/* Options to enable hardware features */
 	SPS_O_STREAMING = 0x00010000,  /* Enable streaming mode (no EOT) */
 	/* Use MTI/SETPEND instead of BAM interrupt */
 	SPS_O_IRQ_MTI   = 0x00020000,
-	/* NWD bit written with EOT for BAM2BAM producer pipe */
-	SPS_O_WRITE_NWD   = 0x00040000,
 
 	/* Options to enable software features */
-	/* Do not disable a pipe during disconnection */
-	SPS_O_NO_DISABLE      = 0x00800000,
 	/* Transfer operation should be polled */
 	SPS_O_POLL      = 0x01000000,
 	/* Disable queuing of transfer events for the connection end point */
@@ -197,8 +145,6 @@ enum sps_option {
 	SPS_O_AUTO_ENABLE = 0x20000000,
 	/* DISABLE endpoint synchronization for config/enable/disable */
 	SPS_O_NO_EP_SYNC = 0x40000000,
-	/* Allow partial polling duing IRQ mode */
-	SPS_O_HYBRID = 0x80000000,
 };
 
 /**
@@ -233,8 +179,6 @@ enum sps_event {
 	SPS_EVENT_FLOWOFF,	/* Graceful halt (idle) */
 	SPS_EVENT_INACTIVE,	/* Inactivity timeout */
 	SPS_EVENT_ERROR,	/* Error */
-	SPS_EVENT_RST_ERROR,    /* Pipe Reset unsuccessful */
-	SPS_EVENT_HRESP_ERROR,  /* Errorneous Hresponse by AHB Master*/
 	SPS_EVENT_MAX,
 };
 
@@ -289,21 +233,6 @@ enum sps_timer_mode {
 /*   SPS_TIMER_MODE_PERIODIC,    Not supported by hardware yet */
 };
 
-/* This enum indicates the cases when callback the user of BAM */
-enum sps_callback_case {
-	SPS_CALLBACK_BAM_ERROR_IRQ = 1,     /* BAM ERROR IRQ */
-	SPS_CALLBACK_BAM_HRESP_ERR_IRQ,	    /* Erroneous HResponse */
-	SPS_CALLBACK_BAM_TIMER_IRQ,	    /* Inactivity timer */
-};
-
-/*
- * This enum indicates the command type in a command element
- */
-enum sps_command_type {
-	SPS_WRITE_COMMAND = 0,
-	SPS_READ_COMMAND,
-};
-
 /**
  * This data type corresponds to the native I/O vector (BAM descriptor)
  * supported by SPS hardware
@@ -317,26 +246,6 @@ struct sps_iovec {
 	u32 addr;
 	u32 size:16;
 	u32 flags:16;
-};
-
-/**
- * This data type corresponds to the native Command Element
- * supported by SPS hardware
- *
- * @addr - register address.
- * @command - command type.
- * @data - for write command: content to be written into peripheral register.
- *         for read command: dest addr to write peripheral register value to.
- * @mask - register mask.
- * @reserved - for future usage.
- *
- */
-struct sps_command_element {
-	u32 addr:24;
-	u32 command:8;
-	u32 data;
-	u32 mask;
-	u32 reserved;
 };
 
 /*
@@ -372,9 +281,6 @@ struct sps_bam_sec_config_props {
  * @periph_phys_addr - Peripheral base physical address, for BAM-DMA only.
  * @periph_virt_addr - Peripheral base virtual address.
  * @periph_virt_size - Size for virtual mapping.
- *
- * @callback - callback function for BAM user.
- * @user - pointer to user data.
  *
  * @event_threshold - Pipe event threshold.
  * @desc_size - Size (bytes) of descriptor FIFO.
@@ -428,10 +334,6 @@ struct sps_bam_props {
 	u32 desc_mem_id;
 	u32 data_mem_id;
 
-	/* Feedback to BAM user */
-	void (*callback)(enum sps_callback_case, void *);
-	void *user;
-
 	/* Security properties */
 
 	u32 manage;
@@ -446,11 +348,6 @@ struct sps_bam_props {
 
 	u32 sec_config;
 	struct sps_bam_sec_config_props *p_sec_config_props;
-
-	/* Logging control */
-
-	bool constrained_logging;
-	u32 logging_number;
 };
 
 /**
@@ -464,7 +361,7 @@ struct sps_bam_props {
  */
 struct sps_mem_buffer {
 	void *base;
-	phys_addr_t phys_base;
+	u32 phys_base;
 	u32 size;
 	u32 min_size;
 };
@@ -501,7 +398,6 @@ struct sps_mem_buffer {
  * @data - Data FIFO (BAM-to-BAM mode only).
  *
  * @event_thresh - Pipe event threshold or derivative.
- * @lock_group - The lock group this pipe belongs to.
  *
  * @sps_reserved - Reserved word - client must not modify.
  *
@@ -522,8 +418,6 @@ struct sps_connect {
 	struct sps_mem_buffer data;
 
 	u32 event_thresh;
-
-	u32 lock_group;
 
 	/* SETPEND/MTI interrupt generation parameters */
 
@@ -681,7 +575,7 @@ struct sps_register_event {
  *
  */
 struct sps_transfer {
-	phys_addr_t iovec_phys;
+	u32 iovec_phys;
 	struct sps_iovec *iovec;
 	u32 iovec_count;
 	void *user;
@@ -720,7 +614,6 @@ struct sps_timer_result {
  * -------------------------------------------------------------------------*/
 struct sps_pipe;	/* Forward declaration */
 
-#ifdef CONFIG_SPS
 /**
  * Register a BAM device
  *
@@ -973,7 +866,7 @@ int sps_register_event(struct sps_pipe *h, struct sps_register_event *reg);
  * @return 0 on success, negative value on error
  *
  */
-int sps_transfer_one(struct sps_pipe *h, phys_addr_t addr, u32 size,
+int sps_transfer_one(struct sps_pipe *h, u32 addr, u32 size,
 		     void *user, u32 flags);
 
 /**
@@ -1273,215 +1166,5 @@ int sps_phy2h(u32 phys_addr, u32 *handle);
  */
 int sps_setup_bam2bam_fifo(struct sps_mem_buffer *mem_buffer,
 		  u32 addr, u32 size, int use_offset);
-
-/**
- * Get the number of unused descriptors in the descriptor FIFO
- * of a pipe
- *
- * @h - client context for SPS connection end point
- *
- * @desc_num - number of unused descriptors
- *
- * @return 0 on success, negative value on error
- *
- */
-int sps_get_unused_desc_num(struct sps_pipe *h, u32 *desc_num);
-
-/**
- * Get the debug info of BAM registers and descriptor FIFOs
- *
- * @dev - BAM device handle
- *
- * @option - debugging option
- *
- * @para - parameter used for an option (such as pipe combination)
- *
- * @tb_sel - testbus selection
- *
- * @desc_sel - selection of descriptors
- *
- * @return 0 on success, negative value on error
- *
- */
-int sps_get_bam_debug_info(u32 dev, u32 option, u32 para,
-		u32 tb_sel, u32 desc_sel);
-
-/**
- * Vote for or relinquish BAM DMA clock
- *
- * @clk_on - to turn on or turn off the clock
- *
- * @return 0 on success, negative value on error
- *
- */
-int sps_ctrl_bam_dma_clk(bool clk_on);
-#else
-static inline int sps_register_bam_device(const struct sps_bam_props
-			*bam_props, u32 *dev_handle)
-{
-	return -EPERM;
-}
-
-static inline int sps_deregister_bam_device(u32 dev_handle)
-{
-	return -EPERM;
-}
-
-static inline struct sps_pipe *sps_alloc_endpoint(void)
-{
-	return NULL;
-}
-
-static inline int sps_free_endpoint(struct sps_pipe *h)
-{
-	return -EPERM;
-}
-
-static inline int sps_get_config(struct sps_pipe *h, struct sps_connect *config)
-{
-	return -EPERM;
-}
-
-static inline int sps_alloc_mem(struct sps_pipe *h, enum sps_mem mem,
-		  struct sps_mem_buffer *mem_buffer)
-{
-	return -EPERM;
-}
-
-static inline int sps_free_mem(struct sps_pipe *h,
-				struct sps_mem_buffer *mem_buffer)
-{
-	return -EPERM;
-}
-
-static inline int sps_connect(struct sps_pipe *h, struct sps_connect *connect)
-{
-	return -EPERM;
-}
-
-static inline int sps_disconnect(struct sps_pipe *h)
-{
-	return -EPERM;
-}
-
-static inline int sps_register_event(struct sps_pipe *h,
-					struct sps_register_event *reg)
-{
-	return -EPERM;
-}
-
-static inline int sps_transfer_one(struct sps_pipe *h, phys_addr_t addr,
-					u32 size, void *user, u32 flags)
-{
-	return -EPERM;
-}
-
-static inline int sps_get_event(struct sps_pipe *h,
-				struct sps_event_notify *event)
-{
-	return -EPERM;
-}
-
-static inline int sps_get_iovec(struct sps_pipe *h, struct sps_iovec *iovec)
-{
-	return -EPERM;
-}
-
-static inline int sps_flow_on(struct sps_pipe *h)
-{
-	return -EPERM;
-}
-
-static inline int sps_flow_off(struct sps_pipe *h, enum sps_flow_off mode)
-{
-	return -EPERM;
-}
-
-static inline int sps_transfer(struct sps_pipe *h,
-				struct sps_transfer *transfer)
-{
-	return -EPERM;
-}
-
-static inline int sps_is_pipe_empty(struct sps_pipe *h, u32 *empty)
-{
-	return -EPERM;
-}
-
-static inline int sps_device_reset(u32 dev)
-{
-	return -EPERM;
-}
-
-static inline int sps_set_config(struct sps_pipe *h, struct sps_connect *config)
-{
-	return -EPERM;
-}
-
-static inline int sps_set_owner(struct sps_pipe *h, enum sps_owner owner,
-		  struct sps_satellite *connect)
-{
-	return -EPERM;
-}
-
-static inline int sps_get_free_count(struct sps_pipe *h, u32 *count)
-{
-	return -EPERM;
-}
-
-static inline int sps_alloc_dma_chan(const struct sps_alloc_dma_chan *alloc,
-		       struct sps_dma_chan *chan)
-{
-	return -EPERM;
-}
-
-static inline int sps_free_dma_chan(struct sps_dma_chan *chan)
-{
-	return -EPERM;
-}
-
-static inline u32 sps_dma_get_bam_handle(void)
-{
-	return 0;
-}
-
-static inline void sps_dma_free_bam_handle(u32 h)
-{
-}
-
-static inline int sps_timer_ctrl(struct sps_pipe *h,
-		   struct sps_timer_ctrl *timer_ctrl,
-		   struct sps_timer_result *timer_result)
-{
-	return -EPERM;
-}
-
-static inline int sps_phy2h(u32 phys_addr, u32 *handle)
-{
-	return -EPERM;
-}
-
-static inline int sps_setup_bam2bam_fifo(struct sps_mem_buffer *mem_buffer,
-		  u32 addr, u32 size, int use_offset)
-{
-	return -EPERM;
-}
-
-static inline int sps_get_unused_desc_num(struct sps_pipe *h, u32 *desc_num)
-{
-	return -EPERM;
-}
-
-static inline int sps_get_bam_debug_info(u32 dev, u32 option, u32 para,
-		u32 tb_sel, u32 desc_sel)
-{
-	return -EPERM;
-}
-
-static inline int sps_ctrl_bam_dma_clk(bool clk_on)
-{
-	return -EPERM;
-}
-#endif
 
 #endif /* _SPS_H_ */

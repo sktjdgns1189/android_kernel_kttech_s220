@@ -55,11 +55,10 @@
 #include <linux/pagemap.h>
 #include <linux/syscalls.h>
 #include <linux/signal.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/magic.h>
 #include <linux/pid.h>
 #include <linux/nsproxy.h>
-#include <linux/ptrace.h>
 
 #include <asm/futex.h>
 
@@ -315,29 +314,17 @@ again:
 #endif
 
 	lock_page(page_head);
-
-	/*
-	 * If page_head->mapping is NULL, then it cannot be a PageAnon
-	 * page; but it might be the ZERO_PAGE or in the gate area or
-	 * in a special mapping (all cases which we are happy to fail);
-	 * or it may have been a good file page when get_user_pages_fast
-	 * found it, but truncated or holepunched or subjected to
-	 * invalidate_complete_page2 before we got the page lock (also
-	 * cases which we are happy to fail).  And we hold a reference,
-	 * so refcount care in invalidate_complete_page's remove_mapping
-	 * prevents drop_caches from setting mapping to NULL beneath us.
-	 *
-	 * The case we do have to guard against is when memory pressure made
-	 * shmem_writepage move it from filecache to swapcache beneath us:
-	 * an unlikely race, but we do need to retry for page_head->mapping.
-	 */
 	if (!page_head->mapping) {
-		int shmem_swizzled = PageSwapCache(page_head);
 		unlock_page(page_head);
 		put_page(page_head);
-		if (shmem_swizzled)
-			goto again;
-		return -EFAULT;
+		/*
+		* ZERO_PAGE pages don't have a mapping. Avoid a busy loop
+		* trying to find one. RW mapping would have COW'd (and thus
+		* have a mapping) so this page is RO and won't ever change.
+		*/
+		if ((page_head == ZERO_PAGE(address)))
+			return -EFAULT;
+		goto again;
 	}
 
 	/*
@@ -867,7 +854,7 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *this)
 {
 	struct task_struct *new_owner;
 	struct futex_pi_state *pi_state = this->pi_state;
-	u32 uninitialized_var(curval), newval;
+	u32 curval, newval;
 
 	if (!pi_state)
 		return -EINVAL;
@@ -929,7 +916,7 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *this)
 
 static int unlock_futex_pi(u32 __user *uaddr, u32 uval)
 {
-	u32 uninitialized_var(oldval);
+	u32 oldval;
 
 	/*
 	 * There is no waiter, so we unlock the futex. The owner died
@@ -1256,13 +1243,6 @@ static int futex_requeue(u32 __user *uaddr1, unsigned int flags,
 
 	if (requeue_pi) {
 		/*
-		 * Requeue PI only works on two distinct uaddrs. This
-		 * check is only valid for private futexes. See below.
-		 */
-		if (uaddr1 == uaddr2)
-			return -EINVAL;
-
-		/*
 		 * requeue_pi requires a pi_state, try to allocate it now
 		 * without any locks in case it fails.
 		 */
@@ -1299,15 +1279,6 @@ retry:
 			    requeue_pi ? VERIFY_WRITE : VERIFY_READ);
 	if (unlikely(ret != 0))
 		goto out_put_key1;
-
-	/*
-	 * The check above which compares uaddrs is not sufficient for
-	 * shared futexes. We need to compare the keys:
-	 */
-	if (requeue_pi && match_futex(&key1, &key2)) {
-		ret = -EINVAL;
-		goto out_put_keys;
-	}
 
 	hb1 = hash_futex(&key1);
 	hb2 = hash_futex(&key2);
@@ -1605,7 +1576,7 @@ static int fixup_pi_state_owner(u32 __user *uaddr, struct futex_q *q,
 	u32 newtid = task_pid_vnr(newowner) | FUTEX_WAITERS;
 	struct futex_pi_state *pi_state = q->pi_state;
 	struct task_struct *oldowner = pi_state->owner;
-	u32 uval, uninitialized_var(curval), newval;
+	u32 uval, curval, newval;
 	int ret;
 
 	/* Owner died? */
@@ -1822,7 +1793,7 @@ static void futex_wait_queue_me(struct futex_hash_bucket *hb, struct futex_q *q,
  *
  * Returns:
  *  0 - uaddr contains val and hb has been locked
- * <1 - -EFAULT or -EWOULDBLOCK (uaddr does not contain val) and hb is unlocked
+ * <1 - -EFAULT or -EWOULDBLOCK (uaddr does not contain val) and hb is unlcoked
  */
 static int futex_wait_setup(u32 __user *uaddr, u32 val, unsigned int flags,
 			   struct futex_q *q, struct futex_hash_bucket **hb)
@@ -2324,15 +2295,6 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 	if (ret)
 		goto out_key2;
 
-	/*
-	 * The check above which compares uaddrs is not sufficient for
-	 * shared futexes. We need to compare the keys:
-	 */
-	if (match_futex(&q.key, &key2)) {
-		ret = -EINVAL;
-		goto out_put_keys;
-	}
-
 	/* Queue the futex_q, drop the hb lock, wait for wakeup. */
 	futex_wait_queue_me(hb, &q, to);
 
@@ -2469,30 +2431,39 @@ SYSCALL_DEFINE3(get_robust_list, int, pid,
 {
 	struct robust_list_head __user *head;
 	unsigned long ret;
-	struct task_struct *p;
+	const struct cred *cred = current_cred(), *pcred;
 
 	if (!futex_cmpxchg_enabled)
 		return -ENOSYS;
 
-	WARN_ONCE(1, "deprecated: get_robust_list will be deleted in 2013.\n");
-
-	rcu_read_lock();
-
-	ret = -ESRCH;
 	if (!pid)
-		p = current;
+		head = current->robust_list;
 	else {
+		struct task_struct *p;
+
+		ret = -ESRCH;
+		rcu_read_lock();
 		p = find_task_by_vpid(pid);
 		if (!p)
 			goto err_unlock;
+		ret = -EPERM;
+		pcred = __task_cred(p);
+		/* If victim is in different user_ns, then uids are not
+		   comparable, so we must have CAP_SYS_PTRACE */
+		if (cred->user->user_ns != pcred->user->user_ns) {
+			if (!ns_capable(pcred->user->user_ns, CAP_SYS_PTRACE))
+				goto err_unlock;
+			goto ok;
+		}
+		/* If victim is in same user_ns, then uids are comparable */
+		if (cred->euid != pcred->euid &&
+		    cred->euid != pcred->uid &&
+		    !ns_capable(pcred->user->user_ns, CAP_SYS_PTRACE))
+			goto err_unlock;
+ok:
+		head = p->robust_list;
+		rcu_read_unlock();
 	}
-
-	ret = -EPERM;
-	if (!ptrace_may_access(p, PTRACE_MODE_READ))
-		goto err_unlock;
-
-	head = p->robust_list;
-	rcu_read_unlock();
 
 	if (put_user(sizeof(*head), len_ptr))
 		return -EFAULT;
@@ -2510,7 +2481,7 @@ err_unlock:
  */
 int handle_futex_death(u32 __user *uaddr, struct task_struct *curr, int pi)
 {
-	u32 uval, uninitialized_var(nval), mval;
+	u32 uval, nval, mval;
 
 retry:
 	if (get_user(uval, uaddr))
@@ -2645,7 +2616,7 @@ void exit_robust_list(struct task_struct *curr)
 long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 		u32 __user *uaddr2, u32 val2, u32 val3)
 {
-	int cmd = op & FUTEX_CMD_MASK;
+	int ret = -ENOSYS, cmd = op & FUTEX_CMD_MASK;
 	unsigned int flags = 0;
 
 	if (!(op & FUTEX_PRIVATE_FLAG))
@@ -2658,44 +2629,49 @@ long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 	}
 
 	switch (cmd) {
-	case FUTEX_LOCK_PI:
-	case FUTEX_UNLOCK_PI:
-	case FUTEX_TRYLOCK_PI:
-	case FUTEX_WAIT_REQUEUE_PI:
-	case FUTEX_CMP_REQUEUE_PI:
-		if (!futex_cmpxchg_enabled)
-			return -ENOSYS;
-	}
-
-	switch (cmd) {
 	case FUTEX_WAIT:
 		val3 = FUTEX_BITSET_MATCH_ANY;
 	case FUTEX_WAIT_BITSET:
-		return futex_wait(uaddr, flags, val, timeout, val3);
+		ret = futex_wait(uaddr, flags, val, timeout, val3);
+		break;
 	case FUTEX_WAKE:
 		val3 = FUTEX_BITSET_MATCH_ANY;
 	case FUTEX_WAKE_BITSET:
-		return futex_wake(uaddr, flags, val, val3);
+		ret = futex_wake(uaddr, flags, val, val3);
+		break;
 	case FUTEX_REQUEUE:
-		return futex_requeue(uaddr, flags, uaddr2, val, val2, NULL, 0);
+		ret = futex_requeue(uaddr, flags, uaddr2, val, val2, NULL, 0);
+		break;
 	case FUTEX_CMP_REQUEUE:
-		return futex_requeue(uaddr, flags, uaddr2, val, val2, &val3, 0);
+		ret = futex_requeue(uaddr, flags, uaddr2, val, val2, &val3, 0);
+		break;
 	case FUTEX_WAKE_OP:
-		return futex_wake_op(uaddr, flags, uaddr2, val, val2, val3);
+		ret = futex_wake_op(uaddr, flags, uaddr2, val, val2, val3);
+		break;
 	case FUTEX_LOCK_PI:
-		return futex_lock_pi(uaddr, flags, val, timeout, 0);
+		if (futex_cmpxchg_enabled)
+			ret = futex_lock_pi(uaddr, flags, val, timeout, 0);
+		break;
 	case FUTEX_UNLOCK_PI:
-		return futex_unlock_pi(uaddr, flags);
+		if (futex_cmpxchg_enabled)
+			ret = futex_unlock_pi(uaddr, flags);
+		break;
 	case FUTEX_TRYLOCK_PI:
-		return futex_lock_pi(uaddr, flags, 0, timeout, 1);
+		if (futex_cmpxchg_enabled)
+			ret = futex_lock_pi(uaddr, flags, 0, timeout, 1);
+		break;
 	case FUTEX_WAIT_REQUEUE_PI:
 		val3 = FUTEX_BITSET_MATCH_ANY;
-		return futex_wait_requeue_pi(uaddr, flags, val, timeout, val3,
-					     uaddr2);
+		ret = futex_wait_requeue_pi(uaddr, flags, val, timeout, val3,
+					    uaddr2);
+		break;
 	case FUTEX_CMP_REQUEUE_PI:
-		return futex_requeue(uaddr, flags, uaddr2, val, val2, &val3, 1);
+		ret = futex_requeue(uaddr, flags, uaddr2, val, val2, &val3, 1);
+		break;
+	default:
+		ret = -ENOSYS;
 	}
-	return -ENOSYS;
+	return ret;
 }
 
 

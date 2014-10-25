@@ -1,6 +1,7 @@
 config BCMDHD
 	tristate "Broadcom 4329/30 wireless cards support"
 	depends on MMC
+	default m
 	---help---
 	  This module adds support for wireless adapters based on
 	  Broadcom 4329/30 chipset.
@@ -13,7 +14,7 @@ config BCMDHD
 config BCMDHD_FW_PATH
 	depends on BCMDHD
 	string "Firmware path"
-	default "/system/etc/firmware/fw_bcmdhd.bin"
+	default "/system/vendor/firmware/fw_bcmdhd.bin"
 	---help---
 	  Path to the firmware file.
 
@@ -32,16 +33,13 @@ config BCMDHD_WEXT
 	help
 	  Enables WEXT support
 
-config DHD_USE_STATIC_BUF
-	bool "Enable memory preallocation"
+config BCMDHD_OOB_GPIO
 	depends on BCMDHD
-	default n
-	---help---
-	  Use memory preallocated in platform
+	int "BCMDHD out-of-band GPIO number"
+	default 50
 
-config DHD_USE_SCHED_SCAN
-	bool "Use CFG80211 sched scan"
-	depends on BCMDHD && CFG80211
-	default n
-	---help---
-	  Use CFG80211 sched scan
+config BCM4330_MEM_PREALLOC
+	depends on BCMDHD
+	bool "use static memory for wifi driver"
+	default y
+

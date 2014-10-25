@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -142,5 +142,8 @@ int pm8058_micbias_enable(enum othc_micbias micbias,
 			enum othc_micbias_enable enable);
 int pm8058_othc_svideo_enable(enum othc_micbias micbias,
 			bool enable);
+#ifdef CONFIG_KTTECH_HEADSET
+int pm8058_get_headset_status(void);
+#endif
 
 #endif /* __PMIC8058_OTHC_H__ */

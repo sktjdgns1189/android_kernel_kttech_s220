@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,44 +19,11 @@
 #include <linux/memory.h>
 #include <mach/msm_memtypes.h>
 #include <mach/socinfo.h>
-#include <mach/msm_smem.h>
+#include "smd_private.h"
 
 #if defined(CONFIG_ARCH_MSM8960)
 #include "rpm_resources.h"
 #endif
-
-struct smem_ram_ptn {
-	char name[16];
-	unsigned start;
-	unsigned size;
-
-	/* RAM Partition attribute: READ_ONLY, READWRITE etc.  */
-	unsigned attr;
-
-	/* RAM Partition category: EBI0, EBI1, IRAM, IMEM */
-	unsigned category;
-
-	/* RAM Partition domain: APPS, MODEM, APPS & MODEM (SHARED) etc. */
-	unsigned domain;
-
-	/* RAM Partition type: system, bootloader, appsboot, apps etc. */
-	unsigned type;
-
-	/* reserved for future expansion without changing version number */
-	unsigned reserved2, reserved3, reserved4, reserved5;
-} __attribute__ ((__packed__));
-
-
-struct smem_ram_ptable {
-	#define _SMEM_RAM_PTABLE_MAGIC_1 0x9DA5E0A8
-	#define _SMEM_RAM_PTABLE_MAGIC_2 0xAF9EC4E2
-	unsigned magic[2];
-	unsigned version;
-	unsigned reserved1;
-	unsigned len;
-	struct smem_ram_ptn parts[32];
-	unsigned buf;
-} __attribute__ ((__packed__));
 
 static struct mem_region_t {
 	u64 start;
@@ -98,6 +65,136 @@ unsigned int get_num_populated_chipselects()
 	return num_chipselects;
 }
 #endif
+
+#if (defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_MSM8930)) \
+	&& defined(CONFIG_ENABLE_DMM)
+static int rpm_change_memory_state(int retention_mask,
+					int active_mask)
+{
+	int ret;
+	struct msm_rpm_iv_pair cmd[2];
+	struct msm_rpm_iv_pair status[2];
+
+	cmd[0].id = MSM_RPM_ID_DDR_DMM_0;
+	cmd[1].id = MSM_RPM_ID_DDR_DMM_1;
+
+	status[0].id = MSM_RPM_STATUS_ID_DDR_DMM_0;
+	status[1].id = MSM_RPM_STATUS_ID_DDR_DMM_1;
+
+	cmd[0].value = retention_mask;
+	cmd[1].value = active_mask;
+
+	ret = msm_rpm_set(MSM_RPM_CTX_SET_0, cmd, 2);
+	if (ret < 0) {
+		pr_err("rpm set failed");
+		return -EINVAL;
+	}
+
+	ret = msm_rpm_get_status(status, 2);
+	if (ret < 0) {
+		pr_err("rpm status failed");
+		return -EINVAL;
+	}
+	if (status[0].value == retention_mask &&
+		status[1].value == active_mask)
+		return 0;
+	else {
+		pr_err("rpm failed to change memory state");
+		return -EINVAL;
+	}
+}
+
+static int switch_memory_state(int mask, int new_state, int start_region,
+				int end_region)
+{
+	int final_mask = 0;
+	int i;
+
+	mutex_lock(&mem_regions_mutex);
+
+	for (i = start_region; i <= end_region; i++) {
+		if (new_state == mem_regions[i].state)
+		goto no_change;
+		/* All region states must be the same to change them */
+		if (mem_regions[i].state != mem_regions[start_region].state)
+			goto no_change;
+	}
+
+	if (new_state == STATE_POWER_DOWN)
+		final_mask = mem_regions_mask & mask;
+	else if (new_state == STATE_ACTIVE)
+		final_mask = mem_regions_mask | ~mask;
+		else
+		goto no_change;
+
+	pr_info("request memory %d to %d state switch (%d->%d)\n",
+		start_region, end_region, mem_regions[start_region].state,
+		new_state);
+	if (rpm_change_memory_state(final_mask, final_mask) == 0) {
+		for (i = start_region; i <= end_region; i++)
+			mem_regions[i].state = new_state;
+		mem_regions_mask = final_mask;
+
+		pr_info("completed memory %d to %d state switch to %d\n",
+			start_region, end_region, new_state);
+		mutex_unlock(&mem_regions_mutex);
+		return 0;
+	}
+
+	pr_err("failed memory %d to %d state switch (%d->%d)\n",
+		start_region, end_region, mem_regions[start_region].state,
+		new_state);
+
+no_change:
+	mutex_unlock(&mem_regions_mutex);
+	return -EINVAL;
+}
+#else
+
+static int switch_memory_state(int mask, int new_state, int start_region,
+				int end_region)
+{
+	return -EINVAL;
+}
+#endif
+
+/* The hotplug code expects the number of bytes that switched state successfully
+ * as the return value, so a return value of zero indicates an error
+*/
+int soc_change_memory_power(u64 start, u64 size, int change)
+{
+	int i = 0;
+	int mask = default_mask;
+	u64 end = start + size;
+	int start_region = 0;
+	int end_region = 0;
+
+	if (change != STATE_ACTIVE && change != STATE_POWER_DOWN) {
+		pr_info("requested state transition invalid\n");
+		return 0;
+	}
+	/* Find the memory regions that fall within the range */
+	for (i = 0; i < nr_mem_regions; i++) {
+		if (mem_regions[i].start <= start &&
+			mem_regions[i].start >=
+			mem_regions[start_region].start) {
+			start_region = i;
+		}
+		if (end <= mem_regions[i].start + mem_regions[i].size) {
+			end_region = i;
+			break;
+	}
+	}
+
+	/* Set the bitmask for each region in the range */
+	for (i = start_region; i <= end_region; i++)
+		mask &= ~(0x1 << i);
+
+	if (!switch_memory_state(mask, change, start_region, end_region))
+		return size;
+	else
+		return 0;
+}
 
 unsigned int get_num_memory_banks(void)
 {

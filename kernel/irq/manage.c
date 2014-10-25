@@ -282,7 +282,7 @@ setup_affinity(unsigned int irq, struct irq_desc *desc, struct cpumask *mask)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct cpumask *set = irq_default_affinity;
-	int ret, node = desc->irq_data.node;
+	int ret;
 
 	/* Excludes PER_CPU and NO_BALANCE interrupts */
 	if (!irq_can_set_affinity(irq))
@@ -301,13 +301,6 @@ setup_affinity(unsigned int irq, struct irq_desc *desc, struct cpumask *mask)
 	}
 
 	cpumask_and(mask, cpu_online_mask, set);
-	if (node != NUMA_NO_NODE) {
-		const struct cpumask *nodemask = cpumask_of_node(node);
-
-		/* make sure at least one of the cpus in nodemask is online */
-		if (cpumask_intersects(mask, nodemask))
-			cpumask_and(mask, mask, nodemask);
-	}
 	ret = chip->irq_set_affinity(&desc->irq_data, mask, false);
 	switch (ret) {
 	case IRQ_SET_MASK_OK:
@@ -473,9 +466,6 @@ static int set_irq_wake_real(unsigned int irq, unsigned int on)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
 	int ret = -ENXIO;
-
-	if (irq_desc_get_chip(desc)->flags &  IRQCHIP_SKIP_SET_WAKE)
-		return 0;
 
 	if (desc->irq_data.chip->irq_set_wake)
 		ret = desc->irq_data.chip->irq_set_wake(&desc->irq_data, on);
@@ -656,9 +646,8 @@ static irqreturn_t irq_nested_primary_handler(int irq, void *dev_id)
 
 static int irq_wait_for_interrupt(struct irqaction *action)
 {
-	set_current_state(TASK_INTERRUPTIBLE);
-
 	while (!kthread_should_stop()) {
+		set_current_state(TASK_INTERRUPTIBLE);
 
 		if (test_and_clear_bit(IRQTF_RUNTHREAD,
 				       &action->thread_flags)) {
@@ -666,9 +655,7 @@ static int irq_wait_for_interrupt(struct irqaction *action)
 			return 0;
 		}
 		schedule();
-		set_current_state(TASK_INTERRUPTIBLE);
 	}
-	__set_current_state(TASK_RUNNING);
 	return -1;
 }
 
@@ -678,7 +665,7 @@ static int irq_wait_for_interrupt(struct irqaction *action)
  * is marked MASKED.
  */
 static void irq_finalize_oneshot(struct irq_desc *desc,
-				 struct irqaction *action)
+				 struct irqaction *action, bool force)
 {
 	if (!(desc->istate & IRQS_ONESHOT))
 		return;
@@ -712,7 +699,7 @@ again:
 	 * we would clear the threads_oneshot bit of this thread which
 	 * was just set.
 	 */
-	if (test_bit(IRQTF_RUNTHREAD, &action->thread_flags))
+	if (!force && test_bit(IRQTF_RUNTHREAD, &action->thread_flags))
 		goto out_unlock;
 
 	desc->threads_oneshot &= ~action->thread_mask;
@@ -772,7 +759,7 @@ irq_forced_thread_fn(struct irq_desc *desc, struct irqaction *action)
 
 	local_bh_disable();
 	ret = action->thread_fn(action->irq, action->dev_id);
-	irq_finalize_oneshot(desc, action);
+	irq_finalize_oneshot(desc, action, false);
 	local_bh_enable();
 	return ret;
 }
@@ -788,15 +775,8 @@ static irqreturn_t irq_thread_fn(struct irq_desc *desc,
 	irqreturn_t ret;
 
 	ret = action->thread_fn(action->irq, action->dev_id);
-	irq_finalize_oneshot(desc, action);
+	irq_finalize_oneshot(desc, action, false);
 	return ret;
-}
-
-static void wake_threads_waitq(struct irq_desc *desc)
-{
-	if (atomic_dec_and_test(&desc->threads_active) &&
-	    waitqueue_active(&desc->wait_for_threads))
-		wake_up(&desc->wait_for_threads);
 }
 
 /*
@@ -811,41 +791,57 @@ static int irq_thread(void *data)
 	struct irq_desc *desc = irq_to_desc(action->irq);
 	irqreturn_t (*handler_fn)(struct irq_desc *desc,
 			struct irqaction *action);
+	int wake;
 
-	if (force_irqthreads && test_bit(IRQTF_FORCED_THREAD,
+	if (force_irqthreads & test_bit(IRQTF_FORCED_THREAD,
 					&action->thread_flags))
 		handler_fn = irq_forced_thread_fn;
 	else
 		handler_fn = irq_thread_fn;
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
-	current->irq_thread = 1;
+	current->irqaction = action;
 
 	while (!irq_wait_for_interrupt(action)) {
-		irqreturn_t action_ret;
 
 		irq_thread_check_affinity(desc, action);
 
-		action_ret = handler_fn(desc, action);
-		if (!noirqdebug)
-			note_interrupt(action->irq, desc, action_ret);
+		atomic_inc(&desc->threads_active);
 
-		wake_threads_waitq(desc);
+		raw_spin_lock_irq(&desc->lock);
+		if (unlikely(irqd_irq_disabled(&desc->irq_data))) {
+			/*
+			 * CHECKME: We might need a dedicated
+			 * IRQ_THREAD_PENDING flag here, which
+			 * retriggers the thread in check_irq_resend()
+			 * but AFAICT IRQS_PENDING should be fine as it
+			 * retriggers the interrupt itself --- tglx
+			 */
+			desc->istate |= IRQS_PENDING;
+			raw_spin_unlock_irq(&desc->lock);
+		} else {
+			irqreturn_t action_ret;
+
+			raw_spin_unlock_irq(&desc->lock);
+			action_ret = handler_fn(desc, action);
+			if (!noirqdebug)
+				note_interrupt(action->irq, desc, action_ret);
+		}
+
+		wake = atomic_dec_and_test(&desc->threads_active);
+
+		if (wake && waitqueue_active(&desc->wait_for_threads))
+			wake_up(&desc->wait_for_threads);
 	}
 
+	/* Prevent a stale desc->threads_oneshot */
+	irq_finalize_oneshot(desc, action, true);
+
 	/*
-	 * This is the regular exit path. __free_irq() is stopping the
-	 * thread via kthread_stop() after calling
-	 * synchronize_irq(). So neither IRQTF_RUNTHREAD nor the
-	 * oneshot mask bit can be set. We cannot verify that as we
-	 * cannot touch the oneshot mask at this point anymore as
-	 * __setup_irq() might have given out currents thread_mask
-	 * again.
-	 *
-	 * Clear irq_thread. Otherwise exit_irq_thread() would make
+	 * Clear irqaction. Otherwise exit_irq_thread() would make
 	 * fuzz about an active irq thread going into nirvana.
 	 */
-	current->irq_thread = 0;
+	current->irqaction = NULL;
 	return 0;
 }
 
@@ -856,28 +852,27 @@ void exit_irq_thread(void)
 {
 	struct task_struct *tsk = current;
 	struct irq_desc *desc;
-	struct irqaction *action;
 
-	if (!tsk->irq_thread)
+	if (!tsk->irqaction)
 		return;
-
-	action = kthread_data(tsk);
 
 	printk(KERN_ERR
 	       "exiting task \"%s\" (%d) is an active IRQ thread (irq %d)\n",
-	       tsk->comm ? tsk->comm : "", tsk->pid, action->irq);
+	       tsk->comm ? tsk->comm : "", tsk->pid, tsk->irqaction->irq);
 
-	desc = irq_to_desc(action->irq);
+	desc = irq_to_desc(tsk->irqaction->irq);
 
 	/*
-	 * If IRQTF_RUNTHREAD is set, we need to decrement
-	 * desc->threads_active and wake possible waiters.
+	 * Prevent a stale desc->threads_oneshot. Must be called
+	 * before setting the IRQTF_DIED flag.
 	 */
-	if (test_and_clear_bit(IRQTF_RUNTHREAD, &action->thread_flags))
-		wake_threads_waitq(desc);
+	irq_finalize_oneshot(desc, tsk->irqaction, true);
 
-	/* Prevent a stale desc->threads_oneshot */
-	irq_finalize_oneshot(desc, action);
+	/*
+	 * Set the THREAD DIED flag to prevent further wakeups of the
+	 * soon to be gone threaded handler.
+	 */
+	set_bit(IRQTF_DIED, &tsk->irqaction->flags);
 }
 
 static void irq_setup_forced_threading(struct irqaction *new)
@@ -1010,11 +1005,6 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 		/* add new interrupt at end of irq queue */
 		do {
-			/*
-			 * Or all existing action->thread_mask bits,
-			 * so we can find the next zero bit for this
-			 * new action.
-			 */
 			thread_mask |= old->thread_mask;
 			old_ptr = &old->next;
 			old = *old_ptr;
@@ -1023,41 +1013,14 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	}
 
 	/*
-	 * Setup the thread mask for this irqaction for ONESHOT. For
-	 * !ONESHOT irqs the thread mask is 0 so we can avoid a
-	 * conditional in irq_wake_thread().
+	 * Setup the thread mask for this irqaction. Unlikely to have
+	 * 32 resp 64 irqs sharing one line, but who knows.
 	 */
-	if (new->flags & IRQF_ONESHOT) {
-		/*
-		 * Unlikely to have 32 resp 64 irqs sharing one line,
-		 * but who knows.
-		 */
-		if (thread_mask == ~0UL) {
-			ret = -EBUSY;
-			goto out_mask;
-		}
-		/*
-		 * The thread_mask for the action is or'ed to
-		 * desc->thread_active to indicate that the
-		 * IRQF_ONESHOT thread handler has been woken, but not
-		 * yet finished. The bit is cleared when a thread
-		 * completes. When all threads of a shared interrupt
-		 * line have completed desc->threads_active becomes
-		 * zero and the interrupt line is unmasked. See
-		 * handle.c:irq_wake_thread() for further information.
-		 *
-		 * If no thread is woken by primary (hard irq context)
-		 * interrupt handlers, then desc->threads_active is
-		 * also checked for zero to unmask the irq line in the
-		 * affected hard irq flow handlers
-		 * (handle_[fasteoi|level]_irq).
-		 *
-		 * The new action gets the first zero bit of
-		 * thread_mask assigned. See the loop above which or's
-		 * all existing action->thread_mask bits.
-		 */
-		new->thread_mask = 1 << ffz(thread_mask);
+	if (new->flags & IRQF_ONESHOT && thread_mask == ~0UL) {
+		ret = -EBUSY;
+		goto out_mask;
 	}
+	new->thread_mask = 1 << ffz(thread_mask);
 
 	if (!shared) {
 		init_waitqueue_head(&desc->wait_for_threads);
@@ -1084,7 +1047,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			desc->istate |= IRQS_ONESHOT;
 
 		if (irq_settings_can_autoenable(desc))
-			irq_startup(desc, true);
+			irq_startup(desc);
 		else
 			/* Undo nested disables: */
 			desc->depth = 1;
@@ -1160,7 +1123,8 @@ out_thread:
 		struct task_struct *t = new->thread;
 
 		new->thread = NULL;
-		kthread_stop(t);
+		if (likely(!test_bit(IRQTF_DIED, &new->thread_flags)))
+			kthread_stop(t);
 		put_task_struct(t);
 	}
 out_mput:
@@ -1277,7 +1241,8 @@ static struct irqaction *__free_irq(unsigned int irq, void *dev_id)
 #endif
 
 	if (action->thread) {
-		kthread_stop(action->thread);
+		if (!test_bit(IRQTF_DIED, &action->thread_flags))
+			kthread_stop(action->thread);
 		put_task_struct(action->thread);
 	}
 
@@ -1354,7 +1319,7 @@ EXPORT_SYMBOL(free_irq);
  *	and to set up the interrupt handler in the right order.
  *
  *	If you want to set up a threaded irq handler for your device
- *	then you need to supply @handler and @thread_fn. @handler is
+ *	then you need to supply @handler and @thread_fn. @handler ist
  *	still called in hard interrupt context and has to check
  *	whether the interrupt originates from the device. If yes it
  *	needs to disable the interrupt on the device and return
@@ -1674,7 +1639,7 @@ int request_percpu_irq(unsigned int irq, irq_handler_t handler,
 		return -ENOMEM;
 
 	action->handler = handler;
-	action->flags = IRQF_PERCPU | IRQF_NO_SUSPEND;
+	action->flags = IRQF_PERCPU;
 	action->name = devname;
 	action->percpu_dev_id = dev_id;
 

@@ -35,10 +35,7 @@
 #ifndef __LINUX_REGULATOR_CONSUMER_H_
 #define __LINUX_REGULATOR_CONSUMER_H_
 
-#include <linux/compiler.h>
-
-struct device;
-struct notifier_block;
+#include <linux/device.h>
 
 /*
  * Regulator operating modes.
@@ -131,9 +128,6 @@ struct regulator_bulk_data {
 	struct regulator *consumer;
 	int min_uV;
 	int max_uV;
-
-	/* private: Internal use */
-	int ret;
 };
 
 #if defined(CONFIG_REGULATOR)
@@ -141,31 +135,23 @@ struct regulator_bulk_data {
 /* regulator get and put */
 struct regulator *__must_check regulator_get(struct device *dev,
 					     const char *id);
-struct regulator *__must_check devm_regulator_get(struct device *dev,
-					     const char *id);
 struct regulator *__must_check regulator_get_exclusive(struct device *dev,
 						       const char *id);
 void regulator_put(struct regulator *regulator);
-void devm_regulator_put(struct regulator *regulator);
 
 /* regulator output control and status */
 int regulator_enable(struct regulator *regulator);
 int regulator_disable(struct regulator *regulator);
 int regulator_force_disable(struct regulator *regulator);
 int regulator_is_enabled(struct regulator *regulator);
-int regulator_disable_deferred(struct regulator *regulator, int ms);
 
 int regulator_bulk_get(struct device *dev, int num_consumers,
 		       struct regulator_bulk_data *consumers);
-int devm_regulator_bulk_get(struct device *dev, int num_consumers,
-			    struct regulator_bulk_data *consumers);
 int regulator_bulk_enable(int num_consumers,
 			  struct regulator_bulk_data *consumers);
 int regulator_bulk_set_voltage(int num_consumers,
 			  struct regulator_bulk_data *consumers);
 int regulator_bulk_disable(int num_consumers,
-			   struct regulator_bulk_data *consumers);
-int regulator_bulk_force_disable(int num_consumers,
 			   struct regulator_bulk_data *consumers);
 void regulator_bulk_free(int num_consumers,
 			 struct regulator_bulk_data *consumers);
@@ -216,18 +202,7 @@ static inline struct regulator *__must_check regulator_get(struct device *dev,
 	 */
 	return NULL;
 }
-
-static inline struct regulator *__must_check
-devm_regulator_get(struct device *dev, const char *id)
-{
-	return NULL;
-}
-
 static inline void regulator_put(struct regulator *regulator)
-{
-}
-
-static inline void devm_regulator_put(struct regulator *regulator)
 {
 }
 
@@ -237,17 +212,6 @@ static inline int regulator_enable(struct regulator *regulator)
 }
 
 static inline int regulator_disable(struct regulator *regulator)
-{
-	return 0;
-}
-
-static inline int regulator_force_disable(struct regulator *regulator)
-{
-	return 0;
-}
-
-static inline int regulator_disable_deferred(struct regulator *regulator,
-					     int ms)
 {
 	return 0;
 }
@@ -264,12 +228,6 @@ static inline int regulator_bulk_get(struct device *dev,
 	return 0;
 }
 
-static inline int devm_regulator_bulk_get(struct device *dev, int num_consumers,
-					  struct regulator_bulk_data *consumers)
-{
-	return 0;
-}
-
 static inline int regulator_bulk_enable(int num_consumers,
 					struct regulator_bulk_data *consumers)
 {
@@ -278,12 +236,6 @@ static inline int regulator_bulk_enable(int num_consumers,
 
 static inline int regulator_bulk_disable(int num_consumers,
 					 struct regulator_bulk_data *consumers)
-{
-	return 0;
-}
-
-static inline int regulator_bulk_force_disable(int num_consumers,
-					struct regulator_bulk_data *consumers)
 {
 	return 0;
 }

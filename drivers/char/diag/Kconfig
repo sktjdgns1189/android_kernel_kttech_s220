@@ -30,12 +30,12 @@ config DIAG_SDIO_PIPE
 	 SDIO Transport Layer for DIAG Router
 endmenu
 
-menu "HSIC/SMUX support for DIAG"
+menu "HSIC support for DIAG"
 
-config DIAGFWD_BRIDGE_CODE
+config DIAG_HSIC_PIPE
 	depends on USB_QCOM_DIAG_BRIDGE
 	default y
-	bool "Enable QSC/9K DIAG traffic over SMUX/HSIC"
+	bool "Enable 9K DIAG traffic over HSIC"
 	help
-	 SMUX/HSIC Transport Layer for DIAG Router
+	 HSIC Transport Layer for DIAG Router
 endmenu

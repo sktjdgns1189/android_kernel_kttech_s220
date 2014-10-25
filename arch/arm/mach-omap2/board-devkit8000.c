@@ -41,13 +41,12 @@
 #include <asm/mach/flash.h>
 
 #include <plat/board.h>
-#include "common.h"
+#include <plat/common.h>
 #include <plat/gpmc.h>
 #include <plat/nand.h>
 #include <plat/usb.h>
 #include <video/omapdss.h>
 #include <video/omap-panel-generic-dpi.h>
-#include <video/omap-panel-dvi.h>
 
 #include <plat/mcspi.h>
 #include <linux/input/matrix_keypad.h>
@@ -59,6 +58,7 @@
 
 #include "mux.h"
 #include "hsmmc.h"
+#include "timer-gp.h"
 #include "common-board-devices.h"
 
 #define OMAP_DM9000_GPIO_IRQ	25
@@ -100,7 +100,6 @@ static struct omap2_hsmmc_info mmc[] = {
 		.mmc		= 1,
 		.caps		= MMC_CAP_4_BIT_DATA | MMC_CAP_8_BIT_DATA,
 		.gpio_wp	= 29,
-		.deferred	= true,
 	},
 	{}	/* Terminator */
 };
@@ -131,17 +130,16 @@ static void devkit8000_panel_disable_dvi(struct omap_dss_device *dssdev)
 		gpio_set_value_cansleep(dssdev->reset_gpio, 0);
 }
 
-static struct regulator_consumer_supply devkit8000_vmmc1_supply[] = {
-	REGULATOR_SUPPLY("vmmc", "omap_hsmmc.0"),
-};
+static struct regulator_consumer_supply devkit8000_vmmc1_supply =
+	REGULATOR_SUPPLY("vmmc", "omap_hsmmc.0");
+
 
 /* ads7846 on SPI */
-static struct regulator_consumer_supply devkit8000_vio_supply[] = {
-	REGULATOR_SUPPLY("vcc", "spi2.0"),
-};
+static struct regulator_consumer_supply devkit8000_vio_supply =
+	REGULATOR_SUPPLY("vcc", "spi2.0");
 
 static struct panel_generic_dpi_data lcd_panel = {
-	.name			= "innolux_at070tn83",
+	.name			= "generic",
 	.platform_enable        = devkit8000_panel_enable_lcd,
 	.platform_disable       = devkit8000_panel_disable_lcd,
 };
@@ -154,7 +152,8 @@ static struct omap_dss_device devkit8000_lcd_device = {
 	.phy.dpi.data_lines     = 24,
 };
 
-static struct panel_dvi_platform_data dvi_panel = {
+static struct panel_generic_dpi_data dvi_panel = {
+	.name			= "generic",
 	.platform_enable        = devkit8000_panel_enable_dvi,
 	.platform_disable       = devkit8000_panel_disable_dvi,
 };
@@ -162,7 +161,7 @@ static struct panel_dvi_platform_data dvi_panel = {
 static struct omap_dss_device devkit8000_dvi_device = {
 	.name                   = "dvi",
 	.type                   = OMAP_DISPLAY_TYPE_DPI,
-	.driver_name            = "dvi",
+	.driver_name            = "generic_dpi_panel",
 	.data			= &dvi_panel,
 	.phy.dpi.data_lines     = 24,
 };
@@ -227,9 +226,10 @@ static int devkit8000_twl_gpio_setup(struct device *dev,
 {
 	int ret;
 
+	omap_mux_init_gpio(29, OMAP_PIN_INPUT);
 	/* gpio + 0 is "mmc0_cd" (input/IRQ) */
 	mmc[0].gpio_cd = gpio + 0;
-	omap_hsmmc_late_init(mmc);
+	omap2_hsmmc_init(mmc);
 
 	/* TWL4030_GPIO_MAX + 1 == ledB, PMU_STAT (out, active low LED) */
 	gpio_leds[2].gpio = gpio + TWL4030_GPIO_MAX + 1;
@@ -267,7 +267,7 @@ static struct twl4030_gpio_platform_data devkit8000_gpio_data = {
 
 static struct regulator_consumer_supply devkit8000_vpll1_supplies[] = {
 	REGULATOR_SUPPLY("vdds_dsi", "omapdss"),
-	REGULATOR_SUPPLY("vdds_dsi", "omapdss_dsi.0"),
+	REGULATOR_SUPPLY("vdds_dsi", "omapdss_dsi1"),
 };
 
 /* VMMC1 for MMC1 pins CMD, CLK, DAT0..DAT3 (20 mA, plus card == max 220 mA) */
@@ -281,8 +281,8 @@ static struct regulator_init_data devkit8000_vmmc1 = {
 					| REGULATOR_CHANGE_MODE
 					| REGULATOR_CHANGE_STATUS,
 	},
-	.num_consumer_supplies	= ARRAY_SIZE(devkit8000_vmmc1_supply),
-	.consumer_supplies	= devkit8000_vmmc1_supply,
+	.num_consumer_supplies	= 1,
+	.consumer_supplies	= &devkit8000_vmmc1_supply,
 };
 
 /* VPLL1 for digital video outputs */
@@ -310,8 +310,8 @@ static struct regulator_init_data devkit8000_vio = {
 		.valid_ops_mask         = REGULATOR_CHANGE_MODE
 			| REGULATOR_CHANGE_STATUS,
 	},
-	.num_consumer_supplies  = ARRAY_SIZE(devkit8000_vio_supply),
-	.consumer_supplies      = devkit8000_vio_supply,
+	.num_consumer_supplies  = 1,
+	.consumer_supplies      = &devkit8000_vio_supply,
 };
 
 static struct twl4030_platform_data devkit8000_twldata = {
@@ -397,6 +397,22 @@ static struct platform_device keys_gpio = {
 	},
 };
 
+
+static void __init devkit8000_init_early(void)
+{
+	omap2_init_common_infrastructure();
+	omap2_init_common_devices(mt46h32m32lf6_sdrc_params,
+				  mt46h32m32lf6_sdrc_params);
+}
+
+static void __init devkit8000_init_irq(void)
+{
+	omap_init_irq();
+#ifdef CONFIG_OMAP_32K_TIMER
+	omap2_gp_clockevent_set_gptimer(12);
+#endif
+}
+
 #define OMAP_DM9000_BASE	0x2c000000
 
 static struct resource omap_dm9000_resources[] = {
@@ -411,6 +427,7 @@ static struct resource omap_dm9000_resources[] = {
 		.flags		= IORESOURCE_MEM,
 	},
 	[2] = {
+		.start		= OMAP_GPIO_IRQ(OMAP_DM9000_GPIO_IRQ),
 		.flags		= IORESOURCE_IRQ | IRQF_TRIGGER_LOW,
 	},
 };
@@ -631,14 +648,10 @@ static void __init devkit8000_init(void)
 {
 	omap3_mux_init(board_mux, OMAP_PACKAGE_CUS);
 	omap_serial_init();
-	omap_sdrc_init(mt46h32m32lf6_sdrc_params,
-				  mt46h32m32lf6_sdrc_params);
 
 	omap_dm9000_init();
 
-	omap_hsmmc_init(mmc);
 	devkit8000_i2c_init();
-	omap_dm9000_resources[2].start = gpio_to_irq(OMAP_DM9000_GPIO_IRQ);
 	platform_add_devices(devkit8000_devices,
 			ARRAY_SIZE(devkit8000_devices));
 
@@ -657,13 +670,11 @@ static void __init devkit8000_init(void)
 }
 
 MACHINE_START(DEVKIT8000, "OMAP3 Devkit8000")
-	.atag_offset	= 0x100,
+	.boot_params	= 0x80000100,
 	.reserve	= omap_reserve,
 	.map_io		= omap3_map_io,
-	.init_early	= omap35xx_init_early,
-	.init_irq	= omap3_init_irq,
-	.handle_irq	= omap3_intc_handle_irq,
+	.init_early	= devkit8000_init_early,
+	.init_irq	= devkit8000_init_irq,
 	.init_machine	= devkit8000_init,
-	.timer		= &omap3_secure_timer,
-	.restart	= omap_prcm_restart,
+	.timer		= &omap_timer,
 MACHINE_END

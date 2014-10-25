@@ -26,6 +26,9 @@
 #include "debugfs.h"
 #include "wext-compat.h"
 #include "ethtool.h"
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+#include <linux/vmalloc.h>
+#endif
 
 /* name for sysfs, %d is appended */
 #define PHY_NAME "phy"
@@ -340,8 +343,11 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 	WARN_ON(ops->join_mesh && !ops->leave_mesh);
 
 	alloc_size = sizeof(*rdev) + sizeof_priv;
-
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330 // Try to memory allocate replaced because memory couldn not reallocate wiphy device...
+	rdev = vzalloc(alloc_size);
+#else
 	rdev = kzalloc(alloc_size, GFP_KERNEL);
+#endif
 	if (!rdev)
 		return NULL;
 
@@ -355,7 +361,11 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 		wiphy_counter--;
 		mutex_unlock(&cfg80211_mutex);
 		/* ugh, wrapped! */
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+        vfree(rdev);	
+#else
 		kfree(rdev);
+#endif
 		return NULL;
 	}
 
@@ -392,7 +402,11 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 				   &rdev->rfkill_ops, rdev);
 
 	if (!rdev->rfkill) {
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+		vfree(rdev);		
+#else
 		kfree(rdev);
+#endif
 		return NULL;
 	}
 
@@ -488,12 +502,8 @@ int wiphy_register(struct wiphy *wiphy)
 	int i;
 	u16 ifmodes = wiphy->interface_modes;
 
-	if (WARN_ON((wiphy->wowlan.flags & WIPHY_WOWLAN_GTK_REKEY_FAILURE) &&
-		    !(wiphy->wowlan.flags & WIPHY_WOWLAN_SUPPORTS_GTK_REKEY)))
-		return -EINVAL;
-
 	if (WARN_ON(wiphy->ap_sme_capa &&
-		    !(wiphy->flags & WIPHY_FLAG_HAVE_AP_SME)))
+		!(wiphy->flags & WIPHY_FLAG_HAVE_AP_SME)))
 		return -EINVAL;
 
 	if (WARN_ON(wiphy->addresses && !wiphy->n_addresses))
@@ -503,11 +513,6 @@ int wiphy_register(struct wiphy *wiphy)
 		    !is_zero_ether_addr(wiphy->perm_addr) &&
 		    memcmp(wiphy->perm_addr, wiphy->addresses[0].addr,
 			   ETH_ALEN)))
-		return -EINVAL;
-
-	if (WARN_ON(wiphy->max_acl_mac_addrs &&
-		    (!(wiphy->flags & WIPHY_FLAG_HAVE_AP_SME) ||
-		     !rdev->ops->set_mac_acl)))
 		return -EINVAL;
 
 	if (wiphy->addresses)
@@ -591,7 +596,7 @@ int wiphy_register(struct wiphy *wiphy)
 	}
 
 	/* set up regulatory info */
-	regulatory_update(wiphy, NL80211_REGDOM_SET_BY_CORE);
+	wiphy_update_regulatory(wiphy, NL80211_REGDOM_SET_BY_CORE);
 
 	list_add_rcu(&rdev->list, &cfg80211_rdev_list);
 	cfg80211_rdev_list_generation++;
@@ -625,9 +630,6 @@ int wiphy_register(struct wiphy *wiphy)
 	if (res)
 		goto out_rm_dev;
 
-	rtnl_lock();
-	rdev->wiphy.registered = true;
-	rtnl_unlock();
 	return 0;
 
 out_rm_dev:
@@ -658,10 +660,6 @@ EXPORT_SYMBOL(wiphy_rfkill_stop_polling);
 void wiphy_unregister(struct wiphy *wiphy)
 {
 	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
-
-	rtnl_lock();
-	rdev->wiphy.registered = false;
-	rtnl_unlock();
 
 	rfkill_unregister(rdev->rfkill);
 
@@ -726,7 +724,11 @@ void cfg80211_dev_free(struct cfg80211_registered_device *rdev)
 	list_for_each_entry_safe(scan, tmp, &rdev->bss_list, list)
 		cfg80211_put_bss(&scan->pub);
 	cfg80211_rdev_free_wowlan(rdev);
+#ifdef CONFIG_KTTECH_WIRELESS_BCM4330
+    vfree(rdev);	
+#else
 	kfree(rdev);
+#endif
 }
 
 void wiphy_free(struct wiphy *wiphy)
@@ -938,8 +940,7 @@ static int cfg80211_netdev_notifier_call(struct notifier_block * nb,
 		 * Configure power management to the driver here so that its
 		 * correctly set also after interface type changes etc.
 		 */
-		if ((wdev->iftype == NL80211_IFTYPE_STATION ||
-		     wdev->iftype == NL80211_IFTYPE_P2P_CLIENT) &&
+		if (wdev->iftype == NL80211_IFTYPE_STATION &&
 		    rdev->ops->set_power_mgmt)
 			if (rdev->ops->set_power_mgmt(wdev->wiphy, dev,
 						      wdev->ps,

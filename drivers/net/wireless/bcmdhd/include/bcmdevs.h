@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmdevs.h 327007 2012-04-11 22:45:50Z $
+ * $Id: bcmdevs.h 309997 2012-01-21 06:26:00Z $
  */
 
 #ifndef	_BCMDEVS_H
@@ -159,12 +159,9 @@
 #define BCM94313HMG_SSID_VEN1	0x0609
 
 
-#define BCM4335_D11AC_ID	0x43ae
-#define BCM4335_D11AC2G_ID	0x43af
-#define BCM4335_D11AC5G_ID	0x43b0
-#define BCM4352_D11AC_ID	0x43b1		
-#define BCM4352_D11AC2G_ID	0x43b2		
-#define BCM4352_D11AC5G_ID	0x43b3		
+#define BCM4335_D11AC_ID	0x43a9
+#define BCM4335_D11AC2G_ID	0x43aa
+#define BCM4335_D11AC5G_ID	0x43ab
 
 #define	BCMGPRS_UART_ID		0x4333		
 #define	BCMGPRS2_UART_ID	0x4344		
@@ -261,8 +258,6 @@
 #define	BCM43242_CHIP_ID	43242		
 #define BCM4334_CHIP_ID		0x4334		
 #define BCM4360_CHIP_ID		0x4360          
-#define BCM4352_CHIP_ID		0x4352          
-#define BCM43526_CHIP_ID	0xAA06
 
 #define BCM4335_CHIP_ID         0x4335
 
@@ -340,7 +335,6 @@
 #define	BFL_PACTRL		0x00000002  
 #define BFL_AIRLINEMODE	0x00000004  
 #define	BFL_ADCDIV		0x00000008  
-#define	BFL_RFPLL	        0x00000008  
 #define	BFL_ENETROBO		0x00000010  
 #define	BFL_NOPLLDOWN		0x00000020  
 #define	BFL_CCKHIPWR		0x00000040  

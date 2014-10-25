@@ -31,13 +31,14 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
-#include <mach/pxa25x.h>
 #include <mach/audio.h>
 #include <mach/palmtc.h>
 #include <mach/mmc.h>
 #include <mach/pxafb.h>
+#include <mach/mfp-pxa25x.h>
 #include <mach/irda.h>
 #include <mach/udc.h>
+#include <mach/pxa2xx-regs.h>
 
 #include "generic.h"
 #include "devices.h"
@@ -338,7 +339,7 @@ static inline void palmtc_mkp_init(void) {}
 /******************************************************************************
  * UDC
  ******************************************************************************/
-#if defined(CONFIG_USB_PXA25X)||defined(CONFIG_USB_PXA25X_MODULE)
+#if defined(CONFIG_USB_GADGET_PXA25X)||defined(CONFIG_USB_GADGET_PXA25X_MODULE)
 static struct gpio_vbus_mach_info palmtc_udc_info = {
 	.gpio_vbus		= GPIO_NR_PALMTC_USB_DETECT_N,
 	.gpio_vbus_inverted	= 1,
@@ -537,12 +538,9 @@ static void __init palmtc_init(void)
 };
 
 MACHINE_START(PALMTC, "Palm Tungsten|C")
-	.atag_offset 	= 0x100,
+	.boot_params 	= 0xa0000100,
 	.map_io		= pxa25x_map_io,
-	.nr_irqs	= PXA_NR_IRQS,
 	.init_irq	= pxa25x_init_irq,
-	.handle_irq	= pxa25x_handle_irq,
 	.timer		= &pxa_timer,
-	.init_machine	= palmtc_init,
-	.restart	= pxa_restart,
+	.init_machine	= palmtc_init
 MACHINE_END

@@ -12,8 +12,7 @@
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * the Free Software Foundation; only version 2 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -168,7 +167,7 @@ static int bf5xx_pcm_open(struct snd_pcm_substream *substream)
 
 	snd_soc_set_runtime_hwparams(substream, &bf5xx_pcm_hardware);
 
-	ret = snd_pcm_hw_constraint_integer(runtime,
+	ret = snd_pcm_hw_constraint_integer(runtime, \
 			SNDRV_PCM_HW_PARAM_PERIODS);
 	if (ret < 0)
 		goto out;
@@ -257,9 +256,10 @@ static void bf5xx_pcm_free_dma_buffers(struct snd_pcm *pcm)
 
 static u64 bf5xx_pcm_dmamask = DMA_BIT_MASK(32);
 
-static int bf5xx_pcm_i2s_new(struct snd_soc_pcm_runtime *rtd)
+int bf5xx_pcm_i2s_new(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_card *card = rtd->card->snd_card;
+	struct snd_soc_dai *dai = rtd->cpu_dai;
 	struct snd_pcm *pcm = rtd->pcm;
 	int ret = 0;
 
@@ -269,14 +269,14 @@ static int bf5xx_pcm_i2s_new(struct snd_soc_pcm_runtime *rtd)
 	if (!card->dev->coherent_dma_mask)
 		card->dev->coherent_dma_mask = DMA_BIT_MASK(32);
 
-	if (pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream) {
+	if (dai->driver->playback.channels_min) {
 		ret = bf5xx_pcm_preallocate_dma_buffer(pcm,
 			SNDRV_PCM_STREAM_PLAYBACK);
 		if (ret)
 			goto out;
 	}
 
-	if (pcm->streams[SNDRV_PCM_STREAM_CAPTURE].substream) {
+	if (dai->driver->capture.channels_min) {
 		ret = bf5xx_pcm_preallocate_dma_buffer(pcm,
 			SNDRV_PCM_STREAM_CAPTURE);
 		if (ret)
@@ -305,16 +305,26 @@ static int __devexit bfin_i2s_soc_platform_remove(struct platform_device *pdev)
 
 static struct platform_driver bfin_i2s_pcm_driver = {
 	.driver = {
-		.name = "bfin-i2s-pcm-audio",
-		.owner = THIS_MODULE,
+			.name = "bfin-i2s-pcm-audio",
+			.owner = THIS_MODULE,
 	},
 
 	.probe = bfin_i2s_soc_platform_probe,
 	.remove = __devexit_p(bfin_i2s_soc_platform_remove),
 };
 
-module_platform_driver(bfin_i2s_pcm_driver);
+static int __init snd_bfin_i2s_pcm_init(void)
+{
+	return platform_driver_register(&bfin_i2s_pcm_driver);
+}
+module_init(snd_bfin_i2s_pcm_init);
+
+static void __exit snd_bfin_i2s_pcm_exit(void)
+{
+	platform_driver_unregister(&bfin_i2s_pcm_driver);
+}
+module_exit(snd_bfin_i2s_pcm_exit);
 
 MODULE_AUTHOR("Cliff Cai");
 MODULE_DESCRIPTION("ADI Blackfin I2S PCM DMA module");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");

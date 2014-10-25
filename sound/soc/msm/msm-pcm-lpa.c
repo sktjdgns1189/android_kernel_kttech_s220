@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,11 +24,10 @@
 #include <sound/pcm.h>
 #include <sound/initval.h>
 #include <sound/control.h>
-#include <sound/pcm_params.h>
 #include <asm/dma.h>
 #include <linux/dma-mapping.h>
-
-#include <sound/compress_params.h>
+#include <linux/android_pmem.h>
+#include <sound/snd_compress_params.h>
 #include <sound/compress_offload.h>
 #include <sound/compress_driver.h>
 #include <sound/timer.h>
@@ -110,16 +109,12 @@ static void event_handler(uint32_t opcode,
 			break;
 		} else
 			atomic_set(&prtd->pending_buffer, 0);
-
-		buf = prtd->audio_client->port[IN].buf;
-		if (runtime->status->hw_ptr >= runtime->control->appl_ptr) {
-			memset((void *)buf[0].data +
-				(prtd->out_head * prtd->pcm_count),
-				0, prtd->pcm_count);
-		}
+		if (runtime->status->hw_ptr >= runtime->control->appl_ptr)
+			break;
 		pr_debug("%s:writing %d bytes of buffer to dsp 2\n",
 				__func__, prtd->pcm_count);
 
+		buf = prtd->audio_client->port[IN].buf;
 		param.paddr = (unsigned long)buf[0].phys
 				+ (prtd->out_head * prtd->pcm_count);
 		param.len = prtd->pcm_count;
@@ -234,12 +229,10 @@ static int msm_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 		pr_debug("SNDRV_PCM_TRIGGER_START\n");
 		q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 		atomic_set(&prtd->start, 1);
-		atomic_set(&prtd->stop, 0);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 		pr_debug("SNDRV_PCM_TRIGGER_STOP\n");
 		atomic_set(&prtd->start, 0);
-		atomic_set(&prtd->stop, 1);
 		if (substream->stream != SNDRV_PCM_STREAM_PLAYBACK)
 			break;
 		break;
@@ -290,7 +283,6 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 		kfree(prtd);
 		return -ENOMEM;
 	}
-	prtd->audio_client->perf_mode = false;
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		ret = q6asm_open_write(prtd->audio_client, FORMAT_LINEAR_PCM);
 		if (ret < 0) {
@@ -313,7 +305,6 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	pr_debug("%s: session ID %d\n", __func__, prtd->audio_client->session);
 	prtd->session_id = prtd->audio_client->session;
 	msm_pcm_routing_reg_phy_stream(soc_prtd->dai_link->be_id,
-		prtd->audio_client->perf_mode,
 		prtd->session_id, substream->stream);
 
 	ret = snd_pcm_hw_constraint_list(runtime, 0,
@@ -329,10 +320,9 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 
 	prtd->dsp_cnt = 0;
 	atomic_set(&prtd->pending_buffer, 1);
-	atomic_set(&prtd->stop, 1);
 	runtime->private_data = prtd;
 	lpa_audio.prtd = prtd;
-	lpa_set_volume(0);
+	lpa_set_volume(lpa_audio.volume);
 	ret = q6asm_set_softpause(lpa_audio.prtd->audio_client, &softpause);
 	if (ret < 0)
 		pr_err("%s: Send SoftPause Param failed ret=%d\n",
@@ -373,8 +363,7 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	To issue EOS to dsp, we need to be run state otherwise
 	EOS is not honored.
 	*/
-	if (msm_routing_check_backend_enabled(soc_prtd->dai_link->be_id) &&
-		(!atomic_read(&prtd->stop))) {
+	if (msm_routing_check_backend_enabled(soc_prtd->dai_link->be_id)) {
 		rc = q6asm_run(prtd->audio_client, 0, 0, 0);
 		atomic_set(&prtd->pending_buffer, 0);
 		prtd->cmd_ack = 0;
@@ -382,7 +371,7 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 		pr_debug("%s\n", __func__);
 		rc = wait_event_timeout(the_locks.eos_wait,
 			prtd->cmd_ack, 5 * HZ);
-		if (!rc)
+		if (rc < 0)
 			pr_err("EOS cmd timeout\n");
 		prtd->pcm_irq_pos = 0;
 	}
@@ -394,7 +383,6 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	q6asm_audio_client_buf_free_contiguous(dir,
 				prtd->audio_client);
 
-	atomic_set(&prtd->stop, 1);
 	pr_debug("%s\n", __func__);
 	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
 		SNDRV_PCM_STREAM_PLAYBACK);
@@ -471,8 +459,8 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 		return -EPERM;
 	ret = q6asm_audio_client_buf_alloc_contiguous(dir,
 			prtd->audio_client,
-			params_period_bytes(params),
-			params_periods(params));
+			runtime->hw.period_bytes_min,
+			runtime->hw.periods_max);
 	if (ret < 0) {
 		pr_err("Audio Start: Buffer Allocation failed \
 					rc = %d\n", ret);
@@ -489,7 +477,7 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 	dma_buf->private_data = NULL;
 	dma_buf->area = buf[0].data;
 	dma_buf->addr =  buf[0].phys;
-	dma_buf->bytes = params_period_bytes(params) * params_periods(params);
+	dma_buf->bytes = runtime->hw.buffer_bytes_max;
 	if (!dma_buf->area)
 		return -ENOMEM;
 
@@ -512,18 +500,22 @@ static int msm_pcm_ioctl(struct snd_pcm_substream *substream,
 		pr_debug("SNDRV_COMPRESS_TSTAMP\n");
 
 		memset(&tstamp, 0x0, sizeof(struct snd_compr_tstamp));
-		rc = q6asm_get_session_time(prtd->audio_client, &timestamp);
-		if (rc < 0) {
-			pr_err("%s: fail to get session tstamp\n", __func__);
-			return rc;
+		timestamp = q6asm_get_session_time(prtd->audio_client);
+		if (timestamp < 0) {
+			pr_err("%s: Get Session Time return value =%lld\n",
+				__func__, timestamp);
+			return -EAGAIN;
 		}
 		temp = (timestamp * 2 * runtime->channels);
 		temp = temp * (runtime->rate/1000);
 		temp = div_u64(temp, 1000);
 		tstamp.sampling_rate = runtime->rate;
+		tstamp.rendered = (size_t)(temp & 0xFFFFFFFF);
+		tstamp.decoded  = (size_t)((temp >> 32) & 0xFFFFFFFF);
 		tstamp.timestamp = timestamp;
-		pr_debug("%s: bytes_consumed:"
-			"timestamp = %lld,\n",__func__,
+		pr_debug("%s: bytes_consumed:lsb = %d, msb = %d,"
+			"timestamp = %lld,\n",
+			__func__, tstamp.rendered, tstamp.decoded,
 			tstamp.timestamp);
 		if (copy_to_user((void *) arg, &tstamp,
 			sizeof(struct snd_compr_tstamp)))
@@ -537,7 +529,7 @@ static int msm_pcm_ioctl(struct snd_pcm_substream *substream,
 			pr_err("%s: flush cmd failed rc=%d\n", __func__, rc);
 		rc = wait_event_timeout(the_locks.eos_wait,
 			prtd->cmd_ack, 5 * HZ);
-		if (!rc)
+		if (rc < 0)
 			pr_err("Flush cmd timeout\n");
 		prtd->pcm_irq_pos = 0;
 		break;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -51,10 +51,6 @@ enum pm8xxx_adc_channels {
 	CHANNEL_MPP_1,
 	CHANNEL_MPP_2,
 	CHANNEL_BATT_THERM,
-	/* PM8018 ADC Arbiter uses a single channel on AMUX8
-	 * to read either Batt_id or Batt_therm.
-	 */
-	CHANNEL_BATT_ID_THERM = CHANNEL_BATT_THERM,
 	CHANNEL_BATT_ID,
 	CHANNEL_USBIN,
 	CHANNEL_DIE_TEMP,

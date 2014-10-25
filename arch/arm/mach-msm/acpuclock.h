@@ -2,7 +2,7 @@
  * MSM architecture CPU clock driver header
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -31,11 +31,12 @@ enum setrate_reason {
 };
 
 /**
- * struct acpuclk_pdata - Platform data for acpuclk
+ * struct acpuclk_soc_data - SoC data for acpuclk_init()
  */
-struct acpuclk_pdata {
+struct acpuclk_soc_data {
 	unsigned long max_speed_delta_khz;
 	unsigned int max_axi_khz;
+	int (*init)(struct acpuclk_soc_data *);
 };
 
 /**
@@ -90,4 +91,23 @@ unsigned long acpuclk_wait_for_irq(void);
  */
 void acpuclk_register(struct acpuclk_data *data);
 
-#endif /*__ARCH_ARM_MACH_MSM_ACPUCLOCK_H*/
+/**
+ * acpuclk_init() - acpuclock driver initialization function
+ *
+ * Return 0 for success.
+ */
+int acpuclk_init(struct acpuclk_soc_data *);
+
+/* SoC-specific acpuclock initialization functions. */
+extern struct acpuclk_soc_data acpuclk_7x27_soc_data;
+extern struct acpuclk_soc_data acpuclk_7x27a_soc_data;
+extern struct acpuclk_soc_data acpuclk_7x27aa_soc_data;
+extern struct acpuclk_soc_data acpuclk_7x30_soc_data;
+extern struct acpuclk_soc_data acpuclk_8x50_soc_data;
+extern struct acpuclk_soc_data acpuclk_8x60_soc_data;
+extern struct acpuclk_soc_data acpuclk_8960_soc_data;
+extern struct acpuclk_soc_data acpuclk_9xxx_soc_data;
+extern struct acpuclk_soc_data acpuclk_9615_soc_data;
+extern struct acpuclk_soc_data acpuclk_8930_soc_data;
+
+#endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,17 +32,19 @@
 #include <linux/msm_dsps.h>
 
 #include <mach/irqs.h>
+#include <mach/peripheral-loader.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_smsm.h>
 #include <mach/msm_dsps.h>
 #include <mach/subsystem_restart.h>
-#include <mach/ramdump.h>
+#include <mach/subsystem_notif.h>
 
 #include "timer.h"
 
 #define DRV_NAME	"msm_dsps"
-#define DRV_VERSION	"4.03"
+#define DRV_VERSION	"3.02"
 
+#define PPSS_PAUSE_REG	0x1804
 
 #define PPSS_TIMER0_32KHZ_REG	0x1004
 #define PPSS_TIMER0_20MHZ_REG	0x0804
@@ -56,10 +58,6 @@
  *  @cdev - character device for user interface.
  *  @pdata - platform data.
  *  @pil - handle to DSPS Firmware loader.
- *  @dspsfw_ramdump_dev - handle to ramdump device for DSPS
- *  @dspsfw_ramdump_segments - Ramdump segment information for DSPS
- *  @smem_ramdump_dev - handle to ramdump device for smem
- *  @smem_ramdump_segments - Ramdump segment information for smem
  *  @is_on - DSPS is on.
  *  @ref_count - open/close reference count.
  *  @ppss_base - ppss registers virtual base address.
@@ -87,15 +85,24 @@ struct dsps_drv {
 static struct dsps_drv *drv;
 
 /**
+ * self-initiated shutdown flag
+ */
+static int dsps_crash_shutdown_g;
+
+
+static void dsps_fatal_handler(struct work_struct *work);
+
+/**
  *  Load DSPS Firmware.
  */
-static int dsps_load(void)
+static int dsps_load(const char *name)
 {
 	pr_debug("%s.\n", __func__);
 
-	drv->pil = subsystem_get("dsps");
+	drv->pil = pil_get(name);
+
 	if (IS_ERR(drv->pil)) {
-		pr_err("%s: fail to load DSPS firmware.\n", __func__);
+		pr_err("%s: fail to load DSPS firmware %s.\n", __func__, name);
 		return -ENODEV;
 	}
 	msleep(20);
@@ -109,34 +116,28 @@ static void dsps_unload(void)
 {
 	pr_debug("%s.\n", __func__);
 
-	subsystem_put(drv->pil);
+	pil_put(drv->pil);
 }
 
 /**
  *  Suspend DSPS CPU.
- *
- * Only call if dsps_pwr_ctl_en is false.
- * If dsps_pwr_ctl_en is true, then DSPS will control its own power state.
  */
 static void dsps_suspend(void)
 {
 	pr_debug("%s.\n", __func__);
 
-	writel_relaxed(1, drv->ppss_base + drv->pdata->ppss_pause_reg);
+	writel_relaxed(1, drv->ppss_base + PPSS_PAUSE_REG);
 	mb(); /* Make sure write commited before ioctl returns. */
 }
 
 /**
  *  Resume DSPS CPU.
- *
- * Only call if dsps_pwr_ctl_en is false.
- * If dsps_pwr_ctl_en is true, then DSPS will control its own power state.
  */
 static void dsps_resume(void)
 {
 	pr_debug("%s.\n", __func__);
 
-	writel_relaxed(0, drv->ppss_base + drv->pdata->ppss_pause_reg);
+	writel_relaxed(0, drv->ppss_base + PPSS_PAUSE_REG);
 	mb(); /* Make sure write commited before ioctl returns. */
 }
 
@@ -209,7 +210,7 @@ static int dsps_power_on_handler(void)
 
 		}
 
-		ret = clk_prepare_enable(clock);
+		ret = clk_enable(clock);
 		if (ret) {
 			pr_err("%s: enable clk %s err %d.",
 			       __func__, name, ret);
@@ -298,7 +299,7 @@ clk_err:
 		if (clock == NULL)
 			continue;
 
-		clk_disable_unprepare(clock);
+		clk_disable(clock);
 	}
 
 	return -ENODEV;
@@ -328,7 +329,7 @@ static int dsps_power_off_handler(void)
 			const char *name = drv->pdata->clks[i].name;
 
 			pr_debug("%s: set clk %s off.", __func__, name);
-			clk_disable_unprepare(drv->pdata->clks[i].clock);
+			clk_disable(drv->pdata->clks[i].clock);
 		}
 
 	for (i = 0; i < drv->pdata->regs_num; i++)
@@ -359,6 +360,20 @@ static int dsps_power_off_handler(void)
 	return 0;
 }
 
+static DECLARE_WORK(dsps_fatal_work, dsps_fatal_handler);
+
+/**
+ *  Watchdog interrupt handler
+ *
+ */
+static irqreturn_t dsps_wdog_bite_irq(int irq, void *dev_id)
+{
+	pr_debug("%s\n", __func__);
+	(void)schedule_work(&dsps_fatal_work);
+	disable_irq_nosync(irq);
+	return IRQ_HANDLED;
+}
+
 /**
  * IO Control - handle commands from client.
  *
@@ -373,10 +388,8 @@ static long dsps_ioctl(struct file *file,
 
 	switch (cmd) {
 	case DSPS_IOCTL_ON:
-		if (!drv->pdata->dsps_pwr_ctl_en) {
-			ret = dsps_power_on_handler();
-			dsps_resume();
-		}
+		ret = dsps_power_on_handler();
+		dsps_resume();
 		break;
 	case DSPS_IOCTL_OFF:
 		if (!drv->pdata->dsps_pwr_ctl_en) {
@@ -393,9 +406,7 @@ static long dsps_ioctl(struct file *file,
 		ret = put_user(val, (u32 __user *) arg);
 		break;
 	case DSPS_IOCTL_RESET:
-		pr_err("%s: User-initiated DSPS reset.\nResetting DSPS\n",
-		       __func__);
-		subsystem_restart("dsps");
+		dsps_fatal_handler(NULL);
 		ret = 0;
 		break;
 	default:
@@ -414,6 +425,7 @@ static int dsps_alloc_resources(struct platform_device *pdev)
 {
 	int ret = -ENODEV;
 	struct resource *ppss_res;
+	struct resource *ppss_wdog;
 	int i;
 
 	pr_debug("%s.\n", __func__);
@@ -483,10 +495,26 @@ static int dsps_alloc_resources(struct platform_device *pdev)
 	drv->ppss_base = ioremap(ppss_res->start,
 				 resource_size(ppss_res));
 
+	ppss_wdog = platform_get_resource_byname(pdev, IORESOURCE_IRQ,
+						"ppss_wdog");
+	if (ppss_wdog) {
+		ret = request_irq(ppss_wdog->start, dsps_wdog_bite_irq,
+				  IRQF_TRIGGER_RISING, "dsps_wdog", NULL);
+		if (ret) {
+			pr_err("%s: request_irq fail %d\n", __func__, ret);
+			goto request_irq_err;
+		}
+	} else {
+		pr_debug("%s: ppss_wdog not supported.\n", __func__);
+	}
+
 	if (drv->pdata->init)
 		drv->pdata->init(drv->pdata);
 
 	return 0;
+
+request_irq_err:
+	iounmap(drv->ppss_base);
 
 reg_err:
 	for (i = 0; i < drv->pdata->regs_num; i++) {
@@ -529,15 +557,14 @@ static int dsps_open(struct inode *ip, struct file *fp)
 		if (ret)
 			return ret;
 
-		ret = dsps_load();
+		ret = dsps_load(drv->pdata->pil_name);
 
 		if (ret) {
 			dsps_power_off_handler();
 			return ret;
 		}
 
-		if (!drv->pdata->dsps_pwr_ctl_en)
-			dsps_resume();
+		dsps_resume();
 	}
 	drv->ref_count++;
 
@@ -585,7 +612,7 @@ static void dsps_free_resources(void)
  *
  * If the DSPS is running, then we must reset DSPS CPU & HW before
  * setting the clocks off.
- * The DSPS reset should be done as part of the subsystem_put().
+ * The DSPS reset should be done as part of the pil_put().
  * The DSPS reset should be used for error recovery if the DSPS firmware
  * has crashed and re-loading the firmware is required.
  */
@@ -613,6 +640,112 @@ const struct file_operations dsps_fops = {
 	.open = dsps_open,
 	.release = dsps_release,
 	.unlocked_ioctl = dsps_ioctl,
+};
+
+/**
+ *  Fatal error handler
+ *  Resets DSPS.
+ */
+static void dsps_fatal_handler(struct work_struct *work)
+{
+	uint32_t dsps_state;
+
+	dsps_state = smsm_get_state(SMSM_DSPS_STATE);
+
+	pr_debug("%s: DSPS state 0x%x\n", __func__, dsps_state);
+
+	if (dsps_state & SMSM_RESET) {
+		pr_err("%s: DSPS fatal error detected. Resetting\n",
+		       __func__);
+		panic("DSPS fatal error detected.");
+	} else {
+		pr_debug("%s: User-initiated DSPS reset. Resetting\n",
+			 __func__);
+		panic("User-initiated DSPS reset.");
+	}
+}
+
+
+/**
+ *  SMSM state change callback
+ *
+ */
+static void dsps_smsm_state_cb(void *data, uint32_t old_state,
+			       uint32_t new_state)
+{
+	pr_debug("%s\n", __func__);
+	if (dsps_crash_shutdown_g == 1) {
+		pr_debug("%s: SMSM_RESET state change ignored\n",
+			 __func__);
+		dsps_crash_shutdown_g = 0;
+		return;
+	}
+
+	if (new_state & SMSM_RESET) {
+		pr_err
+		    ("%s: SMSM_RESET state detected. restarting the DSPS\n",
+		     __func__);
+		panic("SMSM_RESET state detected.");
+	}
+}
+
+/**
+ *  Shutdown function
+ * called by the restart notifier
+ *
+ */
+static int dsps_shutdown(const struct subsys_data *subsys)
+{
+	pr_debug("%s\n", __func__);
+	dsps_unload();
+	return 0;
+}
+
+/**
+ *  Powerup function
+ * called by the restart notifier
+ *
+ */
+static int dsps_powerup(const struct subsys_data *subsys)
+{
+	pr_debug("%s\n", __func__);
+	if (dsps_load(drv->pdata->pil_name) != 0) {
+		pr_err("%s: fail to restart DSPS after reboot\n",
+		       __func__);
+		return 1;
+	}
+	return 0;
+}
+
+/**
+ *  Crash shutdown function
+ * called by the restart notifier
+ *
+ */
+static void dsps_crash_shutdown(const struct subsys_data *subsys)
+{
+	pr_debug("%s\n", __func__);
+	dsps_crash_shutdown_g = 1;
+	smsm_change_state(SMSM_DSPS_STATE, SMSM_RESET, SMSM_RESET);
+}
+
+/**
+ *  Ramdump function
+ * called by the restart notifier
+ *
+ */
+static int dsps_ramdump(int enable, const struct subsys_data *subsys)
+{
+	pr_debug("%s\n", __func__);
+	return 0;
+}
+
+static struct subsys_data dsps_ssrops = {
+	.name = "dsps",
+	.shutdown = dsps_shutdown,
+	.powerup = dsps_powerup,
+	.ramdump = dsps_ramdump,
+	.crash_shutdown = dsps_crash_shutdown
 };
 
 /**
@@ -677,8 +810,30 @@ static int __devinit dsps_probe(struct platform_device *pdev)
 		goto cdev_add_err;
 	}
 
+	ret =
+	    smsm_state_cb_register(SMSM_DSPS_STATE, SMSM_RESET,
+				   dsps_smsm_state_cb, 0);
+	if (ret) {
+		pr_err("%s: smsm_state_cb_register fail %d\n", __func__,
+		       ret);
+		goto smsm_register_err;
+	}
+
+	ret = ssr_register_subsystem(&dsps_ssrops);
+	if (ret) {
+		pr_err("%s: ssr_register_subsystem fail %d\n", __func__,
+		       ret);
+		goto ssr_register_err;
+	}
+
 	return 0;
 
+ssr_register_err:
+	smsm_state_cb_deregister(SMSM_DSPS_STATE, SMSM_RESET,
+				 dsps_smsm_state_cb,
+				 0);
+smsm_register_err:
+	cdev_del(drv->cdev);
 cdev_add_err:
 	kfree(drv->cdev);
 cdev_alloc_err:

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,15 +13,11 @@
 #ifndef _ARCH_ARM_MACH_MSM_PM_BOOT_H
 #define _ARCH_ARM_MACH_MSM_PM_BOOT_H
 
-/* 8x25 specific macros */
-#define MPA5_CFG_CTL_REG	0x30
-/* end */
-
 enum {
-	MSM_PM_BOOT_CONFIG_TZ		    ,
-	MSM_PM_BOOT_CONFIG_RESET_VECTOR_PHYS,
-	MSM_PM_BOOT_CONFIG_RESET_VECTOR_VIRT,
-	MSM_PM_BOOT_CONFIG_REMAP_BOOT_ADDR  ,
+	MSM_PM_BOOT_CONFIG_TZ		     = 0,
+	MSM_PM_BOOT_CONFIG_RESET_VECTOR_PHYS = 1,
+	MSM_PM_BOOT_CONFIG_RESET_VECTOR_VIRT = 2,
+	MSM_PM_BOOT_CONFIG_REMAP_BOOT_ADDR   = 3,
 };
 
 struct msm_pm_boot_platform_data {

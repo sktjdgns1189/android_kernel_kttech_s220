@@ -101,9 +101,7 @@ static s32 scaled_ppm_to_ppb(long ppm)
 
 static int ptp_clock_getres(struct posix_clock *pc, struct timespec *tp)
 {
-	tp->tv_sec = 0;
-	tp->tv_nsec = 1;
-	return 0;
+	return 1; /* always round timer functions to one nanosecond */
 }
 
 static int ptp_clock_settime(struct posix_clock *pc, const struct timespec *tp)
@@ -340,6 +338,6 @@ no_region:
 subsys_initcall(ptp_init);
 module_exit(ptp_exit);
 
-MODULE_AUTHOR("Richard Cochran <richardcochran@gmail.com>");
+MODULE_AUTHOR("Richard Cochran <richard.cochran@omicron.at>");
 MODULE_DESCRIPTION("PTP clocks support");
 MODULE_LICENSE("GPL");

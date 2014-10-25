@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,6 +12,7 @@
  */
 #ifndef _VCD_DDL_H_
 #define _VCD_DDL_H_
+#include <mach/msm_subsystem_map.h>
 #include "vcd_ddl_api.h"
 #include "vcd_ddl_utils.h"
 #include "vcd_ddl_firmware.h"
@@ -76,7 +77,6 @@ struct ddl_buf_addr {
 	u32 *align_physical_addr;
 	u32 *align_virtual_addr;
 	struct msm_mapped_buffer *mapped_buffer;
-	struct ion_handle *alloc_handle;
 	u32 buffer_size;
 	enum ddl_mem_area mem_type;
 };
@@ -225,7 +225,6 @@ struct ddl_context {
 	struct ddl_buf_addr dbg_core_dump;
 	u32 enable_dbg_core_dump;
 	struct ddl_client_context *ddl_clients[VCD_MAX_NO_CLIENT];
-	struct ion_client *video_ion_client;
 	u32 device_state;
 	u32 ddl_busy;
 	u32  intr_status;

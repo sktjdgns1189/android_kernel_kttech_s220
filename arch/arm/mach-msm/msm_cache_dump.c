@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,38 +21,28 @@
 #include <linux/pm.h>
 #include <linux/memory_alloc.h>
 #include <linux/notifier.h>
-#include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/dma-mapping.h>
 #include <mach/scm.h>
 #include <mach/msm_cache_dump.h>
+#include <mach/memory.h>
 #include <mach/msm_iomap.h>
-#include <mach/msm_memory_dump.h>
 
-#define L2_DUMP_OFFSET 0x14
+#define L2C_IMEM_ADDR 0x2a03f014
 
-static dma_addr_t msm_cache_dump_addr;
-static void *msm_cache_dump_vaddr;
+static unsigned long msm_cache_dump_addr;
 
 /*
- * These should not actually be dereferenced. There's no
- * need for a virtual mapping, but the physical address is
- * necessary.
+ * These are dummy pointers so the defintion of l1_cache_dump
+ * and l2_cache_dump don't get optimized away. If they aren't
+ * referenced, the structure definitions don't show up in the
+ * debugging information which is needed for post processing.
  */
-static struct l1_cache_dump *l1_dump;
-static struct l2_cache_dump *l2_dump;
-static int use_imem_dump_offset;
+static struct l1_cache_dump __used *l1_dump;
+static struct l2_cache_dump __used *l2_dump;
 
 static int msm_cache_dump_panic(struct notifier_block *this,
 				unsigned long event, void *ptr)
 {
 #ifdef CONFIG_MSM_CACHE_DUMP_ON_PANIC
-	/*
-	 * Clear the bootloader magic so the dumps aren't overwritten
-	 */
-	if (use_imem_dump_offset)
-		__raw_writel(0, MSM_IMEM_BASE + L2_DUMP_OFFSET);
-
 	scm_call_atomic1(L1C_SERVICE_ID, CACHE_BUFFER_DUMP_COMMAND_ID, 2);
 	scm_call_atomic1(L1C_SERVICE_ID, CACHE_BUFFER_DUMP_COMMAND_ID, 1);
 #endif
@@ -71,54 +61,31 @@ static struct notifier_block msm_cache_dump_blk = {
 static int msm_cache_dump_probe(struct platform_device *pdev)
 {
 	struct msm_cache_dump_platform_data *d = pdev->dev.platform_data;
-	struct msm_client_dump l1_dump_entry, l2_dump_entry;
 	int ret;
 	struct {
 		unsigned long buf;
 		unsigned long size;
 	} l1_cache_data;
-	u32 l1_size, l2_size;
-	unsigned long total_size;
+#ifndef CONFIG_MSM_CACHE_DUMP_ON_PANIC
+	unsigned int *imem_loc;
+#endif
+	void *temp;
+	unsigned long total_size = d->l1_size + d->l2_size;
 
-	if (pdev->dev.of_node) {
-		ret = of_property_read_u32(pdev->dev.of_node,
-					   "qcom,l1-dump-size", &l1_size);
-		if (ret)
-			return ret;
+	msm_cache_dump_addr = allocate_contiguous_ebi_nomap(total_size, SZ_4K);
 
-		ret = of_property_read_u32(pdev->dev.of_node,
-					   "qcom,l2-dump-size", &l2_size);
-		if (ret)
-			return ret;
-
-		use_imem_dump_offset = of_property_read_bool(pdev->dev.of_node,
-						   "qcom,use-imem-dump-offset");
-	} else {
-		l1_size = d->l1_size;
-		l2_size = d->l2_size;
-
-		/* Non-DT targets assume the IMEM dump offset shall be used */
-		use_imem_dump_offset = 1;
-	};
-
-	total_size = l1_size + l2_size;
-	msm_cache_dump_vaddr = (void *) dma_alloc_coherent(&pdev->dev,
-					total_size, &msm_cache_dump_addr,
-					GFP_KERNEL);
-
-	if (!msm_cache_dump_vaddr) {
+	if (!msm_cache_dump_addr) {
 		pr_err("%s: Could not get memory for cache dumping\n",
 			__func__);
 		return -ENOMEM;
 	}
 
-	memset(msm_cache_dump_vaddr, 0xFF, total_size);
-	/* Clean caches before sending buffer to TZ */
-	clean_caches((unsigned long) msm_cache_dump_vaddr, total_size,
-			msm_cache_dump_addr);
+	temp = ioremap(msm_cache_dump_addr, total_size);
+	memset(temp, 0xFF, total_size);
+	iounmap(temp);
 
 	l1_cache_data.buf = msm_cache_dump_addr;
-	l1_cache_data.size = l1_size;
+	l1_cache_data.size = d->l1_size;
 
 	ret = scm_call(L1C_SERVICE_ID, L1C_BUFFER_SET_COMMAND_ID,
 			&l1_cache_data, sizeof(l1_cache_data), NULL, 0);
@@ -127,13 +94,9 @@ static int msm_cache_dump_probe(struct platform_device *pdev)
 		pr_err("%s: could not register L1 buffer ret = %d.\n",
 			__func__, ret);
 
-	l1_dump = (struct l1_cache_dump *)(uint32_t)msm_cache_dump_addr;
-	l2_dump = (struct l2_cache_dump *)(uint32_t)(msm_cache_dump_addr
-								+ l1_size);
-
 #if defined(CONFIG_MSM_CACHE_DUMP_ON_PANIC)
-	l1_cache_data.buf = msm_cache_dump_addr + l1_size;
-	l1_cache_data.size = l2_size;
+	l1_cache_data.buf = msm_cache_dump_addr + d->l1_size;
+	l1_cache_data.size = d->l2_size;
 
 	ret = scm_call(L1C_SERVICE_ID, L2C_BUFFER_SET_COMMAND_ID,
 			&l1_cache_data, sizeof(l1_cache_data), NULL, 0);
@@ -141,28 +104,11 @@ static int msm_cache_dump_probe(struct platform_device *pdev)
 	if (ret)
 		pr_err("%s: could not register L2 buffer ret = %d.\n",
 			__func__, ret);
+#else
+	imem_loc = ioremap(L2C_IMEM_ADDR, SZ_4K);
+	__raw_writel(msm_cache_dump_addr + d->l1_size, imem_loc);
+	iounmap(imem_loc);
 #endif
-
-	if (use_imem_dump_offset)
-		__raw_writel(msm_cache_dump_addr + l1_size,
-			MSM_IMEM_BASE + L2_DUMP_OFFSET);
-	else {
-		l1_dump_entry.id = MSM_L1_CACHE;
-		l1_dump_entry.start_addr = msm_cache_dump_addr;
-		l1_dump_entry.end_addr = l1_dump_entry.start_addr + l1_size - 1;
-
-		l2_dump_entry.id = MSM_L2_CACHE;
-		l2_dump_entry.start_addr = msm_cache_dump_addr + l1_size;
-		l2_dump_entry.end_addr = l2_dump_entry.start_addr + l2_size - 1;
-
-		ret = msm_dump_table_register(&l1_dump_entry);
-		if (ret)
-			pr_err("Could not register L1 dump area: %d\n", ret);
-
-		ret = msm_dump_table_register(&l2_dump_entry);
-		if (ret)
-			pr_err("Could not register L2 dump area: %d\n", ret);
-	}
 
 	atomic_notifier_chain_register(&panic_notifier_list,
 						&msm_cache_dump_blk);
@@ -176,18 +122,11 @@ static int msm_cache_dump_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id cache_dump_match_table[] = {
-	{	.compatible = "qcom,cache_dump",	},
-	{}
-};
-EXPORT_COMPAT("qcom,cache_dump");
-
 static struct platform_driver msm_cache_dump_driver = {
 	.remove		= __devexit_p(msm_cache_dump_remove),
 	.driver         = {
 		.name = "msm_cache_dump",
-		.owner = THIS_MODULE,
-		.of_match_table = cache_dump_match_table,
+		.owner = THIS_MODULE
 	},
 };
 

@@ -7,7 +7,7 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/cryptohash.h>
@@ -18,6 +18,7 @@
 #include <linux/io.h>
 
 #include <asm/checksum.h>
+#include <asm/system.h>
 #include <asm/ftrace.h>
 
 /*
@@ -48,8 +49,8 @@ extern void __aeabi_ulcmp(void);
 
 extern void fpundefinstr(void);
 
-	/* platform dependent support */
-EXPORT_SYMBOL(arm_delay_ops);
+
+EXPORT_SYMBOL(__backtrace);
 
 	/* networking */
 EXPORT_SYMBOL(csum_partial);
@@ -106,6 +107,9 @@ EXPORT_SYMBOL(__put_user_2);
 EXPORT_SYMBOL(__put_user_4);
 EXPORT_SYMBOL(__put_user_8);
 #endif
+
+	/* crypto hash */
+EXPORT_SYMBOL(sha_transform);
 
 	/* gcc lib functions */
 EXPORT_SYMBOL(__ashldi3);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011 Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,6 +15,13 @@
 #define __ASM_ARCH_MSM_IRQS_8X60_H
 
 /* MSM ACPU Interrupt Numbers */
+
+/* 0-15:  STI/SGI (software triggered/generated interrupts)
+   16-31: PPI (private peripheral interrupts)
+   32+:   SPI (shared peripheral interrupts) */
+
+#define GIC_PPI_START 16
+#define GIC_SPI_START 32
 
 #define INT_DEBUG_TIMER_EXP			(GIC_PPI_START + 0)
 #define INT_GP_TIMER_EXP			(GIC_PPI_START + 1)
@@ -242,6 +249,7 @@
 #define SMPSS_SPARE_6				(GIC_SPI_START + 222)
 #define SMPSS_SPARE_7				(GIC_SPI_START + 223)
 
+#define NR_TLMM_MSM_DIR_CONN_IRQ 10
 #define NR_GPIO_IRQS 173
 #define NR_MSM_GPIOS NR_GPIO_IRQS
 #define NR_MSM_IRQS 256

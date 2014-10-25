@@ -55,7 +55,7 @@ EXPORT_SYMBOL(of_find_device_by_node);
 #include <asm/dcr.h>
 #endif
 
-#ifdef CONFIG_OF_ADDRESS
+#if !defined(CONFIG_SPARC)
 /*
  * The following routines scan a subtree and registers a device for
  * each applicable node.
@@ -78,7 +78,6 @@ void of_device_make_bus_id(struct device *dev)
 	struct device_node *node = dev->of_node;
 	const u32 *reg;
 	u64 addr;
-	const __be32 *addrp;
 	int magic;
 
 #ifdef CONFIG_PPC_DCR
@@ -106,15 +105,7 @@ void of_device_make_bus_id(struct device *dev)
 	 */
 	reg = of_get_property(node, "reg", NULL);
 	if (reg) {
-		if (of_can_translate_address(node)) {
-			addr = of_translate_address(node, reg);
-		} else {
-			addrp = of_get_address(node, 0, NULL, NULL);
-			if (addrp)
-				addr = of_read_number(addrp, 1);
-			else
-				addr = OF_BAD_ADDR;
-		}
+		addr = of_translate_address(node, reg);
 		if (addr != OF_BAD_ADDR) {
 			dev_set_name(dev, "%llx.%s",
 				     (unsigned long long)addr, node->name);
@@ -149,9 +140,8 @@ struct platform_device *of_device_alloc(struct device_node *np,
 		return NULL;
 
 	/* count the io and irq resources */
-	if (of_can_translate_address(np))
-		while (of_address_to_resource(np, num_reg, &temp_res) == 0)
-			num_reg++;
+	while (of_address_to_resource(np, num_reg, &temp_res) == 0)
+		num_reg++;
 	num_irq = of_irq_count(np);
 
 	/* Populate the resource table */
@@ -172,7 +162,7 @@ struct platform_device *of_device_alloc(struct device_node *np,
 	}
 
 	dev->dev.of_node = of_node_get(np);
-#if defined(CONFIG_MICROBLAZE)
+#if defined(CONFIG_PPC) || defined(CONFIG_MICROBLAZE)
 	dev->dev.dma_mask = &dev->archdata.dma_mask;
 #endif
 	dev->dev.parent = parent;
@@ -211,10 +201,10 @@ struct platform_device *of_platform_device_create_pdata(
 	if (!dev)
 		return NULL;
 
-#if defined(CONFIG_MICROBLAZE)
+#if defined(CONFIG_PPC) || defined(CONFIG_MICROBLAZE)
 	dev->archdata.dma_mask = 0xffffffffUL;
 #endif
-	dev->dev.coherent_dma_mask = DMA_BIT_MASK(sizeof(dma_addr_t) * 8);
+	dev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 	dev->dev.bus = &platform_bus_type;
 	dev->dev.platform_data = platform_data;
 
@@ -263,7 +253,7 @@ static struct amba_device *of_amba_device_create(struct device_node *node,
 	if (!of_device_is_available(node))
 		return NULL;
 
-	dev = amba_device_alloc(NULL, 0, 0);
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
 		return NULL;
 
@@ -293,14 +283,14 @@ static struct amba_device *of_amba_device_create(struct device_node *node,
 	if (ret)
 		goto err_free;
 
-	ret = amba_device_add(dev, &iomem_resource);
+	ret = amba_device_register(dev, &iomem_resource);
 	if (ret)
 		goto err_free;
 
 	return dev;
 
 err_free:
-	amba_device_put(dev);
+	kfree(dev);
 	return NULL;
 }
 #else /* CONFIG_ARM_AMBA */
@@ -320,20 +310,18 @@ static const struct of_dev_auxdata *of_dev_lookup(const struct of_dev_auxdata *l
 				 struct device_node *np)
 {
 	struct resource res;
-
-	if (!lookup)
-		return NULL;
-
-	for(; lookup->compatible != NULL; lookup++) {
-		if (!of_device_is_compatible(np, lookup->compatible))
-			continue;
-		if (!of_address_to_resource(np, 0, &res))
+	if (lookup) {
+		for(; lookup->name != NULL; lookup++) {
+			if (!of_device_is_compatible(np, lookup->compatible))
+				continue;
+			if (of_address_to_resource(np, 0, &res))
+				continue;
 			if (res.start != lookup->phys_addr)
 				continue;
-		pr_debug("%s: devname=%s\n", np->full_name, lookup->name);
-		return lookup;
+			pr_debug("%s: devname=%s\n", np->full_name, lookup->name);
+			return lookup;
+		}
 	}
-
 	return NULL;
 }
 
@@ -341,9 +329,8 @@ static const struct of_dev_auxdata *of_dev_lookup(const struct of_dev_auxdata *l
  * of_platform_bus_create() - Create a device for a node and its children.
  * @bus: device node of the bus to instantiate
  * @matches: match table for bus nodes
- * @lookup: auxdata table for matching id and platform_data with device nodes
+ * disallow recursive creation of child buses
  * @parent: parent for new device, or NULL for top level.
- * @strict: require compatible property
  *
  * Creates a platform_device for the provided device_node, and optionally
  * recursively create devices for all the child nodes.
@@ -471,4 +458,4 @@ int of_platform_populate(struct device_node *root,
 	of_node_put(root);
 	return rc;
 }
-#endif /* CONFIG_OF_ADDRESS */
+#endif /* !CONFIG_SPARC */

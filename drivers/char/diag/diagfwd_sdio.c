@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -105,8 +105,8 @@ int diagfwd_connect_sdio(void)
 {
 	int err;
 
-	err = usb_diag_alloc_req(driver->mdm_ch, N_MDM_SDIO_WRITE,
-							 N_MDM_SDIO_READ);
+	err = usb_diag_alloc_req(driver->mdm_ch, N_MDM_WRITE,
+							 N_MDM_READ);
 	if (err)
 		pr_err("diag: unable to alloc USB req on mdm ch\n");
 
@@ -131,6 +131,7 @@ int diagfwd_connect_sdio(void)
 
 int diagfwd_disconnect_sdio(void)
 {
+	usb_diag_free_req(driver->mdm_ch);
 	if (driver->sdio_ch && (driver->logging_mode == USB_MODE)) {
 		driver->in_busy_sdio = 1;
 		diag_sdio_close();
@@ -279,6 +280,10 @@ err:
 
 void diagfwd_sdio_exit(void)
 {
+#ifdef CONFIG_DIAG_OVER_USB
+	if (driver->usb_connected)
+		usb_diag_free_req(driver->mdm_ch);
+#endif
 	platform_driver_unregister(&msm_sdio_ch_driver);
 #ifdef CONFIG_DIAG_OVER_USB
 	usb_diag_close(driver->mdm_ch);

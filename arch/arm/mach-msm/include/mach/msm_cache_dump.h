@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -56,6 +56,9 @@ struct msm_cache_dump_platform_data {
 	unsigned int l1_size;
 	unsigned int l2_size;
 };
+
+#define L1_BUFFER_SIZE	SZ_1M
+#define L2_BUFFER_SIZE	SZ_4M
 
 #define CACHE_BUFFER_DUMP_SIZE (L1_BUFFER_SIZE + L2_BUFFER_SIZE)
 

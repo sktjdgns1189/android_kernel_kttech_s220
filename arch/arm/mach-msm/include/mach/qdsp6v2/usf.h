@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,18 +36,6 @@
 #define US_SET_DETECTION _IOWR(USF_IOCTL_MAGIC, 8, \
 				struct us_detect_info_type)
 
-#define US_GET_VERSION  _IOWR(USF_IOCTL_MAGIC, 9, \
-				struct us_version_info_type)
-
-#define US_SET_TX_STREAM_PARAM   _IOW(USF_IOCTL_MAGIC, 10, \
-				struct us_stream_param_type)
-#define US_GET_TX_STREAM_PARAM  _IOWR(USF_IOCTL_MAGIC, 11, \
-				struct us_stream_param_type)
-#define US_SET_RX_STREAM_PARAM   _IOW(USF_IOCTL_MAGIC, 12, \
-				struct us_stream_param_type)
-#define US_GET_RX_STREAM_PARAM  _IOWR(USF_IOCTL_MAGIC, 13, \
-				struct us_stream_param_type)
-
 /* Special timeout values */
 #define USF_NO_WAIT_TIMEOUT	0x00000000
 /* Infinitive */
@@ -77,42 +65,15 @@ enum us_detect_mode_enum {
 #define USF_POINT_EPOS_FORMAT	0
 #define USF_RAW_FORMAT		1
 
-/* Indexes of event types, produced by the calculators */
-#define USF_TSC_EVENT_IND      0
-#define USF_TSC_PTR_EVENT_IND  1
-#define USF_MOUSE_EVENT_IND    2
-#define USF_KEYBOARD_EVENT_IND 3
-#define USF_TSC_EXT_EVENT_IND  4
-#define USF_MAX_EVENT_IND      5
-
 /* Types of events, produced by the calculators */
 #define USF_NO_EVENT 0
-#define USF_TSC_EVENT      (1 << USF_TSC_EVENT_IND)
-#define USF_TSC_PTR_EVENT  (1 << USF_TSC_PTR_EVENT_IND)
-#define USF_MOUSE_EVENT    (1 << USF_MOUSE_EVENT_IND)
-#define USF_KEYBOARD_EVENT (1 << USF_KEYBOARD_EVENT_IND)
-#define USF_TSC_EXT_EVENT  (1 << USF_TSC_EXT_EVENT_IND)
-#define USF_ALL_EVENTS         (USF_TSC_EVENT |\
-				USF_TSC_PTR_EVENT |\
-				USF_MOUSE_EVENT |\
-				USF_KEYBOARD_EVENT |\
-				USF_TSC_EXT_EVENT)
-
-/* min, max array dimension */
-#define MIN_MAX_DIM 2
-
-/* coordinates (x,y,z) array dimension */
-#define COORDINATES_DIM 3
-
-/* tilts (x,y) array dimension */
-#define TILTS_DIM 2
+#define USF_TSC_EVENT 1
+#define USF_MOUSE_EVENT 2
+#define USF_KEYBOARD_EVENT 4
+#define USF_ALL_EVENTS (USF_TSC_EVENT | USF_MOUSE_EVENT | USF_KEYBOARD_EVENT)
 
 /* Max size of the client name */
 #define USF_MAX_CLIENT_NAME_SIZE	20
-
-/* Max number of the ports (mics/speakers) */
-#define USF_MAX_PORT_NUM                8
-
 /* Info structure common for TX and RX */
 struct us_xx_info_type {
 /* Input:  general info */
@@ -131,7 +92,7 @@ struct us_xx_info_type {
 /* Number of the microphones (TX) or speakers(RX) */
 	uint16_t port_cnt;
 /* Microphones(TX) or speakers(RX) indexes in their enumeration */
-	uint8_t  port_id[USF_MAX_PORT_NUM];
+	uint8_t  port_id[4];
 /* Bits per sample 16 or 32 */
 	uint16_t bits_per_sample;
 /* Input:  Transparent info for encoder in the LPASS */
@@ -139,26 +100,19 @@ struct us_xx_info_type {
 	uint16_t params_data_size;
 /* Pointer to the parameters */
 	uint8_t *params_data;
-/* Max size of buffer for get and set parameter */
-	uint32_t max_get_set_param_buf_size;
 };
 
 struct us_input_info_type {
 	/* Touch screen dimensions: min & max;for input module */
-	int tsc_x_dim[MIN_MAX_DIM];
-	int tsc_y_dim[MIN_MAX_DIM];
-	int tsc_z_dim[MIN_MAX_DIM];
-	/* Touch screen tilt dimensions: min & max;for input module */
-	int tsc_x_tilt[MIN_MAX_DIM];
-	int tsc_y_tilt[MIN_MAX_DIM];
+	int tsc_x_dim[2];
+	int tsc_y_dim[2];
+    /* Touch screen fuzz; for input module */
+	int tsc_x_fuzz;
+	int tsc_y_fuzz;
 	/* Touch screen pressure limits: min & max; for input module */
-	int tsc_pressure[MIN_MAX_DIM];
-	/* The requested buttons bitmap */
-	uint16_t req_buttons_bitmap;
+	int tsc_pressure[2];
 	/* Bitmap of types of events (USF_X_EVENT), produced by calculator */
 	uint16_t event_types;
-	/* Bitmap of types of events from devs, conflicting with USF */
-	uint16_t conflicting_event_types;
 };
 
 struct us_tx_info_type {
@@ -174,15 +128,18 @@ struct us_rx_info_type {
 	/* Info specific for RX*/
 };
 
+
+#define	USF_PIX_COORDINATE  0 /* unit is pixel */
+#define	USF_CMM_COORDINATE  1 /* unit is 0.01 mm */
 struct point_event_type {
-/* Pen coordinates (x, y, z) in units, defined by <coordinates_type>  */
-	int coordinates[COORDINATES_DIM];
-	/* {x;y}  in transparent units */
-	int inclinations[TILTS_DIM];
+/* Pen coordinates (x, y) in units, defined by <coordinates_type>  */
+	int coordinates[2];
+/* {x;y}  in degrees [-90; 90] */
+	uint32_t inclinations[2];
 /* [0-1023] (10bits); 0 - pen up */
 	uint32_t pressure;
-/* Bitmap for button state. 1 - down, 0 - up */
-	uint16_t buttons_state_bitmap;
+/* 0 - mapped in the display pixel. 1 - raw in 0.01 mm (only for log); */
+	uint8_t coordinates_type;
 };
 
 /* Mouse buttons, supported by USF */
@@ -191,7 +148,7 @@ struct point_event_type {
 #define USF_BUTTON_RIGHT_MASK  4
 struct mouse_event_type {
 /* The mouse relative movement (dX, dY, dZ) */
-	int rels[COORDINATES_DIM];
+	int rels[3];
 /* Bitmap of mouse buttons states: 1 - down, 0 - up; */
 	uint16_t buttons_states;
 };
@@ -208,8 +165,8 @@ struct usf_event_type {
 	uint32_t seq_num;
 /* Event generation system time */
 	uint32_t timestamp;
-/* Destination input event type index (e.g. touch screen, mouse, key) */
-	uint16_t event_type_ind;
+/* Destination input event type (e.g. touch screen, mouse, key) */
+	uint16_t event_type;
 	union {
 		struct point_event_type point_event;
 		struct mouse_event_type mouse_event;
@@ -229,8 +186,6 @@ struct us_tx_update_info_type {
 /* Time (sec) to wait for data or special values: */
 /* USF_NO_WAIT_TIMEOUT, USF_INFINITIVE_TIMEOUT, USF_DEFAULT_TIMEOUT */
 	uint32_t timeout;
-/* Events (from conflicting devs) to be disabled/enabled */
-	uint16_t event_filters;
 
 /* Input  transparent data: */
 /* Parameters size */
@@ -275,24 +230,6 @@ struct us_detect_info_type {
 	uint32_t detect_timeout;
 /* Out parameter: US presence */
 	bool is_us;
-};
-
-struct us_version_info_type {
-/* Size of memory for the version string */
-	uint16_t buf_size;
-/* Pointer to the memory for the version string */
-	char *pbuf;
-};
-
-struct us_stream_param_type {
-/* Id of module */
-	uint32_t module_id;
-/* Id of parameter */
-	uint32_t param_id;
-/* Size of memory of the parameter buffer */
-	uint32_t buf_size;
-/* Pointer to the memory of the parameter buffer */
-	uint8_t __user *pbuf;
 };
 
 #endif /* __USF_H__ */

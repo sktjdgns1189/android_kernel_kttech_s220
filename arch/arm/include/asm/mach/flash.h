@@ -13,11 +13,6 @@
 struct mtd_partition;
 struct mtd_info;
 
-enum sw_version {
-	VERSION_1 = 0,
-	VERSION_2,
-};
-
 /*
  * map_name:	the map probe function name
  * name:	flash device name (eg, as used with mtdparts=)
@@ -29,7 +24,6 @@ enum sw_version {
  * mmcontrol:	method called to enable or disable Sync. Burst Read in OneNAND
  * parts:	optional array of mtd_partitions for static partitioning
  * nr_parts:	number of mtd_partitions for static partitoning
- * version:	software register interface version
  */
 struct flash_platform_data {
 	const char	*map_name;
@@ -42,7 +36,6 @@ struct flash_platform_data {
 	void		(*mmcontrol)(struct mtd_info *mtd, int sync_read);
 	struct mtd_partition *parts;
 	unsigned int	nr_parts;
-	enum sw_version	version;
 };
 
 #endif

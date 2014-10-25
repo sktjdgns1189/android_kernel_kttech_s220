@@ -55,7 +55,7 @@ static int cistpl_vers_1(struct mmc_card *card, struct sdio_func *func,
 
 	for (i = 0; i < nr_strings; i++) {
 		buffer[i] = string;
-		strlcpy(string, buf, strlen(buf) + 1);
+		strlcpy(string, buf, sizeof(string));
 		string += strlen(string) + 1;
 		buf += strlen(buf) + 1;
 	}
@@ -132,7 +132,7 @@ static int cis_tpl_parse(struct mmc_card *card, struct sdio_func *func,
 			ret = -EINVAL;
 		}
 		if (ret && ret != -EILSEQ && ret != -ENOENT) {
-			pr_err("%s: bad %s tuple 0x%02x (%u bytes)\n",
+			printk(KERN_ERR "%s: bad %s tuple 0x%02x (%u bytes)\n",
 			       mmc_hostname(card->host), tpl_descr, code, size);
 		}
 	} else {
@@ -321,7 +321,7 @@ static int sdio_read_cis(struct mmc_card *card, struct sdio_func *func)
 
 			if (ret == -ENOENT) {
 				/* warn about unknown tuples */
-				pr_warning("%s: queuing unknown"
+				printk(KERN_WARNING "%s: queuing unknown"
 				       " CIS tuple 0x%02x (%u bytes)\n",
 				       mmc_hostname(card->host),
 				       tpl_code, tpl_link);

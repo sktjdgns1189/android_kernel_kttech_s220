@@ -4,7 +4,7 @@
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
 
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/errno.h>
 #include <linux/file.h>
@@ -27,12 +27,12 @@ void generic_fillattr(struct inode *inode, struct kstat *stat)
 	stat->uid = inode->i_uid;
 	stat->gid = inode->i_gid;
 	stat->rdev = inode->i_rdev;
-	stat->size = i_size_read(inode);
 	stat->atime = inode->i_atime;
 	stat->mtime = inode->i_mtime;
 	stat->ctime = inode->i_ctime;
-	stat->blksize = (1 << inode->i_blkbits);
+	stat->size = i_size_read(inode);
 	stat->blocks = inode->i_blocks;
+	stat->blksize = (1 << inode->i_blkbits);
 }
 
 EXPORT_SYMBOL(generic_fillattr);
@@ -81,6 +81,8 @@ int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,
 
 	if (!(flag & AT_SYMLINK_NOFOLLOW))
 		lookup_flags |= LOOKUP_FOLLOW;
+	if (flag & AT_NO_AUTOMOUNT)
+		lookup_flags |= LOOKUP_NO_AUTOMOUNT;
 	if (flag & AT_EMPTY_PATH)
 		lookup_flags |= LOOKUP_EMPTY;
 
@@ -294,20 +296,19 @@ SYSCALL_DEFINE4(readlinkat, int, dfd, const char __user *, pathname,
 {
 	struct path path;
 	int error;
-	int empty = 0;
 
 	if (bufsiz <= 0)
 		return -EINVAL;
 
-	error = user_path_at_empty(dfd, pathname, LOOKUP_EMPTY, &path, &empty);
+	error = user_path_at(dfd, pathname, LOOKUP_EMPTY, &path);
 	if (!error) {
 		struct inode *inode = path.dentry->d_inode;
 
-		error = empty ? -ENOENT : -EINVAL;
+		error = -EINVAL;
 		if (inode->i_op->readlink) {
 			error = security_inode_readlink(path.dentry);
 			if (!error) {
-				touch_atime(&path);
+				touch_atime(path.mnt, path.dentry);
 				error = inode->i_op->readlink(path.dentry,
 							      buf, bufsiz);
 			}

@@ -13,15 +13,12 @@
 #include <linux/slab.h>
 #include <linux/wireless.h>
 #include <linux/uaccess.h>
-#include <linux/export.h>
 #include <net/cfg80211.h>
 #include <net/iw_handler.h>
 #include <net/netlink.h>
 #include <net/wext.h>
 #include <net/net_namespace.h>
-#ifdef KW_TAINT_ANALYSIS
-       extern void * get_tainted_stuff();
-#endif
+
 typedef int (*wext_ioctl_func)(struct net_device *, struct iwreq *,
 			       unsigned int, struct iw_request_info *,
 			       iw_handler);
@@ -782,10 +779,8 @@ static int ioctl_standard_iw_point(struct iw_point *iwp, unsigned int cmd,
 		if (cmd == SIOCSIWENCODEEXT) {
 			struct iw_encode_ext *ee = (void *) extra;
 
-			if (iwp->length < sizeof(*ee) + ee->key_len) {
-				err = -EFAULT;
-				goto out;
-			}
+			if (iwp->length < sizeof(*ee) + ee->key_len)
+				return -EFAULT;
 		}
 	}
 
@@ -1008,13 +1003,8 @@ static int ioctl_standard_call(struct net_device *	dev,
 
 
 int wext_handle_ioctl(struct net *net, struct ifreq *ifr, unsigned int cmd,
-		      void __user *arg_actual)
+		      void __user *arg)
 {
-	#ifdef KW_TAINT_ANALYSIS
-	void __user *arg = (void __user *)get_tainted_stuff();
-	#else	
-	void __user *arg = (void __user *)arg_actual;
-	#endif
 	struct iw_request_info info = { .cmd = cmd, .flags = 0 };
 	int ret;
 
@@ -1063,11 +1053,7 @@ static int compat_standard_call(struct net_device	*dev,
 int compat_wext_handle_ioctl(struct net *net, unsigned int cmd,
 			     unsigned long arg)
 {
-	#ifdef KW_TAINT_ANALYSIS
-	void __user *argp = (void __user *)get_tainted_stuff();
-	#else
 	void __user *argp = (void __user *)arg;
-	#endif	
 	struct iw_request_info info;
 	struct iwreq iwr;
 	char *colon;

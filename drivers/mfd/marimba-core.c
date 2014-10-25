@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,7 +24,6 @@
 #include <linux/mfd/marimba.h>
 #include <linux/slab.h>
 #include <linux/debugfs.h>
-#include <linux/module.h>
 
 #define MARIMBA_MODE				0x00
 
@@ -76,16 +75,12 @@ int marimba_read_bahama_ver(struct marimba *marimba)
 	rc = marimba_read_bit_mask(marimba, 0x00,  &bahama_version, 1, 0x1F);
 	if (rc < 0)
 		return rc;
-	pr_debug("%s: Bahama version: 0x%x\n", __func__, bahama_version);
 	switch (bahama_version) {
 	case 0x08: /* varient of bahama v1 */
 	case 0x10:
 	case 0x00:
 		return BAHAMA_VER_1_0;
 	case 0x09: /* variant of bahama v2 */
-	case 0x0a: /* variant of bahama v2.1 */
-	/* Falling through because initialization */
-	/* and configuration for 2.0 and 2.1 are same */
 		return BAHAMA_VER_2_0;
 	default:
 		return BAHAMA_VER_UNSUPPORTED;
@@ -173,13 +168,12 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 	u8 data[num_bytes + 1];
 	u8 mask_value[num_bytes];
 
-	memset(mask_value, 0, sizeof(mask_value));
-
 	marimba = &marimba_modules[marimba->mod_id];
 	if (marimba == NULL) {
 		pr_err("%s: Unable to access Marimba core\n", __func__);
 		return -ENODEV;
 	}
+
 
 	mutex_lock(&marimba->xfer_lock);
 
@@ -620,7 +614,7 @@ DEFINE_SIMPLE_ATTRIBUTE(dbg_addr_fops, addr_get, addr_set, "0x%03llX\n");
 static int __devinit marimba_dbg_init(int adie_type)
 {
 	struct adie_dbg_device *dbgdev;
-	struct dentry *dent = NULL;
+	struct dentry *dent;
 	struct dentry *temp;
 
 	dbgdev = kzalloc(sizeof *dbgdev, GFP_KERNEL);
@@ -765,7 +759,7 @@ static void marimba_init_reg(struct i2c_client *client, u8 driver_data)
 	}
 }
 
-static int __devinit marimba_probe(struct i2c_client *client,
+static int marimba_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
 	struct marimba_platform_data *pdata = client->dev.platform_data;
@@ -857,7 +851,8 @@ static int __devinit marimba_probe(struct i2c_client *client,
 			ssbi_adap = NULL;
 
 		if (!marimba->client) {
-			pr_err("can't attach client %d\n", i);
+			dev_err(&marimba->client->dev,
+				"can't attach client %d\n", i);
 			status = -ENOMEM;
 			goto fail;
 		}

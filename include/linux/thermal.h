@@ -97,27 +97,21 @@ struct thermal_cooling_device {
 				((long)t-2732+5)/10 : ((long)t-2732-5)/10)
 #define CELSIUS_TO_KELVIN(t)	((t)*10+2732)
 
-struct sensor_threshold {
-	long temp;
-	enum thermal_trip_type trip;
-	int (*notify)(enum thermal_trip_type type, int temp, void *data);
-	void *data;
-	uint8_t active;
-	struct list_head list;
+#if defined(CONFIG_THERMAL_HWMON)
+/* thermal zone devices with the same type share one hwmon device */
+struct thermal_hwmon_device {
+	char type[THERMAL_NAME_LENGTH];
+	struct device *device;
+	int count;
+	struct list_head tz_list;
+	struct list_head node;
 };
 
-struct sensor_info {
-	uint32_t sensor_id;
-	struct thermal_zone_device *tz;
-	long threshold_min;
-	long threshold_max;
-	int max_idx;
-	int min_idx;
-	struct list_head sensor_list;
-	struct list_head threshold_list;
-	struct mutex lock;
-	struct work_struct work;
+struct thermal_hwmon_attr {
+	struct device_attribute attr;
+	char name[16];
 };
+#endif
 
 struct thermal_zone_device {
 	int id;
@@ -138,8 +132,12 @@ struct thermal_zone_device {
 	struct mutex lock;	/* protect cooling devices list */
 	struct list_head node;
 	struct delayed_work poll_queue;
-	struct sensor_threshold tz_threshold[2];
-	struct sensor_info sensor;
+#if defined(CONFIG_THERMAL_HWMON)
+	struct list_head hwmon_node;
+	struct thermal_hwmon_device *hwmon;
+	struct thermal_hwmon_attr temp_input;	/* hwmon sys attr */
+	struct thermal_hwmon_attr temp_crit;	/* hwmon sys attr */
+#endif
 };
 /* Adding event notification support elements */
 #define THERMAL_GENL_FAMILY_NAME                "thermal_event"
@@ -187,18 +185,10 @@ struct thermal_cooling_device *thermal_cooling_device_register(char *, void *,
 		const struct thermal_cooling_device_ops *);
 void thermal_cooling_device_unregister(struct thermal_cooling_device *);
 
-int sensor_get_id(char *name);
-int sensor_set_trip(uint32_t sensor_id, struct sensor_threshold *threshold);
-int sensor_cancel_trip(uint32_t sensor_id, struct sensor_threshold *threshold);
-int sensor_activate_trip(uint32_t sensor_id, struct sensor_threshold *threshold,
-			bool enable);
-int thermal_sensor_trip(struct thermal_zone_device *tz,
-		enum thermal_trip_type trip, long temp);
-
 #ifdef CONFIG_NET
-extern int thermal_generate_netlink_event(u32 orig, enum events event);
+extern int generate_netlink_event(u32 orig, enum events event);
 #else
-static inline int thermal_generate_netlink_event(u32 orig, enum events event)
+static inline int generate_netlink_event(u32 orig, enum events event)
 {
 	return 0;
 }

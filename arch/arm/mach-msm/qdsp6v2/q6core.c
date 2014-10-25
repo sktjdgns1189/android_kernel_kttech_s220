@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,7 +26,7 @@
 #include <linux/delay.h>
 #include <mach/msm_smd.h>
 #include <mach/qdsp6v2/apr.h>
-#include <mach/qdsp6v2/q6core.h>
+#include "q6core.h"
 
 #define TIMEOUT_MS 1000
 
@@ -69,19 +69,15 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 		switch (payload1[0]) {
 
 		case ADSP_CMD_SET_POWER_COLLAPSE_STATE:
-			pr_info("Cmd = ADSP_CMD_SET_POWER_COLLAPSE_STATE status[0x%x]\n",
-								payload1[1]);
+			pr_info("Cmd = ADSP_CMD_SET_POWER_COLLAPSE_STATE"
+				" status[0x%x]\n", payload1[1]);
 			break;
 		case ADSP_CMD_REMOTE_BUS_BW_REQUEST:
-			pr_info("%s: cmd = ADSP_CMD_REMOTE_BUS_BW_REQUEST status = 0x%x\n",
-							__func__, payload1[1]);
+			pr_info("%s: cmd = ADSP_CMD_REMOTE_BUS_BW_REQUEST"
+				"  status = 0x%x\n", __func__, payload1[1]);
 
 			bus_bw_resp_received = 1;
 			wake_up(&bus_bw_req_wait);
-			break;
-		case ADSP_CMD_SET_DTS_MODEL_ID:
-			pr_debug("ADSP_CMD_SET_DTS_MODEL_ID status[0x%x]\n",
-					payload1[1]);
 			break;
 		default:
 			pr_err("Invalid cmd rsp[0x%x][0x%x]\n",
@@ -160,9 +156,10 @@ void core_open(void)
 		core_handle_q = apr_register("ADSP", "CORE",
 					aprv2_core_fn_q, 0xFFFFFFFF, NULL);
 	}
-	pr_debug("Open_q %p\n", core_handle_q);
-	if (core_handle_q == NULL)
+	pr_info("Open_q %p\n", core_handle_q);
+	if (core_handle_q == NULL) {
 		pr_err("%s: Unable to register CORE\n", __func__);
+	}
 }
 
 int core_req_bus_bandwith(u16 bus_id, u32 ab_bps, u32 ib_bps)
@@ -338,7 +335,7 @@ static ssize_t apr_debug_write(struct file *file, const char __user *buf,
 		if (apr_handle_q)
 			apr_deregister(apr_handle_q);
 	} else if (!strncmp(l_buf + 20, "loaded", 64)) {
-		apr_set_q6_state(APR_SUBSYS_LOADED);
+		change_q6_state(APR_Q6_LOADED);
 	} else if (!strncmp(l_buf + 20, "boom", 64)) {
 		q6audio_dsp_not_responding();
 	} else if (!strncmp(l_buf + 20, "dsp_ver", 64)) {
@@ -351,7 +348,7 @@ static ssize_t apr_debug_write(struct file *file, const char __user *buf,
 			pc.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_EVENT,
 					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
 			pc.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
-						sizeof(uint32_t));
+						sizeof(uint32_t));;
 			pc.hdr.src_port = 0;
 			pc.hdr.dest_port = 0;
 			pc.hdr.token = 0;
@@ -381,35 +378,6 @@ static ssize_t apr_debug_write(struct file *file, const char __user *buf,
 		pr_info("Unknown Command\n");
 
 	return count;
-}
-
-uint32_t core_set_dts_model_id(uint32_t id_size, uint8_t *id)
-{
-	struct adsp_dts_modelid payload;
-	int rc = 0;
-	pr_debug("core_set_dts_model_id(): Enter\n");
-	core_open();
-	if (core_handle_q) {
-		payload.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_EVENT,
-			APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
-		payload.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
-					sizeof(uint32_t)+id_size);
-		payload.hdr.src_port = 0;
-		payload.hdr.dest_port = 0;
-		payload.hdr.token = 0;
-		payload.hdr.opcode = ADSP_CMD_SET_DTS_MODEL_ID;
-		payload.model_ID_size = id_size;
-		memcpy(payload.model_ID, id, id_size+1);
-		pr_debug("Send DTS sec opcode=%x modelID = %s, size=%d\n",
-			payload.hdr.opcode, (char *)payload.model_ID,
-			payload.model_ID_size);
-		rc = apr_send_pkt(core_handle_q, (uint32_t *)&payload);
-		if (rc < 0)
-			pr_err("%s: SET_DTS_DTS_MODEL_ID failed op[0x%x]rc[%d]\n",
-				__func__, payload.hdr.opcode, rc);
-	}
-	pr_debug("core_set_dts_model_id(): Exit\n");
-	return rc;
 }
 
 static const struct file_operations apr_debug_fops = {

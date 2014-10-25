@@ -59,6 +59,16 @@ if [ -n "$SMP" ] ; then CONFIG_FLAGS="SMP"; fi
 if [ -n "$PREEMPT" ] ; then CONFIG_FLAGS="$CONFIG_FLAGS PREEMPT"; fi
 UTS_VERSION="$UTS_VERSION $CONFIG_FLAGS $TIMESTAMP"
 
+# KT Tech Project2
+if [ "$KTTECH_BUILD" = "true" ]; then
+	if [ "$TARGET_BUILD_VARIANT" = "user" ]; then
+		VERSION=1
+		LINUX_COMPILE_BY="kttech"
+		LINUX_COMPILE_HOST="PJT2-001"
+		UTS_VERSION="#1 $CONFIG_FLAGS $TIMESTAMP"
+	fi
+fi
+
 # Truncate to maximum length
 
 UTS_LEN=64

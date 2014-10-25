@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,19 +13,16 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/elf.h>
 #include <linux/err.h>
-
-#include <mach/subsystem_restart.h>
-#include <mach/msm_bus_board.h>
 
 #include "peripheral-loader.h"
 #include "scm-pas.h"
 
-struct tzapps_data {
-	struct pil_desc pil_desc;
-	struct subsys_device *subsys;
-	struct subsys_desc subsys_desc;
-};
+static int nop_verify_blob(struct pil_desc *pil, u32 phy_addr, size_t size)
+{
+	return 0;
+}
 
 static int pil_tzapps_init_image(struct pil_desc *pil, const u8 *metadata,
 		size_t size)
@@ -45,70 +42,32 @@ static int pil_tzapps_shutdown(struct pil_desc *pil)
 
 static struct pil_reset_ops pil_tzapps_ops = {
 	.init_image = pil_tzapps_init_image,
+	.verify_blob = nop_verify_blob,
 	.auth_and_reset = pil_tzapps_reset,
 	.shutdown = pil_tzapps_shutdown,
 };
 
-#define subsys_to_drv(d) container_of(d, struct tzapps_data, subsys_desc)
-
-static int tzapps_start(const struct subsys_desc *desc)
-{
-	struct tzapps_data *drv = subsys_to_drv(desc);
-
-	return pil_boot(&drv->pil_desc);
-}
-
-static void tzapps_stop(const struct subsys_desc *desc)
-{
-	struct tzapps_data *drv = subsys_to_drv(desc);
-	pil_shutdown(&drv->pil_desc);
-}
-
 static int __devinit pil_tzapps_driver_probe(struct platform_device *pdev)
 {
 	struct pil_desc *desc;
-	struct tzapps_data *drv;
-	int ret;
 
 	if (pas_supported(PAS_TZAPPS) < 0)
 		return -ENOSYS;
 
-	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
-	if (!drv)
+	desc = devm_kzalloc(&pdev->dev, sizeof(*desc), GFP_KERNEL);
+	if (!desc)
 		return -ENOMEM;
-	platform_set_drvdata(pdev, drv);
 
-	desc = &drv->pil_desc;
 	desc->name = "tzapps";
 	desc->dev = &pdev->dev;
 	desc->ops = &pil_tzapps_ops;
-	desc->owner = THIS_MODULE;
-	ret = pil_desc_init(desc);
-	if (ret)
-		return ret;
-
-	drv->subsys_desc.name = "tzapps";
-	drv->subsys_desc.dev = &pdev->dev;
-	drv->subsys_desc.owner = THIS_MODULE;
-	drv->subsys_desc.start = tzapps_start;
-	drv->subsys_desc.stop = tzapps_stop;
-
-	drv->subsys = subsys_register(&drv->subsys_desc);
-	if (IS_ERR(drv->subsys)) {
-		pil_desc_release(desc);
-		return PTR_ERR(drv->subsys);
-	}
-
-	scm_pas_init(MSM_BUS_MASTER_SPS);
-
+	if (msm_pil_register(desc))
+		return -EINVAL;
 	return 0;
 }
 
 static int __devexit pil_tzapps_driver_exit(struct platform_device *pdev)
 {
-	struct tzapps_data *drv = platform_get_drvdata(pdev);
-	subsys_unregister(drv->subsys);
-	pil_desc_release(&drv->pil_desc);
 	return 0;
 }
 

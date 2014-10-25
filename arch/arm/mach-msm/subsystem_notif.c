@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -147,8 +147,7 @@ done:
 EXPORT_SYMBOL(subsys_notif_add_subsys);
 
 int subsys_notif_queue_notification(void *subsys_handle,
-					enum subsys_notif_type notif_type,
-					void *data)
+					enum subsys_notif_type notif_type)
 {
 	int ret = 0;
 	struct subsys_notif_info *subsys =
@@ -160,9 +159,10 @@ int subsys_notif_queue_notification(void *subsys_handle,
 	if (notif_type < 0 || notif_type >= SUBSYS_NOTIF_TYPE_COUNT)
 		return -EINVAL;
 
-		ret = srcu_notifier_call_chain(
-			&subsys->subsys_notif_rcvr_list, notif_type,
-			data);
+	ret = srcu_notifier_call_chain(
+		&subsys->subsys_notif_rcvr_list, notif_type,
+		(void *)subsys);
+
 	return ret;
 }
 EXPORT_SYMBOL(subsys_notif_queue_notification);

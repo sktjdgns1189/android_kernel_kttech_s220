@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,13 +22,6 @@ enum {
 	MAX_AUDPROC_TYPES
 };
 
-enum {
-	VOCPROC_CAL,
-	VOCSTRM_CAL,
-	VOCVOL_CAL,
-	MAX_VOCPROC_TYPES
-};
-
 struct acdb_cal_block {
 	uint32_t		cal_size;
 	uint32_t		cal_kvaddr;
@@ -42,7 +35,7 @@ struct acdb_atomic_cal_block {
 };
 
 struct acdb_cal_data {
-	uint32_t			num_cal_blocks;
+	uint32_t		num_cal_blocks;
 	struct acdb_atomic_cal_block	*cal_blocks;
 };
 
@@ -51,7 +44,6 @@ uint32_t get_voice_tx_topology(void);
 uint32_t get_adm_rx_topology(void);
 uint32_t get_adm_tx_topology(void);
 uint32_t get_asm_topology(void);
-void get_voice_cal_allocation(struct acdb_cal_block *cal_block);
 void get_all_voice_cal(struct acdb_cal_block *cal_block);
 void get_all_cvp_cal(struct acdb_cal_block *cal_block);
 void get_all_vocproc_cal(struct acdb_cal_block *cal_block);

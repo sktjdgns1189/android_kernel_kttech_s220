@@ -31,7 +31,6 @@
 #include <linux/slab.h>
 #include <linux/sysfs.h>
 #include <linux/input/rmi_platformdata.h>
-#include <linux/module.h>
 
 #include "rmi.h"
 #include "rmi_drvr.h"
@@ -522,7 +521,7 @@ int FN_11_init(struct rmi_function_device *function_device)
 	set_bit(EV_SYN, function_device->input->evbit);
 	set_bit(EV_KEY, function_device->input->evbit);
 	set_bit(BTN_TOUCH, function_device->input->keybit);
-	set_bit(KEY_OK, function_device->input->keybit);
+    set_bit(KEY_OK, function_device->input->keybit);
 
 	f11_set_abs_params(function_device);
 

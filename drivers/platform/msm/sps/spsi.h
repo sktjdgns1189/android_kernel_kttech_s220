@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,20 +21,10 @@
 #include <linux/list.h>		/* list_head */
 #include <linux/kernel.h>	/* pr_info() */
 #include <linux/compiler.h>
-#include <linux/ratelimit.h>
 
 #include <mach/sps.h>
 
 #include "sps_map.h"
-
-#ifdef CONFIG_ARM_LPAE
-#define SPS_LPAE (true)
-#else
-#define SPS_LPAE (false)
-#endif
-
-#define BAM_MAX_PIPES              31
-#define BAM_MAX_P_LOCK_GROUP_NUM   31
 
 /* Adjust for offset of struct sps_q_event */
 #define SPS_EVENT_INDEX(e)    ((e) - 1)
@@ -43,98 +33,34 @@
 /* BAM identifier used in log messages */
 #define BAM_ID(dev)       ((dev)->props.phys_addr)
 
-/* "Clear" value for the connection parameter struct */
-#define SPSRM_CLEAR     0xcccccccc
-
-#define MAX_MSG_LEN 80
-
-extern u32 d_type;
-extern bool enhd_pipe;
-extern bool imem;
-
 #ifdef CONFIG_DEBUG_FS
-extern u8 debugfs_record_enabled;
-extern u8 logging_option;
-extern u8 debug_level_option;
-extern u8 print_limit_option;
-
+extern u32 sps_debugfs_enabled;
+extern u32 detailed_debug_on;
+#define MAX_MSG_LEN 80
 #define SPS_DEBUGFS(msg, args...) do {					\
-		char buf[MAX_MSG_LEN];		\
-		snprintf(buf, MAX_MSG_LEN, msg"\n", ##args);	\
-		sps_debugfs_record(buf);	\
-	} while (0)
+			char buf[MAX_MSG_LEN];		\
+			snprintf(buf, MAX_MSG_LEN, msg"\n", ##args);	\
+			sps_debugfs_record(buf);	\
+		} while (0)
 #define SPS_ERR(msg, args...) do {					\
-		if (logging_option != 1) {	\
-			if (unlikely(print_limit_option > 2))	\
-				pr_err_ratelimited(msg, ##args);	\
-			else	\
-				pr_err(msg, ##args);	\
-		}	\
-		if (unlikely(debugfs_record_enabled))	\
-			SPS_DEBUGFS(msg, ##args);	\
-	} while (0)
+			pr_err(msg, ##args);	\
+			if (unlikely(sps_debugfs_enabled))	\
+				SPS_DEBUGFS(msg, ##args);	\
+		} while (0)
 #define SPS_INFO(msg, args...) do {					\
-		if (logging_option != 1) {	\
-			if (unlikely(print_limit_option > 1))	\
-				pr_info_ratelimited(msg, ##args);	\
-			else	\
-				pr_info(msg, ##args);	\
-		}	\
-		if (unlikely(debugfs_record_enabled))	\
-			SPS_DEBUGFS(msg, ##args);	\
-	} while (0)
+			pr_info(msg, ##args);	\
+			if (unlikely(sps_debugfs_enabled))	\
+				SPS_DEBUGFS(msg, ##args);	\
+		} while (0)
 #define SPS_DBG(msg, args...) do {					\
-		if ((unlikely(logging_option > 1))	\
-			&& (unlikely(debug_level_option > 3))) {\
-			if (unlikely(print_limit_option > 0))	\
-				pr_info_ratelimited(msg, ##args);	\
-			else	\
+			if (unlikely(detailed_debug_on))	\
 				pr_info(msg, ##args);	\
-		} else	\
-			pr_debug(msg, ##args);	\
-		if (unlikely(debugfs_record_enabled))	\
-			SPS_DEBUGFS(msg, ##args);	\
-	} while (0)
-#define SPS_DBG1(msg, args...) do {					\
-		if ((unlikely(logging_option > 1))	\
-			&& (unlikely(debug_level_option > 2))) {\
-			if (unlikely(print_limit_option > 0))	\
-				pr_info_ratelimited(msg, ##args);	\
 			else	\
-				pr_info(msg, ##args);	\
-		} else	\
-			pr_debug(msg, ##args);	\
-		if (unlikely(debugfs_record_enabled))	\
-			SPS_DEBUGFS(msg, ##args);	\
-	} while (0)
-#define SPS_DBG2(msg, args...) do {					\
-		if ((unlikely(logging_option > 1))	\
-			&& (unlikely(debug_level_option > 1))) {\
-			if (unlikely(print_limit_option > 0))	\
-				pr_info_ratelimited(msg, ##args);	\
-			else	\
-				pr_info(msg, ##args);	\
-		} else	\
-			pr_debug(msg, ##args);	\
-		if (unlikely(debugfs_record_enabled))	\
-			SPS_DEBUGFS(msg, ##args);	\
-	} while (0)
-#define SPS_DBG3(msg, args...) do {					\
-		if ((unlikely(logging_option > 1))	\
-			&& (unlikely(debug_level_option > 0))) {\
-			if (unlikely(print_limit_option > 0))	\
-				pr_info_ratelimited(msg, ##args);	\
-			else	\
-				pr_info(msg, ##args);	\
-		} else	\
-			pr_debug(msg, ##args);	\
-		if (unlikely(debugfs_record_enabled))	\
-			SPS_DEBUGFS(msg, ##args);	\
-	} while (0)
+				pr_debug(msg, ##args);	\
+			if (unlikely(sps_debugfs_enabled))	\
+				SPS_DEBUGFS(msg, ##args);	\
+		} while (0)
 #else
-#define	SPS_DBG3(x...)		pr_debug(x)
-#define	SPS_DBG2(x...)		pr_debug(x)
-#define	SPS_DBG1(x...)		pr_debug(x)
 #define	SPS_DBG(x...)		pr_debug(x)
 #define	SPS_INFO(x...)		pr_info(x)
 #define	SPS_ERR(x...)		pr_err(x)
@@ -146,7 +72,6 @@ struct sps_conn_end_pt {
 	u32 bam_phys;		/* Physical address of BAM. */
 	u32 pipe_index;		/* Pipe index */
 	u32 event_threshold;	/* Pipe event threshold */
-	u32 lock_group;	/* The lock group this pipe belongs to */
 	void *bam;
 };
 
@@ -173,9 +98,8 @@ struct sps_connection {
 	/* Dynamically allocated resouces, if required */
 	u32 alloc_src_pipe;	/* Source pipe index */
 	u32 alloc_dest_pipe;	/* Destination pipe index */
-	/* Physical address of descriptor FIFO */
-	phys_addr_t alloc_desc_base;
-	phys_addr_t alloc_data_base;	/* Physical address of data FIFO */
+	u32 alloc_desc_base;	/* Physical address of descriptor FIFO */
+	u32 alloc_data_base;	/* Physical address of data FIFO */
 };
 
 /* Event bookkeeping descriptor struct */
@@ -199,24 +123,6 @@ struct sps_mem_stats {
 void sps_debugfs_record(const char *);
 #endif
 
-/* output the content of BAM-level registers */
-void print_bam_reg(void *);
-
-/* output the content of BAM pipe registers */
-void print_bam_pipe_reg(void *, u32);
-
-/* output the content of selected BAM-level registers */
-void print_bam_selected_reg(void *, u32);
-
-/* output the content of selected BAM pipe registers */
-void print_bam_pipe_selected_reg(void *, u32);
-
-/* output descriptor FIFO of a pipe */
-void print_bam_pipe_desc_fifo(void *, u32, u32);
-
-/* output BAM_TEST_BUS_REG */
-void print_bam_test_bus_reg(void *, u32);
-
 /**
  * Translate physical to virtual address
  *
@@ -227,7 +133,7 @@ void print_bam_test_bus_reg(void *, u32);
  * @return virtual memory pointer
  *
  */
-void *spsi_get_mem_ptr(phys_addr_t phys_addr);
+void *spsi_get_mem_ptr(u32 phys_addr);
 
 /**
  * Allocate I/O (pipe) memory
@@ -238,7 +144,7 @@ void *spsi_get_mem_ptr(phys_addr_t phys_addr);
  *
  * @return physical address of allocated memory, or SPS_ADDR_INVALID on error
  */
-phys_addr_t sps_mem_alloc_io(u32 bytes);
+u32 sps_mem_alloc_io(u32 bytes);
 
 /**
  * Free I/O (pipe) memory
@@ -249,7 +155,7 @@ phys_addr_t sps_mem_alloc_io(u32 bytes);
  *
  * @bytes - number of bytes to free.
  */
-void sps_mem_free_io(phys_addr_t phys_addr, u32 bytes);
+void sps_mem_free_io(u32 phys_addr, u32 bytes);
 
 /**
  * Find matching connection mapping
@@ -333,7 +239,7 @@ int sps_dma_pipe_free(void *bam, u32 pipe_index);
  * @return 0 on success, negative value on error
  *
  */
-int sps_mem_init(phys_addr_t pipemem_phys_base, u32 pipemem_size);
+int sps_mem_init(u32 pipemem_phys_base, u32 pipemem_size);
 
 /**
  * De-initialize driver memory module

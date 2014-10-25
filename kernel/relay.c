@@ -15,7 +15,7 @@
 #include <linux/errno.h>
 #include <linux/stddef.h>
 #include <linux/slab.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/string.h>
 #include <linux/relay.h>
 #include <linux/vmalloc.h>
@@ -164,14 +164,10 @@ depopulate:
  */
 static struct rchan_buf *relay_create_buf(struct rchan *chan)
 {
-	struct rchan_buf *buf;
-
-	if (chan->n_subbufs > UINT_MAX / sizeof(size_t *))
-		return NULL;
-
-	buf = kzalloc(sizeof(struct rchan_buf), GFP_KERNEL);
+	struct rchan_buf *buf = kzalloc(sizeof(struct rchan_buf), GFP_KERNEL);
 	if (!buf)
 		return NULL;
+
 	buf->padding = kmalloc(chan->n_subbufs * sizeof(size_t *), GFP_KERNEL);
 	if (!buf->padding)
 		goto free_buf;
@@ -306,7 +302,7 @@ static void buf_unmapped_default_callback(struct rchan_buf *buf,
  */
 static struct dentry *create_buf_file_default_callback(const char *filename,
 						       struct dentry *parent,
-						       umode_t mode,
+						       int mode,
 						       struct rchan_buf *buf,
 						       int *is_global)
 {
@@ -577,8 +573,6 @@ struct rchan *relay_open(const char *base_filename,
 	struct rchan *chan;
 
 	if (!(subbuf_size && n_subbufs))
-		return NULL;
-	if (subbuf_size > UINT_MAX / n_subbufs)
 		return NULL;
 
 	chan = kzalloc(sizeof(struct rchan), GFP_KERNEL);

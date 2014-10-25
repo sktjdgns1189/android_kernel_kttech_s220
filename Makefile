@@ -1,8 +1,8 @@
 VERSION = 3
-PATCHLEVEL = 4
-SUBLEVEL = 0
+PATCHLEVEL = 0
+SUBLEVEL = 8
 EXTRAVERSION =
-NAME = Saber-toothed Squirrel
+NAME = Sneaky Weasel
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -312,7 +312,7 @@ endif
 # If the user is running make -s (silent mode), suppress echoing of
 # commands
 
-ifneq ($(filter s% -s%,$(MAKEFLAGS)),)
+ifneq ($(findstring s,$(MAKEFLAGS)),)
   quiet=silent_
 endif
 
@@ -358,13 +358,29 @@ CFLAGS_KERNEL	=
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
+ifeq ($(KTTECH_BUILD_FINAL),true)
+CFLAGS_KERNEL += -DKTTECH_FINAL_BUILD
+endif
+
+# Definded KTTech board type.
+ifeq ($(KTTECH_BOARD),pt)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_PT
+else ifeq ($(KTTECH_BOARD),es1)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_ES1
+else ifeq ($(KTTECH_BOARD),es2)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_ES2
+else ifeq ($(KTTECH_BOARD),pp)
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_PP
+else
+CFLAGS_KERNEL += -DCONFIG_BOARDREV_PP
+endif
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
 LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
                    -Iarch/$(hdr-arch)/include/generated -Iinclude \
                    $(if $(KBUILD_SRC), -I$(srctree)/include) \
-                   -include $(srctree)/include/linux/kconfig.h
+                   -include include/generated/autoconf.h
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
@@ -446,7 +462,7 @@ asm-generic:
 
 no-dot-config-targets := clean mrproper distclean \
 			 cscope gtags TAGS tags help %docs check% coccicheck \
-			 include/linux/version.h headers_% archheaders archscripts \
+			 include/linux/version.h headers_% \
 			 kernelversion %src-pkg
 
 config-targets := 0
@@ -563,7 +579,7 @@ endif # $(dot-config)
 all: vmlinux
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -Os
 else
 KBUILD_CFLAGS	+= -O2
 endif
@@ -864,7 +880,6 @@ endef
 # Generate .S file with all kernel symbols
 quiet_cmd_kallsyms = KSYM    $@
       cmd_kallsyms = $(NM) -n $< | $(KALLSYMS) \
-                     --page-offset=$(CONFIG_PAGE_OFFSET) \
                      $(if $(CONFIG_KALLSYMS_ALL),--all-symbols) > $@
 
 .tmp_kallsyms1.o .tmp_kallsyms2.o .tmp_kallsyms3.o: %.o: %.S scripts FORCE
@@ -984,10 +999,11 @@ prepare1: prepare2 include/linux/version.h include/generated/utsrelease.h \
                    include/config/auto.conf
 	$(cmd_crmodverdir)
 
-archprepare: archheaders archscripts prepare1 scripts_basic
+archprepare: prepare1 scripts_basic
 
 prepare0: archprepare FORCE
 	$(Q)$(MAKE) $(build)=.
+	$(Q)$(MAKE) $(build)=. missing-syscalls
 
 # All the preparing..
 prepare: prepare0
@@ -1051,14 +1067,8 @@ hdr-inst := -rR -f $(srctree)/scripts/Makefile.headersinst obj
 # If we do an all arch process set dst to asm-$(hdr-arch)
 hdr-dst = $(if $(KBUILD_HEADERS), dst=include/asm-$(hdr-arch), dst=include/asm)
 
-PHONY += archheaders
-archheaders:
-
-PHONY += archscripts
-archscripts:
-
 PHONY += __headers
-__headers: include/linux/version.h scripts_basic asm-generic archheaders archscripts FORCE
+__headers: include/linux/version.h scripts_basic asm-generic FORCE
 	$(Q)$(MAKE) $(build)=scripts build_unifdef
 
 PHONY += headers_install_all
@@ -1178,7 +1188,7 @@ MRPROPER_FILES += .config .config.old .version .old_version             \
 #
 clean: rm-dirs  := $(CLEAN_DIRS)
 clean: rm-files := $(CLEAN_FILES)
-clean-dirs      := $(addprefix _clean_, . $(vmlinux-alldirs) Documentation samples)
+clean-dirs      := $(addprefix _clean_, . $(vmlinux-alldirs) Documentation)
 
 PHONY += $(clean-dirs) clean archclean
 $(clean-dirs):
@@ -1208,7 +1218,7 @@ distclean: mrproper
 	@find $(srctree) $(RCS_FIND_IGNORE) \
 		\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
-		-o -name '.*.rej' \
+		-o -name '.*.rej' -o -size 0 \
 		-o -name '*%' -o -name '.*.cmd' -o -name 'core' \) \
 		-type f -print | xargs rm -f
 
@@ -1300,12 +1310,12 @@ help:
 	@echo  '  make O=dir [targets] Locate all output files in "dir", including .config'
 	@echo  '  make C=1   [targets] Check all c source with $$CHECK (sparse by default)'
 	@echo  '  make C=2   [targets] Force check of all c source with $$CHECK'
-	@echo  '  make RECORDMCOUNT_WARN=1 [targets] Warn about ignored mcount sections'
 	@echo  '  make W=n   [targets] Enable extra gcc checks, n=1,2,3 where'
 	@echo  '		1: warnings which may be relevant and do not occur too often'
 	@echo  '		2: warnings which occur quite often but may still be relevant'
 	@echo  '		3: more obscure warnings, can most likely be ignored'
 	@echo  '		Multiple levels can be combined with W=12 or W=123'
+	@echo  '  make RECORDMCOUNT_WARN=1 [targets] Warn about ignored mcount sections'
 	@echo  ''
 	@echo  'Execute "make" or "make all" to build all targets marked with [*] '
 	@echo  'For further info see the ./README file'

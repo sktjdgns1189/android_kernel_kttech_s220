@@ -16,18 +16,22 @@
 #include <asm/cachetype.h>
 #include <asm/highmem.h>
 #include <asm/smp_plat.h>
+#include <asm/system.h>
 #include <asm/tlbflush.h>
 
 #include "mm.h"
 
 #ifdef CONFIG_CPU_CACHE_VIPT
 
+#define ALIAS_FLUSH_START	0xffff4000
+
 static void flush_pfn_alias(unsigned long pfn, unsigned long vaddr)
 {
-	unsigned long to = FLUSH_ALIAS_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);
+	unsigned long to = ALIAS_FLUSH_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);
 	const int zero = 0;
 
-	set_top_pte(to, pfn_pte(pfn, PAGE_KERNEL));
+	set_pte_ext(TOP_PTE(to), pfn_pte(pfn, PAGE_KERNEL), 0);
+	flush_tlb_kernel_page(to);
 
 	asm(	"mcrr	p15, 0, %1, %0, c14\n"
 	"	mcr	p15, 0, %2, c7, c10, 4"
@@ -38,12 +42,13 @@ static void flush_pfn_alias(unsigned long pfn, unsigned long vaddr)
 
 static void flush_icache_alias(unsigned long pfn, unsigned long vaddr, unsigned long len)
 {
-	unsigned long va = FLUSH_ALIAS_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);
+	unsigned long colour = CACHE_COLOUR(vaddr);
 	unsigned long offset = vaddr & (PAGE_SIZE - 1);
 	unsigned long to;
 
-	set_top_pte(va, pfn_pte(pfn, PAGE_KERNEL));
-	to = va + offset;
+	set_pte_ext(TOP_PTE(ALIAS_FLUSH_START) + colour, pfn_pte(pfn, PAGE_KERNEL), 0);
+	to = ALIAS_FLUSH_START + (colour << PAGE_SHIFT) + offset;
+	flush_tlb_kernel_page(to);
 	flush_icache_range(to, to + len);
 }
 
@@ -170,18 +175,15 @@ void __flush_dcache_page(struct address_space *mapping, struct page *page)
 	if (!PageHighMem(page)) {
 		__cpuc_flush_dcache_area(page_address(page), PAGE_SIZE);
 	} else {
-		void *addr;
-
-		if (cache_is_vipt_nonaliasing()) {
+		void *addr = kmap_high_get(page);
+		if (addr) {
+			__cpuc_flush_dcache_area(addr, PAGE_SIZE);
+			kunmap_high(page);
+		} else if (cache_is_vipt()) {
+			/* unmapped pages might still be cached */
 			addr = kmap_atomic(page);
 			__cpuc_flush_dcache_area(addr, PAGE_SIZE);
 			kunmap_atomic(addr);
-		} else {
-			addr = kmap_high_get(page);
-			if (addr) {
-				__cpuc_flush_dcache_area(addr, PAGE_SIZE);
-				kunmap_high(page);
-			}
 		}
 	}
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -9,9 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
-#define pr_fmt(fmt) "AXI: %s(): " fmt, __func__
-
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -58,8 +55,6 @@ struct msm_bus_fabric_device *msm_bus_get_fabric_device(int fabid)
 	struct msm_bus_fabric_device *fabric;
 	dev = bus_find_device(&msm_bus_type, NULL, (void *)fabid,
 		msm_bus_device_match);
-	if (!dev)
-		return NULL;
 	fabric = to_msm_bus_fabric_device(dev);
 	return fabric;
 }

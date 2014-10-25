@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012,2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,7 +28,6 @@
 #include "kgsl_log.h"
 #include "kgsl_sharedmem.h"
 #include "adreno_pm4types.h"
-#include "adreno.h"
 
 static struct rchan	*chan;
 static struct dentry	*dir;
@@ -335,6 +334,8 @@ void kgsl_cffdump_init()
 		return;
 	}
 
+	kgsl_cff_dump_enable = 1;
+
 	spin_lock_init(&cffdump_lock);
 
 	dir = debugfs_create_dir("cff", debugfs_dir);
@@ -355,79 +356,65 @@ void kgsl_cffdump_destroy()
 		debugfs_remove(dir);
 }
 
-void kgsl_cffdump_open(struct kgsl_device *device)
+void kgsl_cffdump_open(enum kgsl_deviceid device_id)
 {
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	if (!device->cff_dump_enable)
-		return;
-
-	if (KGSL_MMU_TYPE_IOMMU == kgsl_mmu_get_mmutype()) {
-		kgsl_cffdump_memory_base(device,
-			KGSL_PAGETABLE_BASE,
-			KGSL_IOMMU_GLOBAL_MEM_BASE +
-			KGSL_IOMMU_GLOBAL_MEM_SIZE -
-			KGSL_PAGETABLE_BASE,
-			adreno_dev->gmem_size);
-	} else {
-		kgsl_cffdump_memory_base(device,
-			kgsl_mmu_get_base_addr(&device->mmu),
-			kgsl_mmu_get_ptsize(&device->mmu),
-			adreno_dev->gmem_size);
-	}
+	kgsl_cffdump_memory_base(device_id, KGSL_PAGETABLE_BASE,
+			CONFIG_MSM_KGSL_PAGE_TABLE_SIZE, SZ_256K);
 }
 
-void kgsl_cffdump_memory_base(struct kgsl_device *device, unsigned int base,
+void kgsl_cffdump_memory_base(enum kgsl_deviceid device_id, unsigned int base,
 			      unsigned int range, unsigned gmemsize)
 {
-	if (!device->cff_dump_enable)
-		return;
-	cffdump_printline(device->id, CFF_OP_MEMORY_BASE, base,
+	cffdump_printline(device_id, CFF_OP_MEMORY_BASE, base,
 			range, gmemsize, 0, 0);
 }
 
-void kgsl_cffdump_hang(struct kgsl_device *device)
+void kgsl_cffdump_hang(enum kgsl_deviceid device_id)
 {
-	if (!device->cff_dump_enable)
-		return;
-	cffdump_printline(device->id, CFF_OP_HANG, 0, 0, 0, 0, 0);
+	cffdump_printline(device_id, CFF_OP_HANG, 0, 0, 0, 0, 0);
 }
 
-void kgsl_cffdump_close(struct kgsl_device *device)
+void kgsl_cffdump_close(enum kgsl_deviceid device_id)
 {
-	if (!device->cff_dump_enable)
-		return;
-	cffdump_printline(device->id, CFF_OP_EOF, 0, 0, 0, 0, 0);
+	cffdump_printline(device_id, CFF_OP_EOF, 0, 0, 0, 0, 0);
 }
 
-
-void kgsl_cffdump_user_event(struct kgsl_device *device,
-		unsigned int cff_opcode, unsigned int op1,
+void kgsl_cffdump_user_event(unsigned int cff_opcode, unsigned int op1,
 		unsigned int op2, unsigned int op3,
 		unsigned int op4, unsigned int op5)
 {
-	if (!device->cff_dump_enable)
-		return;
 	cffdump_printline(-1, cff_opcode, op1, op2, op3, op4, op5);
 }
 
-void kgsl_cffdump_syncmem(struct kgsl_device *device,
-			  struct kgsl_memdesc *memdesc, uint gpuaddr,
-			  uint sizebytes, bool clean_cache)
+void kgsl_cffdump_syncmem(struct kgsl_device_private *dev_priv,
+	const struct kgsl_memdesc *memdesc, uint gpuaddr, uint sizebytes,
+	bool clean_cache)
 {
 	const void *src;
 
-	if (!device->cff_dump_enable)
+	if (!kgsl_cff_dump_enable)
 		return;
-
-	BUG_ON(memdesc == NULL);
 
 	total_syncmem += sizebytes;
 
+	if (memdesc == NULL) {
+		struct kgsl_mem_entry *entry;
+		spin_lock(&dev_priv->process_priv->mem_lock);
+		entry = kgsl_sharedmem_find_region(dev_priv->process_priv,
+			gpuaddr, sizebytes);
+		spin_unlock(&dev_priv->process_priv->mem_lock);
+		if (entry == NULL) {
+			KGSL_CORE_ERR("did not find mapping "
+				"for gpuaddr: 0x%08x\n", gpuaddr);
+			return;
+		}
+		memdesc = &entry->memdesc;
+	}
 	src = (uint *)kgsl_gpuaddr_to_vaddr(memdesc, gpuaddr);
 	if (memdesc->hostptr == NULL) {
-		KGSL_CORE_ERR(
-		"no kernel map for gpuaddr: 0x%08x, m->host: 0x%p, phys: %pa\n",
-		gpuaddr, memdesc->hostptr, &memdesc->physaddr);
+		KGSL_CORE_ERR("no kernel mapping for "
+			"gpuaddr: 0x%08x, m->host: 0x%p, phys: 0x%08x\n",
+			gpuaddr, memdesc->hostptr, memdesc->physaddr);
 		return;
 	}
 
@@ -453,10 +440,9 @@ void kgsl_cffdump_syncmem(struct kgsl_device *device,
 			0, 0, 0);
 }
 
-void kgsl_cffdump_setmem(struct kgsl_device *device,
-			uint addr, uint value, uint sizebytes)
+void kgsl_cffdump_setmem(uint addr, uint value, uint sizebytes)
 {
-	if (!device || !device->cff_dump_enable)
+	if (!kgsl_cff_dump_enable)
 		return;
 
 	while (sizebytes > 3) {
@@ -472,37 +458,37 @@ void kgsl_cffdump_setmem(struct kgsl_device *device,
 				0, 0, 0);
 }
 
-void kgsl_cffdump_regwrite(struct kgsl_device *device, uint addr,
+void kgsl_cffdump_regwrite(enum kgsl_deviceid device_id, uint addr,
 	uint value)
 {
-	if (!device->cff_dump_enable)
+	if (!kgsl_cff_dump_enable)
 		return;
 
-	cffdump_printline(device->id, CFF_OP_WRITE_REG, addr, value,
+	cffdump_printline(device_id, CFF_OP_WRITE_REG, addr, value,
 			0, 0, 0);
 }
 
-void kgsl_cffdump_regpoll(struct kgsl_device *device, uint addr,
+void kgsl_cffdump_regpoll(enum kgsl_deviceid device_id, uint addr,
 	uint value, uint mask)
 {
-	if (!device->cff_dump_enable)
+	if (!kgsl_cff_dump_enable)
 		return;
 
-	cffdump_printline(device->id, CFF_OP_POLL_REG, addr, value,
+	cffdump_printline(device_id, CFF_OP_POLL_REG, addr, value,
 			mask, 0, 0);
 }
 
-void kgsl_cffdump_slavewrite(struct kgsl_device *device, uint addr, uint value)
+void kgsl_cffdump_slavewrite(uint addr, uint value)
 {
-	if (!device->cff_dump_enable)
+	if (!kgsl_cff_dump_enable)
 		return;
 
 	cffdump_printline(-1, CFF_OP_WRITE_REG, addr, value, 0, 0, 0);
 }
 
-int kgsl_cffdump_waitirq(struct kgsl_device *device)
+int kgsl_cffdump_waitirq(void)
 {
-	if (!device->cff_dump_enable)
+	if (!kgsl_cff_dump_enable)
 		return 0;
 
 	cffdump_printline(-1, CFF_OP_WAIT_IRQ, 0, 0, 0, 0, 0);
@@ -510,6 +496,190 @@ int kgsl_cffdump_waitirq(struct kgsl_device *device)
 	return 1;
 }
 EXPORT_SYMBOL(kgsl_cffdump_waitirq);
+
+#define ADDRESS_STACK_SIZE 256
+#define GET_PM4_TYPE3_OPCODE(x) ((*(x) >> 8) & 0xFF)
+static unsigned int kgsl_cffdump_addr_count;
+
+static bool kgsl_cffdump_handle_type3(struct kgsl_device_private *dev_priv,
+	uint *hostaddr, bool check_only)
+{
+	static uint addr_stack[ADDRESS_STACK_SIZE];
+	static uint size_stack[ADDRESS_STACK_SIZE];
+
+	switch (GET_PM4_TYPE3_OPCODE(hostaddr)) {
+	case CP_INDIRECT_BUFFER_PFD:
+	case CP_INDIRECT_BUFFER:
+	{
+		/* traverse indirect buffers */
+		int i;
+		uint ibaddr = hostaddr[1];
+		uint ibsize = hostaddr[2];
+
+		/* is this address already in encountered? */
+		for (i = 0;
+			i < kgsl_cffdump_addr_count && addr_stack[i] != ibaddr;
+			++i)
+			;
+
+		if (kgsl_cffdump_addr_count == i) {
+			addr_stack[kgsl_cffdump_addr_count] = ibaddr;
+			size_stack[kgsl_cffdump_addr_count++] = ibsize;
+
+			if (kgsl_cffdump_addr_count >= ADDRESS_STACK_SIZE) {
+				KGSL_CORE_ERR("stack overflow\n");
+				return false;
+			}
+
+			return kgsl_cffdump_parse_ibs(dev_priv, NULL,
+				ibaddr, ibsize, check_only);
+		} else if (size_stack[i] != ibsize) {
+			KGSL_CORE_ERR("gpuaddr: 0x%08x, "
+				"wc: %u, with size wc: %u already on the "
+				"stack\n", ibaddr, ibsize, size_stack[i]);
+			return false;
+		}
+	}
+	break;
+	}
+
+	return true;
+}
+
+/*
+ * Traverse IBs and dump them to test vector. Detect swap by inspecting
+ * register writes, keeping note of the current state, and dump
+ * framebuffer config to test vector
+ */
+bool kgsl_cffdump_parse_ibs(struct kgsl_device_private *dev_priv,
+	const struct kgsl_memdesc *memdesc, uint gpuaddr, int sizedwords,
+	bool check_only)
+{
+	static uint level; /* recursion level */
+	bool ret = true;
+	uint *hostaddr, *hoststart;
+	int dwords_left = sizedwords; /* dwords left in the current command
+					 buffer */
+
+	if (level == 0)
+		kgsl_cffdump_addr_count = 0;
+
+	if (memdesc == NULL) {
+		struct kgsl_mem_entry *entry;
+		spin_lock(&dev_priv->process_priv->mem_lock);
+		entry = kgsl_sharedmem_find_region(dev_priv->process_priv,
+			gpuaddr, sizedwords * sizeof(uint));
+		spin_unlock(&dev_priv->process_priv->mem_lock);
+		if (entry == NULL) {
+			KGSL_CORE_ERR("did not find mapping "
+				"for gpuaddr: 0x%08x\n", gpuaddr);
+			return true;
+		}
+		memdesc = &entry->memdesc;
+	}
+	hostaddr = (uint *)kgsl_gpuaddr_to_vaddr(memdesc, gpuaddr);
+	if (hostaddr == NULL) {
+		KGSL_CORE_ERR("no kernel mapping for "
+			"gpuaddr: 0x%08x\n", gpuaddr);
+		return true;
+	}
+
+	hoststart = hostaddr;
+
+	level++;
+
+	mb();
+	kgsl_cache_range_op((struct kgsl_memdesc *)memdesc,
+				KGSL_CACHE_OP_INV);
+#ifdef DEBUG
+	pr_info("kgsl: cffdump: ib: gpuaddr:0x%08x, wc:%d, hptr:%p\n",
+		gpuaddr, sizedwords, hostaddr);
+#endif
+
+	while (dwords_left > 0) {
+		int count = 0; /* dword count including packet header */
+		bool cur_ret = true;
+
+		switch (*hostaddr >> 30) {
+		case 0x0: /* type-0 */
+			count = (*hostaddr >> 16)+2;
+			break;
+		case 0x1: /* type-1 */
+			count = 2;
+			break;
+		case 0x3: /* type-3 */
+			count = ((*hostaddr >> 16) & 0x3fff) + 2;
+			cur_ret = kgsl_cffdump_handle_type3(dev_priv,
+				hostaddr, check_only);
+			break;
+		default:
+			pr_warn("kgsl: cffdump: parse-ib: unexpected type: "
+				"type:%d, word:0x%08x @ 0x%p, gpu:0x%08x\n",
+				*hostaddr >> 30, *hostaddr, hostaddr,
+				gpuaddr+4*(sizedwords-dwords_left));
+			cur_ret = false;
+			count = dwords_left;
+			break;
+		}
+
+#ifdef DEBUG
+		if (!cur_ret) {
+			pr_info("kgsl: cffdump: bad sub-type: #:%d/%d, v:0x%08x"
+				" @ 0x%p[gb:0x%08x], level:%d\n",
+				sizedwords-dwords_left, sizedwords, *hostaddr,
+				hostaddr, gpuaddr+4*(sizedwords-dwords_left),
+				level);
+
+			print_hex_dump(KERN_ERR, level == 1 ? "IB1:" : "IB2:",
+				DUMP_PREFIX_OFFSET, 32, 4, hoststart,
+				sizedwords*4, 0);
+		}
+#endif
+		ret = ret && cur_ret;
+
+		/* jump to next packet */
+		dwords_left -= count;
+		hostaddr += count;
+		cur_ret = dwords_left >= 0;
+
+#ifdef DEBUG
+		if (!cur_ret) {
+			pr_info("kgsl: cffdump: bad count: c:%d, #:%d/%d, "
+				"v:0x%08x @ 0x%p[gb:0x%08x], level:%d\n",
+				count, sizedwords-(dwords_left+count),
+				sizedwords, *(hostaddr-count), hostaddr-count,
+				gpuaddr+4*(sizedwords-(dwords_left+count)),
+				level);
+
+			print_hex_dump(KERN_ERR, level == 1 ? "IB1:" : "IB2:",
+				DUMP_PREFIX_OFFSET, 32, 4, hoststart,
+				sizedwords*4, 0);
+		}
+#endif
+
+		ret = ret && cur_ret;
+	}
+
+	if (!ret)
+		pr_info("kgsl: cffdump: parsing failed: gpuaddr:0x%08x, "
+			"host:0x%p, wc:%d\n", gpuaddr, hoststart, sizedwords);
+
+	if (!check_only) {
+#ifdef DEBUG
+		uint offset = gpuaddr - memdesc->gpuaddr;
+		pr_info("kgsl: cffdump: ib-dump: hostptr:%p, gpuaddr:%08x, "
+			"physaddr:%08x, offset:%d, size:%d", hoststart,
+			gpuaddr, memdesc->physaddr + offset, offset,
+			sizedwords*4);
+#endif
+		kgsl_cffdump_syncmem(dev_priv, memdesc, gpuaddr, sizedwords*4,
+			false);
+	}
+
+	level--;
+
+	return ret;
+}
 
 static int subbuf_start_handler(struct rchan_buf *buf,
 	void *subbuf, void *prev_subbuf, uint prev_padding)
@@ -536,7 +706,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
 }
 
 static struct dentry *create_buf_file_handler(const char *filename,
-	struct dentry *parent, unsigned short mode, struct rchan_buf *buf,
+	struct dentry *parent, int mode, struct rchan_buf *buf,
 	int *is_global)
 {
 	return debugfs_create_file(filename, mode, parent, buf,
@@ -603,59 +773,3 @@ static void destroy_channel(void)
 	}
 }
 
-int kgsl_cff_dump_enable_set(void *data, u64 val)
-{
-	int ret = 0;
-	struct kgsl_device *device = (struct kgsl_device *)data;
-	int i;
-
-	mutex_lock(&kgsl_driver.devlock);
-	/*
-	 * If CFF dump enabled then set active count to prevent device
-	 * from restarting because simulator cannot run device restarts
-	 */
-	if (val) {
-		/* Check if CFF is on for some other device already */
-		for (i = 0; i < KGSL_DEVICE_MAX; i++) {
-			if (kgsl_driver.devp[i]) {
-				struct kgsl_device *device_temp =
-						kgsl_driver.devp[i];
-				if (device_temp->cff_dump_enable &&
-					device != device_temp) {
-					KGSL_CORE_ERR(
-					"CFF is on for another device %d\n",
-					device_temp->id);
-					ret = -EINVAL;
-					goto done;
-				}
-			}
-		}
-		if (!device->cff_dump_enable) {
-			kgsl_mutex_lock(&device->mutex, &device->mutex_owner);
-			device->cff_dump_enable = 1;
-			ret = kgsl_open_device(device);
-			if (!ret)
-				ret = kgsl_active_count_get(device);
-			if (ret)
-				device->cff_dump_enable = 0;
-			kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
-		}
-	} else if (device->cff_dump_enable && !val) {
-		kgsl_mutex_lock(&device->mutex, &device->mutex_owner);
-		ret = kgsl_close_device(device);
-		device->cff_dump_enable = 0;
-		kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
-	}
-done:
-	mutex_unlock(&kgsl_driver.devlock);
-	return ret;
-}
-EXPORT_SYMBOL(kgsl_cff_dump_enable_set);
-
-int kgsl_cff_dump_enable_get(void *data, u64 *val)
-{
-	struct kgsl_device *device = (struct kgsl_device *)data;
-	*val = device->cff_dump_enable;
-	return 0;
-}
-EXPORT_SYMBOL(kgsl_cff_dump_enable_get);

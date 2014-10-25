@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsrom_tbl.h 327694 2012-04-16 13:22:24Z $
+ * $Id: bcmsrom_tbl.h 309193 2012-01-19 00:03:57Z $
  */
 
 #ifndef	_bcmsrom_tbl_h_
@@ -495,12 +495,6 @@ static const sromvar_t pci_sromvars[] = {
 	{"temps_hysteresis",	0xfffff800,	0,		SROM11_PHYCAL_TEMPDELTA, 0xf000},
 	{"measpower1", 		0xfffff800,	SRFL_PRHEX,	SROM11_MPWR_1_AND_2, 	0x007f},
 	{"measpower2",		0xfffff800, 	SRFL_PRHEX,	SROM11_MPWR_1_AND_2, 	0x3f80},
-	{"pdoffset40ma0",      	0xfffff800,	0,		SROM11_PDOFF_40M_A0,   	0xffff},
-	{"pdoffset40ma1",      	0xfffff800,	0,		SROM11_PDOFF_40M_A1,   	0xffff},
-	{"pdoffset40ma2",      	0xfffff800,	0,		SROM11_PDOFF_40M_A2,   	0xffff},
-	{"pdoffset80ma0",      	0xfffff800,	0,		SROM11_PDOFF_80M_A0,   	0xffff},
-	{"pdoffset80ma1",      	0xfffff800,	0,		SROM11_PDOFF_80M_A1,   	0xffff},
-	{"pdoffset80ma2",      	0xfffff800,	0,		SROM11_PDOFF_80M_A2,   	0xffff},
 
 	{"subband5gver",	0xfffff800, 	SRFL_PRHEX,	SROM11_SUBBAND5GVER, 	0xffff},
 
@@ -561,39 +555,26 @@ static const sromvar_t pci_sromvars[] = {
 	{"pcieingress_war",	0xfffff800,	0,	SROM11_PCIEINGRESS_WAR,	0xf},
 	{"sar2g",       	0xfffff800,	0,	SROM11_SAR,          	0x00ff},
 	{"sar5g",           	0xfffff800,	0,	SROM11_SAR,		0xff00},
-
-	{"noiselvl2ga0",	0xfffff800,	0,		SROM11_NOISELVL_2G,	0x001f},
-	{"noiselvl2ga1",	0xfffff800,	0,		SROM11_NOISELVL_2G,	0x03e0},
-	{"noiselvl2ga2",	0xfffff800,	0,		SROM11_NOISELVL_2G,	0x7c00},
-	{"noiselvl5ga0",	0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GL,	0x001f},
-	{"",			0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GM,	0x001f},
-	{"",			0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GH,	0x001f},
-	{"",			0xfffff800,	0,		SROM11_NOISELVL_5GU,	0x001f},
-	{"noiselvl5ga1",	0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GL,	0x03e0},
-	{"",			0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GM,	0x03e0},
-	{"",			0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GH,	0x03e0},
-	{"",			0xfffff800,	0,		SROM11_NOISELVL_5GU,	0x03e0},
-	{"noiselvl5ga2",	0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GL,	0x7c00},
-	{"",			0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GM,	0x7c00},
-	{"",			0xfffff800,	SRFL_ARRAY,	SROM11_NOISELVL_5GH,	0x7c00},
-	{"",			0xfffff800,	0,		SROM11_NOISELVL_5GU,	0x7c00},
-
-	{"rxgainerr2ga0", 	0xfffff800, 	0,    		SROM11_RXGAINERR_2G,    0x003f},
-	{"rxgainerr2ga1", 	0xfffff800, 	0,    		SROM11_RXGAINERR_2G,    0x07c0},
-	{"rxgainerr2ga2", 	0xfffff800, 	0,    		SROM11_RXGAINERR_2G,    0xf800},
-	{"rxgainerr5ga0",      	0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GL,   0x003f},
-	{"",      		0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GM,   0x003f},
-	{"",      		0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GH,   0x003f},
-	{"",      		0xfffff800, 	0,    		SROM11_RXGAINERR_5GU,   0x003f},
-	{"rxgainerr5ga1",      	0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GL,   0x07c0},
-	{"",      		0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GM,   0x07c0},
-	{"",      		0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GH,   0x07c0},
-	{"",      		0xfffff800, 	0,    		SROM11_RXGAINERR_5GU,   0x07c0},
-	{"rxgainerr5ga2",      	0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GL,   0xf800},
-	{"",      		0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GM,   0xf800},
-	{"",      		0xfffff800, 	SRFL_ARRAY,    	SROM11_RXGAINERR_5GH,   0xf800},
-	{"",      		0xfffff800, 	0,    		SROM11_RXGAINERR_5GU,   0xf800},
-
+	{"noiselvl2ga0",	0xfffff800,	0,	SROM11_NOISELVL_2G,	0x001f},
+	{"noiselvl2ga1",	0xfffff800,	0,	SROM11_NOISELVL_2G,	0x03e0},
+	{"noiselvl2ga2",	0xfffff800,	0,	SROM11_NOISELVL_2G,	0x7c00},
+	{"noiselvl5gla0",	0xfffff800,	0,	SROM11_NOISELVL_5GL,	0x001f},
+	{"noiselvl5gla1",	0xfffff800,	0,	SROM11_NOISELVL_5GL,	0x03e0},
+	{"noiselvl5gla2",	0xfffff800,	0,	SROM11_NOISELVL_5GL,	0x7c00},
+	{"noiselvl5gma0",	0xfffff800,	0,	SROM11_NOISELVL_5GM,	0x001f},
+	{"noiselvl5gma1",	0xfffff800,	0,	SROM11_NOISELVL_5GM,	0x03e0},
+	{"noiselvl5gma2",	0xfffff800,	0,	SROM11_NOISELVL_5GM,	0x7c00},
+	{"noiselvl5gha0",	0xfffff800,	0,	SROM11_NOISELVL_5GH,	0x001f},
+	{"noiselvl5gha1",	0xfffff800,	0,	SROM11_NOISELVL_5GH,	0x03e0},
+	{"noiselvl5gha2",	0xfffff800,	0,	SROM11_NOISELVL_5GH,	0x7c00},
+	{"noiselvl5gua0",	0xfffff800,	0,	SROM11_NOISELVL_5GU,	0x001f},
+	{"noiselvl5gua1",	0xfffff800,	0,	SROM11_NOISELVL_5GU,	0x03e0},
+	{"noiselvl5gua2",	0xfffff800,	0,	SROM11_NOISELVL_5GU,	0x7c00},
+	{"rxgainerr2g",	0xfffff800, SRFL_PRHEX,		SROM11_RXGAINERR_2G,	0xffff},
+	{"rxgainerr5g",	0xfffff800, SRFL_PRHEX|SRFL_ARRAY, SROM11_RXGAINERR_5GL, 0xffff},
+	{"",		0xfffff800, SRFL_PRHEX|SRFL_ARRAY, SROM11_RXGAINERR_5GM, 0xffff},
+	{"",		0xfffff800, SRFL_PRHEX|SRFL_ARRAY, SROM11_RXGAINERR_5GH, 0xffff},
+	{"",		0xfffff800, SRFL_PRHEX,		   SROM11_RXGAINERR_5GU, 0xffff},
 	{NULL,		0,		0,		0,			0}
 };
 
@@ -644,12 +625,6 @@ static const sromvar_t perpath_pci_sromvars[] = {
 	{"pa2ga",	0xfffff800,	SRFL_PRHEX | SRFL_ARRAY, SROM11_2G_PA,		0xffff},
 	{"",		0xfffff800,	SRFL_PRHEX | SRFL_ARRAY, SROM11_2G_PA + 1,	0xffff},
 	{"",		0xfffff800,	SRFL_PRHEX,		 SROM11_2G_PA + 2,	0xffff},
-	{"rxgains5gmelnagaina",	0xfffff800,	0,		 SROM11_RXGAINS1,	0x0007},
-	{"rxgains5gmtrisoa",	0xfffff800,	0,		 SROM11_RXGAINS1,	0x0078},
-	{"rxgains5gmtrelnabypa", 0xfffff800,	0,		 SROM11_RXGAINS1,	0x0080},
-	{"rxgains5ghelnagaina",	0xfffff800,	0,		 SROM11_RXGAINS1,	0x0700},
-	{"rxgains5ghtrisoa",	0xfffff800,	0,		 SROM11_RXGAINS1,	0x7800},
-	{"rxgains5ghtrelnabypa", 0xfffff800,	0,		 SROM11_RXGAINS1,	0x8000},
 	{"rxgains2gelnagaina",	0xfffff800,	0,		 SROM11_RXGAINS,	0x0007},
 	{"rxgains2gtrisoa",	0xfffff800,	0,		 SROM11_RXGAINS,	0x0078},
 	{"rxgains2gtrelnabypa",	0xfffff800,	0,		 SROM11_RXGAINS,	0x0080},
@@ -757,7 +732,6 @@ static const povars_t povars[] = {
 
 typedef struct {
 	uint8	tag;		/* Broadcom subtag name */
-	uint32	revmask;	/* Supported cis_sromrev */
 	uint8	len;		/* Length field of the tuple, note that it includes the
 				 * subtag name (1 byte): 1 + tuple content length
 				 */
@@ -770,131 +744,94 @@ typedef struct {
 #define OTP_RAW1	(0xff - 4)	/* Like RAW, but comes first */
 
 static const cis_tuple_t cis_hnbuvars[] = {
-	{OTP_RAW1,		0xffffffff, 0, ""},	/* special case */
-	{OTP_VERS_1,	0xffffffff, 0, "smanf sproductname"},	/* special case (non BRCM tuple) */
-	{OTP_MANFID,	0xffffffff, 4, "2manfid 2prodid"},	/* special case (non BRCM tuple) */
+	{OTP_RAW1,		0, ""},	/* special case */
+	{OTP_VERS_1,		0, "smanf sproductname"},	/* special case (non BRCM tuple) */
+	{OTP_MANFID,		4, "2manfid 2prodid"},		/* special case (non BRCM tuple) */
 	/* Unified OTP: tupple to embed USB manfid inside SDIO CIS */
-	{HNBU_UMANFID,		0xffffffff, 8, "8usbmanfid"},
-	{HNBU_SROMREV,		0xffffffff, 2, "1sromrev"},
+	{HNBU_UMANFID,		8, "8usbmanfid"},
+	{HNBU_SROMREV,		2, "1sromrev"},
 	/* NOTE: subdevid is also written to boardtype.
 	 *       Need to write HNBU_BOARDTYPE to change it if it is different.
 	 */
-	{HNBU_CHIPID,		0xffffffff, 11, "2vendid 2devid 2chiprev 2subvendid 2subdevid"},
-	{HNBU_BOARDREV,		0xffffffff, 3, "2boardrev"},
-	{HNBU_PAPARMS,		0xffffffff, 10, "2pa0b0 2pa0b1 2pa0b2 1pa0itssit 1pa0maxpwr 1opo"},
-	{HNBU_AA,		0xffffffff, 3, "1aa2g 1aa5g"},
-	{HNBU_AA,		0xffffffff, 3, "1aa0 1aa1"}, /* backward compatibility */
-	{HNBU_AG,		0xffffffff, 5, "1ag0 1ag1 1ag2 1ag3"},
-	{HNBU_BOARDFLAGS,	0xffffffff, 13, "4boardflags 4boardflags2 4boardflags3"},
-	{HNBU_LEDS,		0xffffffff, 5, "1ledbh0 1ledbh1 1ledbh2 1ledbh3"},
-	{HNBU_CCODE,		0xffffffff, 4, "2ccode 1cctl"},
-	{HNBU_CCKPO,		0xffffffff, 3, "2cckpo"},
-	{HNBU_OFDMPO,		0xffffffff, 5, "4ofdmpo"},
-	{HNBU_PAPARMS5G,	0xffffffff, 23, "2pa1b0 2pa1b1 2pa1b2 2pa1lob0 2pa1lob1 2pa1lob2 "
+	{HNBU_CHIPID,		11, "2vendid 2devid 2chiprev 2subvendid 2subdevid"},
+	{HNBU_BOARDREV,		3, "2boardrev"},
+	{HNBU_PAPARMS,		10, "2pa0b0 2pa0b1 2pa0b2 1pa0itssit 1pa0maxpwr 1opo"},
+	{HNBU_AA,		3, "1aa2g 1aa5g"},
+	{HNBU_AA,		3, "1aa0 1aa1"}, /* backward compatibility */
+	{HNBU_AG,		5, "1ag0 1ag1 1ag2 1ag3"},
+	{HNBU_BOARDFLAGS,	9, "4boardflags 4boardflags2"},
+	{HNBU_LEDS,		5, "1ledbh0 1ledbh1 1ledbh2 1ledbh3"},
+	{HNBU_CCODE,		4, "2ccode 1cctl"},
+	{HNBU_CCKPO,		3, "2cckpo"},
+	{HNBU_OFDMPO,		5, "4ofdmpo"},
+	{HNBU_PAPARMS5G,	23, "2pa1b0 2pa1b1 2pa1b2 2pa1lob0 2pa1lob1 2pa1lob2 "
 	"2pa1hib0 2pa1hib1 2pa1hib2 1pa1itssit "
 	"1pa1maxpwr 1pa1lomaxpwr 1pa1himaxpwr"},
-	{HNBU_RDLID,		0xffffffff, 3, "2rdlid"},
-	{HNBU_RSSISMBXA2G, 0xffffffff, 3, "0rssismf2g 0rssismc2g "
-	"0rssisav2g 0bxa2g"}, /* special case */
-	{HNBU_RSSISMBXA5G, 0xffffffff, 3, "0rssismf5g 0rssismc5g "
-	"0rssisav5g 0bxa5g"}, /* special case */
-	{HNBU_XTALFREQ,		0xffffffff, 5, "4xtalfreq"},
-	{HNBU_TRI2G,		0xffffffff, 2, "1tri2g"},
-	{HNBU_TRI5G,		0xffffffff, 4, "1tri5gl 1tri5g 1tri5gh"},
-	{HNBU_RXPO2G,		0xffffffff, 2, "1rxpo2g"},
-	{HNBU_RXPO5G,		0xffffffff, 2, "1rxpo5g"},
-	{HNBU_BOARDNUM,		0xffffffff, 3, "2boardnum"},
-	{HNBU_MACADDR,		0xffffffff, 7, "6macaddr"},	/* special case */
-	{HNBU_RDLSN,		0xffffffff, 3, "2rdlsn"},
-	{HNBU_BOARDTYPE,	0xffffffff, 3, "2boardtype"},
-	{HNBU_LEDDC,		0xffffffff, 3, "2leddc"},
-	{HNBU_RDLRNDIS,		0xffffffff, 2, "1rdlndis"},
-	{HNBU_CHAINSWITCH,	0xffffffff, 5, "1txchain 1rxchain 2antswitch"},
-	{HNBU_REGREV,		0xffffffff, 2, "1regrev"},
-	{HNBU_FEM,		0x000007fe, 5, "0antswctl2g 0triso2g 0pdetrange2g 0extpagain2g "
-	"0tssipos2g 0antswctl5g 0triso5g 0pdetrange5g 0extpagain5g 0tssipos5g"}, /* special case */
-	{HNBU_PAPARMS_C0,	0x000007fe, 31, "1maxp2ga0 1itt2ga0 2pa2gw0a0 2pa2gw1a0 "
-	"2pa2gw2a0 1maxp5ga0 1itt5ga0 1maxp5gha0 1maxp5gla0 2pa5gw0a0 2pa5gw1a0 2pa5gw2a0 "
-	"2pa5glw0a0 2pa5glw1a0 2pa5glw2a0 2pa5ghw0a0 2pa5ghw1a0 2pa5ghw2a0"},
-	{HNBU_PAPARMS_C1,	0x000007fe, 31, "1maxp2ga1 1itt2ga1 2pa2gw0a1 2pa2gw1a1 "
-	"2pa2gw2a1 1maxp5ga1 1itt5ga1 1maxp5gha1 1maxp5gla1 2pa5gw0a1 2pa5gw1a1 2pa5gw2a1 "
-	"2pa5glw0a1 2pa5glw1a1 2pa5glw2a1 2pa5ghw0a1 2pa5ghw1a1 2pa5ghw2a1"},
-	{HNBU_PO_CCKOFDM,	0xffffffff, 19, "2cck2gpo 4ofdm2gpo 4ofdm5gpo 4ofdm5glpo "
+	{HNBU_RDLID,		3, "2rdlid"},
+	{HNBU_RSSISMBXA2G,	3, "0rssismf2g 0rssismc2g 0rssisav2g 0bxa2g"}, /* special case */
+	{HNBU_RSSISMBXA5G,	3, "0rssismf5g 0rssismc5g 0rssisav5g 0bxa5g"}, /* special case */
+	{HNBU_XTALFREQ,		5, "4xtalfreq"},
+	{HNBU_TRI2G,		2, "1tri2g"},
+	{HNBU_TRI5G,		4, "1tri5gl 1tri5g 1tri5gh"},
+	{HNBU_RXPO2G,		2, "1rxpo2g"},
+	{HNBU_RXPO5G,		2, "1rxpo5g"},
+	{HNBU_BOARDNUM,		3, "2boardnum"},
+	{HNBU_MACADDR,		7, "6macaddr"},	/* special case */
+	{HNBU_RDLSN,		3, "2rdlsn"},
+	{HNBU_BOARDTYPE,	3, "2boardtype"},
+	{HNBU_LEDDC,		3, "2leddc"},
+	{HNBU_RDLRNDIS,		2, "1rdlndis"},
+	{HNBU_CHAINSWITCH,	5, "1txchain 1rxchain 2antswitch"},
+	{HNBU_REGREV,		2, "1regrev"},
+	{HNBU_FEM,		5, "0antswctl2g 0triso2g 0pdetrange2g 0extpagain2g 0tssipos2g "
+				   "0antswctl5g 0triso5g 0pdetrange5g 0extpagain5g 0tssipos5g"
+				   }, /* special case */
+	{HNBU_PAPARMS_C0,	31, "1maxp2ga0 1itt2ga0 2pa2gw0a0 2pa2gw1a0 "
+	"2pa2gw2a0 1maxp5ga0 1itt5ga0 1maxp5gha0 1maxp5gla0 2pa5gw0a0 "
+	"2pa5gw1a0 2pa5gw2a0 2pa5glw0a0 2pa5glw1a0 2pa5glw2a0 2pa5ghw0a0 "
+	"2pa5ghw1a0 2pa5ghw2a0"},
+	{HNBU_PAPARMS_C1,	31, "1maxp2ga1 1itt2ga1 2pa2gw0a1 2pa2gw1a1 "
+	"2pa2gw2a1 1maxp5ga1 1itt5ga1 1maxp5gha1 1maxp5gla1 2pa5gw0a1 "
+	"2pa5gw1a1 2pa5gw2a1 2pa5glw0a1 2pa5glw1a1 2pa5glw2a1 2pa5ghw0a1 "
+	"2pa5ghw1a1 2pa5ghw2a1"},
+	{HNBU_PO_CCKOFDM,	19, "2cck2gpo 4ofdm2gpo 4ofdm5gpo 4ofdm5glpo "
 	"4ofdm5ghpo"},
-	{HNBU_PO_MCS2G,		0xffffffff, 17, "2mcs2gpo0 2mcs2gpo1 2mcs2gpo2 2mcs2gpo3 "
+	{HNBU_PO_MCS2G,		17, "2mcs2gpo0 2mcs2gpo1 2mcs2gpo2 2mcs2gpo3 "
 	"2mcs2gpo4 2mcs2gpo5 2mcs2gpo6 2mcs2gpo7"},
-	{HNBU_PO_MCS5GM,	0xffffffff, 17, "2mcs5gpo0 2mcs5gpo1 2mcs5gpo2 2mcs5gpo3 "
+	{HNBU_PO_MCS5GM,	17, "2mcs5gpo0 2mcs5gpo1 2mcs5gpo2 2mcs5gpo3 "
 	"2mcs5gpo4 2mcs5gpo5 2mcs5gpo6 2mcs5gpo7"},
-	{HNBU_PO_MCS5GLH,	0xffffffff, 33, "2mcs5glpo0 2mcs5glpo1 2mcs5glpo2 2mcs5glpo3 "
+	{HNBU_PO_MCS5GLH,	33, "2mcs5glpo0 2mcs5glpo1 2mcs5glpo2 2mcs5glpo3 "
 	"2mcs5glpo4 2mcs5glpo5 2mcs5glpo6 2mcs5glpo7 "
 	"2mcs5ghpo0 2mcs5ghpo1 2mcs5ghpo2 2mcs5ghpo3 "
 	"2mcs5ghpo4 2mcs5ghpo5 2mcs5ghpo6 2mcs5ghpo7"},
-	{HNBU_CCKFILTTYPE,	0xffffffff, 2, "1cckdigfilttype"},
-	{HNBU_PO_CDD,		0xffffffff, 3, "2cddpo"},
-	{HNBU_PO_STBC,		0xffffffff, 3, "2stbcpo"},
-	{HNBU_PO_40M,		0xffffffff, 3, "2bw40po"},
-	{HNBU_PO_40MDUP,	0xffffffff, 3, "2bwduppo"},
-	{HNBU_RDLRWU,		0xffffffff, 2, "1rdlrwu"},
-	{HNBU_WPS,		0xffffffff, 3, "1wpsgpio 1wpsled"},
-	{HNBU_USBFS,		0xffffffff, 2, "1usbfs"},
-	{HNBU_ELNA2G,           0xffffffff, 2, "1elna2g"},
-	{HNBU_ELNA5G,           0xffffffff, 2, "1elna5g"},
-	{HNBU_CUSTOM1,		0xffffffff, 5, "4customvar1"},
-	{OTP_RAW,		0xffffffff, 0, ""},	/* special case */
-	{HNBU_OFDMPO5G,		0xffffffff, 13, "4ofdm5gpo 4ofdm5glpo 4ofdm5ghpo"},
-	{HNBU_USBEPNUM,		0xffffffff, 3, "2usbepnum"},
-	{HNBU_CCKBW202GPO,	0xffffffff, 5, "2cckbw202gpo 2cckbw20ul2gpo"},
-	{HNBU_LEGOFDMBW202GPO,	0xffffffff, 9, "4legofdmbw202gpo 4legofdmbw20ul2gp"},
-	{HNBU_LEGOFDMBW205GPO,	0xffffffff, 25, "4legofdmbw205glpo 4legofdmbw20ul5glpo "
-	"4legofdmbw205gmpo 4legofdmbw20ul5gmpo 4legofdmbw205ghpo 4legofdmbw20ul5ghpo"},
-	{HNBU_MCS2GPO,	0xffffffff, 13,	"4mcsbw202gpo 4mcsbw20ul2gpo 4mcsbw402gpo"},
-	{HNBU_MCS5GLPO,	0xffffffff, 13,	"4mcsbw205glpo 4mcsbw20ul5glpo 4mcsbw405glpo"},
-	{HNBU_MCS5GMPO,	0xffffffff, 13,	"4mcsbw205gmpo 4mcsbw20ul5gmpo 4mcsbw405gmpo"},
-	{HNBU_MCS5GHPO,	0xffffffff, 13,	"4mcsbw205ghpo 4mcsbw20ul5ghpo 4mcsbw405ghpo"},
-	{HNBU_MCS32PO,	0xffffffff, 3,	"2mcs32po"},
-	{HNBU_LEG40DUPPO, 	0xffffffff, 3,	"2legofdm40duppo"},
-	{HNBU_TEMPTHRESH, 	0xffffffff, 7,	"1tempthresh 0temps_period 0temps_hysteresis "
-	"1tempoffset 1tempsense_slope 0tempcorrx 0tempsense_option "
-	"1phycal_tempdelta"}, /* special case */
-	{HNBU_MUXENAB,		0xffffffff, 2,	"1muxenab"},
-	{HNBU_FEM_CFG,		0xfffff800, 5,	"0femctrl 0papdcap2g 0tworangetssi2g 0pdgain2g "
-	"0epagain2g 0tssiposslope2g 0gainctrlsph 0papdcap5g 0tworangetssi5g 0pdgain5g 0epagain5g "
-	"0tssiposslope5g"}, /* special case */
-	{HNBU_ACPA_C0,		0xfffff800, 39,	"2subband5gver 2maxp2ga0 2*3pa2ga0 "
-	"1*4maxp5ga0 2*12pa5ga0"},
-	{HNBU_ACPA_C1,		0xfffff800, 37,	"2maxp2ga1 2*3pa2ga1 1*4maxp5ga1 2*12pa5ga1"},
-	{HNBU_ACPA_C2,		0xfffff800, 37,	"2maxp2ga2 2*3pa2ga2 1*4maxp5ga2 2*12pa5ga2"},
-	{HNBU_MEAS_PWR,		0xfffff800, 5,	"1measpower 1measpower1 1measpower2 2rawtempsense"},
-	{HNBU_PDOFF,		0xfffff800, 13,	"2pdoffset40ma0 2pdoffset40ma1 2pdoffset40ma2 "
-	"2pdoffset80ma0 2pdoffset80ma1 2pdoffset80ma2"},
-	{HNBU_ACPPR_2GPO,	0xfffff800, 5,	"2dot11agofdmhrbw202gpo 2ofdmlrbw202gpo"},
-	{HNBU_ACPPR_5GPO,	0xfffff800, 31,	"4mcsbw805glpo 4mcsbw1605glpo 4mcsbw805gmpo "
-	"4mcsbw1605gmpo 4mcsbw805ghpo 4mcsbw1605ghpo 2mcslr5rlpo 2mcslr5gmpo 2mcslr5ghpo"},
-	{HNBU_ACPPR_SBPO,	0xfffff800, 33,	"2sb20in40hrrpo 2sb20in80and160hr5glpo "
-	"2sb40and80hr5glpo 2sb20in80and160hr5gmpo 2sb40and80hr5gmpo 2sb20in80and160hr5ghpo "
-	"2sb40and80hr5ghpo 2sb20in40lrpo 2sb20in80and160lr5glpo 2sb40and80lr5glpo "
-	"2sb20in80and160lr5gmpo 2sb40and80lr5gmpo 2sb20in80and160lr5ghpo 2sb40and80lr5ghpo "
-	"2dot11agduphrpo 2dot11agduplrpo"},
-	{HNBU_NOISELVL,		0xfffff800, 16, "1noiselvl2ga0 1noiselvl2ga1 1noiselvl2ga2 "
-	"1*4noiselvl5ga0 1*4noiselvl5ga1 1*4noiselvl5ga2"},
-	{HNBU_RXGAIN_ERR,	0xfffff800, 16, "1rxgainerr2ga0 1rxgainerr2ga1 1rxgainerr2ga2 "
-	"1*4rxgainerr5ga0 1*4rxgainerr5ga1 1*4rxgainerr5ga2"},
-	{HNBU_AGBGA,		0xfffff800, 7, "1agbg0 1agbg1 1agbg2 1aga0 1aga1 1aga2"},
-	{HNBU_UUID, 		0xffffffff, 17,	"16uuid"},
-	{HNBU_WOWLGPIO,		0xffffffff, 2,  "1wowl_gpio"},
-	{HNBU_ACRXGAINS_C0,	0xfffff800, 5, "0rxgains5gtrelnabypa0 0rxgains5gtrisoa0 "
-	"0rxgains5gelnagaina0 0rxgains2gtrelnabypa0 0rxgains2gtrisoa0 0rxgains2gelnagaina0 "
-	"0rxgains5ghtrelnabypa0 0rxgains5ghtrisoa0 0rxgains5ghelnagaina0 0rxgains5gmtrelnabypa0 "
-	"0rxgains5gmtrisoa0 0rxgains5gmelnagaina0"},	/* special case */
-	{HNBU_ACRXGAINS_C1,	0xfffff800, 5, "0rxgains5gtrelnabypa1 0rxgains5gtrisoa1 "
-	"0rxgains5gelnagaina1 0rxgains2gtrelnabypa1 0rxgains2gtrisoa1 0rxgains2gelnagaina1 "
-	"0rxgains5ghtrelnabypa1 0rxgains5ghtrisoa1 0rxgains5ghelnagaina1 0rxgains5gmtrelnabypa1 "
-	"0rxgains5gmtrisoa1 0rxgains5gmelnagaina1"},	/* special case */
-	{HNBU_ACRXGAINS_C2,	0xfffff800, 5, "0rxgains5gtrelnabypa2 0rxgains5gtrisoa2 "
-	"0rxgains5gelnagaina2 0rxgains2gtrelnabypa2 0rxgains2gtrisoa2 0rxgains2gelnagaina2 "
-	"0rxgains5ghtrelnabypa2 0rxgains5ghtrisoa2 0rxgains5ghelnagaina2 0rxgains5gmtrelnabypa2 "
-	"0rxgains5gmtrisoa2 0rxgains5gmelnagaina2"},	/* special case */
-	{0xFF,			0xffffffff, 0, ""}
+	{HNBU_CCKFILTTYPE,	2, "1cckdigfilttype"},
+	{HNBU_PO_CDD,		3, "2cddpo"},
+	{HNBU_PO_STBC,		3, "2stbcpo"},
+	{HNBU_PO_40M,		3, "2bw40po"},
+	{HNBU_PO_40MDUP,	3, "2bwduppo"},
+	{HNBU_RDLRWU,		2, "1rdlrwu"},
+	{HNBU_WPS,		3, "1wpsgpio 1wpsled"},
+	{HNBU_USBFS,		2, "1usbfs"},
+	{HNBU_ELNA2G,           2, "1elna2g"},
+	{HNBU_ELNA5G,           2, "1elna5g"},
+	{HNBU_CUSTOM1,		5, "4customvar1"},
+	{OTP_RAW,		0, ""},	/* special case */
+	{HNBU_OFDMPO5G,		13, "4ofdm5gpo 4ofdm5glpo 4ofdm5ghpo"},
+	{HNBU_USBEPNUM,		3, "2usbepnum"},
+	{HNBU_CCKBW202GPO,	5, "2cckbw202gpo 2cckbw20ul2gpo"},
+	{HNBU_LEGOFDMBW202GPO,	9, "4legofdmbw202gpo 4legofdmbw20ul2gp"},
+	{HNBU_LEGOFDMBW205GPO,	25, "4legofdmbw205glpo 4legofdmbw20ul5glpo 4legofdmbw205gmpo "
+	"4legofdmbw20ul5gmpo 4legofdmbw205ghpo 4legofdmbw20ul5ghpo"},
+	{HNBU_MCS2GPO,	13,	"4mcsbw202gpo 4mcsbw20ul2gpo 4mcsbw402gpo"},
+	{HNBU_MCS5GLPO,	13,	"4mcsbw205glpo 4mcsbw20ul5glpo 4mcsbw405glpo"},
+	{HNBU_MCS5GMPO,	13,	"4mcsbw205gmpo 4mcsbw20ul5gmpo 4mcsbw405gmpo"},
+	{HNBU_MCS5GHPO,	13,	"4mcsbw205ghpo 4mcsbw20ul5ghpo 4mcsbw405ghpo"},
+	{HNBU_MCS32PO,	3,	"2mcs32po"},
+	{HNBU_LEG40DUPPO, 	3,	"2legofdm40duppo"},
+	{HNBU_TEMPTHRESH, 	3,	"1tempthresh 1periodhyst"},
+	{HNBU_UUID, 	17,	"16uuid"},
+	{HNBU_WOWLGPIO,     2,  "1wowl_gpio"},
+	{0xFF,			0, ""}
 };
 
 #endif /* _bcmsrom_tbl_h_ */

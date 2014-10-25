@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,7 +17,6 @@
 #include <linux/msm_ssbi.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/mfd/pm8xxx/core.h>
-#include <linux/module.h>
 
 /* PMIC8901 Revision */
 #define PM8901_REG_REV			0x002

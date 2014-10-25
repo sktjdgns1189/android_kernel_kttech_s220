@@ -20,7 +20,6 @@
 
 #include <linux/types.h>
 #include <linux/slab.h>
-#include <linux/bug.h>
 #include <asm/io.h>
 #include <asm/page.h>
 
@@ -28,7 +27,7 @@
  * The io_mapping mechanism provides an abstraction for mapping
  * individual pages from an io device to the CPU in an efficient fashion.
  *
- * See Documentation/io-mapping.txt
+ * See Documentation/io_mapping.txt
  */
 
 #ifdef CONFIG_HAVE_ATOMIC_IOMAP
@@ -118,8 +117,6 @@ io_mapping_unmap(void __iomem *vaddr)
 
 #else
 
-#include <linux/uaccess.h>
-
 /* this struct isn't actually defined anywhere */
 struct io_mapping;
 
@@ -141,14 +138,12 @@ static inline void __iomem *
 io_mapping_map_atomic_wc(struct io_mapping *mapping,
 			 unsigned long offset)
 {
-	pagefault_disable();
 	return ((char __force __iomem *) mapping) + offset;
 }
 
 static inline void
 io_mapping_unmap_atomic(void __iomem *vaddr)
 {
-	pagefault_enable();
 }
 
 /* Non-atomic map/unmap */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,7 +22,11 @@
 #include <linux/input/msm_ts.h>
 #include <mach/vreg.h>
 
+#if defined(CONFIG_KTTECH_SOUND)
+#define MARIMBA_NUM_CHILD			1
+#else
 #define MARIMBA_NUM_CHILD			4
+#endif
 
 #define MARIMBA_SLAVE_ID_MARIMBA	0x00
 #define MARIMBA_SLAVE_ID_FM			0x01

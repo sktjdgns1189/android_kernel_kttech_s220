@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,18 +28,6 @@ enum {
 	BAM_DMUX_DATA_RMNET_6,
 	BAM_DMUX_DATA_RMNET_7,
 	BAM_DMUX_USB_RMNET_0,
-	BAM_DMUX_RESERVED_0, /* 9..11 are reserved*/
-	BAM_DMUX_RESERVED_1,
-	BAM_DMUX_RESERVED_2,
-	BAM_DMUX_DATA_REV_RMNET_0,
-	BAM_DMUX_DATA_REV_RMNET_1,
-	BAM_DMUX_DATA_REV_RMNET_2,
-	BAM_DMUX_DATA_REV_RMNET_3,
-	BAM_DMUX_DATA_REV_RMNET_4,
-	BAM_DMUX_DATA_REV_RMNET_5,
-	BAM_DMUX_DATA_REV_RMNET_6,
-	BAM_DMUX_DATA_REV_RMNET_7,
-	BAM_DMUX_DATA_REV_RMNET_8,
 	BAM_DMUX_NUM_CHANNELS
 };
 
@@ -79,24 +67,20 @@ int msm_bam_dmux_ul_power_unvote(void);
 int msm_bam_dmux_is_ch_full(uint32_t id);
 
 int msm_bam_dmux_is_ch_low(uint32_t id);
-
-int msm_bam_dmux_reg_notify(void *priv,
-		       void (*notify)(void *priv, int event_type,
-						unsigned long data));
 #else
-static inline int msm_bam_dmux_open(uint32_t id, void *priv,
+int msm_bam_dmux_open(uint32_t id, void *priv,
 		       void (*notify)(void *priv, int event_type,
 						unsigned long data))
 {
 	return -ENODEV;
 }
 
-static inline int msm_bam_dmux_close(uint32_t id)
+int msm_bam_dmux_close(uint32_t id)
 {
 	return -ENODEV;
 }
 
-static inline int msm_bam_dmux_write(uint32_t id, struct sk_buff *skb)
+int msm_bam_dmux_write(uint32_t id, struct sk_buff *skb)
 {
 	return -ENODEV;
 }
@@ -116,19 +100,12 @@ static inline int msm_bam_dmux_ul_power_unvote(void)
 	return -ENODEV;
 }
 
-static inline int msm_bam_dmux_is_ch_full(uint32_t id)
+int msm_bam_dmux_is_ch_full(uint32_t id)
 {
 	return -ENODEV;
 }
 
-static inline int msm_bam_dmux_is_ch_low(uint32_t id)
-{
-	return -ENODEV;
-}
-
-static inline int msm_bam_dmux_reg_notify(void *priv,
-		       void (*notify)(void *priv, int event_type,
-						unsigned long data))
+int msm_bam_dmux_is_ch_low(uint32_t id)
 {
 	return -ENODEV;
 }

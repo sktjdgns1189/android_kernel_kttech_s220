@@ -4,8 +4,6 @@
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/errno.h>
-#include <linux/of.h>
-#include <linux/pinctrl/pinctrl.h>
 
 #ifdef CONFIG_GPIOLIB
 
@@ -43,30 +41,9 @@ static inline bool gpio_is_valid(int number)
 }
 
 struct device;
-struct gpio;
 struct seq_file;
 struct module;
 struct device_node;
-
-#ifdef CONFIG_PINCTRL
-/**
- * struct gpio_pin_range - pin range controlled by a gpio chip
- * @head: list for maintaining set of pin ranges, used internally
- * @pctldev: pinctrl device which handles corresponding pins
- * @range: actual range of pins controlled by a gpio controller
- */
-
-struct gpio_pin_range {
-	struct list_head node;
-	struct pinctrl_dev *pctldev;
-	struct pinctrl_gpio_range range;
-};
-
-int gpiochip_add_pin_range(struct gpio_chip *chip, const char *pinctl_name,
-			   unsigned int pin_base, unsigned int npins);
-void gpiochip_remove_pin_ranges(struct gpio_chip *chip);
-
-#endif
 
 /**
  * struct gpio_chip - abstract a GPIO controller
@@ -150,31 +127,21 @@ struct gpio_chip {
 	 */
 	struct device_node *of_node;
 	int of_gpio_n_cells;
-	int (*of_xlate)(struct gpio_chip *gc,
-		        const struct of_phandle_args *gpiospec, u32 *flags);
-#endif
-#ifdef CONFIG_PINCTRL
-	/*
-	 * If CONFIG_PINCTRL is enabled, then gpio controllers can optionally
-	 * describe the actual pin range which they serve in an SoC. This
-	 * information would be used by pinctrl subsystem to configure
-	 * corresponding pins for gpio usage.
-	 */
-	struct list_head pin_ranges;
+	int (*of_xlate)(struct gpio_chip *gc, struct device_node *np,
+		        const void *gpio_spec, u32 *flags);
 #endif
 };
 
 extern const char *gpiochip_is_requested(struct gpio_chip *chip,
 			unsigned offset);
-extern struct gpio_chip *gpio_to_chip(unsigned gpio);
 extern int __must_check gpiochip_reserve(int start, int ngpio);
 
 /* add/remove chips */
 extern int gpiochip_add(struct gpio_chip *chip);
 extern int __must_check gpiochip_remove(struct gpio_chip *chip);
-extern struct gpio_chip *gpiochip_find(const void *data,
+extern struct gpio_chip *gpiochip_find(void *data,
 					int (*match)(struct gpio_chip *chip,
-						     const void *data));
+						     void *data));
 
 
 /* Always use the library code for GPIO management calls,
@@ -203,13 +170,21 @@ extern int __gpio_cansleep(unsigned gpio);
 
 extern int __gpio_to_irq(unsigned gpio);
 
+/**
+ * struct gpio - a structure describing a GPIO with configuration
+ * @gpio:	the GPIO number
+ * @flags:	GPIO configuration as specified by GPIOF_*
+ * @label:	a literal description string of this GPIO
+ */
+struct gpio {
+	unsigned	gpio;
+	unsigned long	flags;
+	const char	*label;
+};
+
 extern int gpio_request_one(unsigned gpio, unsigned long flags, const char *label);
 extern int gpio_request_array(const struct gpio *array, size_t num);
 extern void gpio_free_array(const struct gpio *array, size_t num);
-
-/* bindings for managed devices that want to request gpios */
-int devm_gpio_request(struct device *dev, unsigned gpio, const char *label);
-void devm_gpio_free(struct device *dev, unsigned int gpio);
 
 #ifdef CONFIG_GPIO_SYSFS
 
@@ -245,13 +220,13 @@ static inline int gpio_cansleep(unsigned gpio)
 static inline int gpio_get_value_cansleep(unsigned gpio)
 {
 	might_sleep();
-	return __gpio_get_value(gpio);
+	return gpio_get_value(gpio);
 }
 
 static inline void gpio_set_value_cansleep(unsigned gpio, int value)
 {
 	might_sleep();
-	__gpio_set_value(gpio, value);
+	gpio_set_value(gpio, value);
 }
 
 #endif /* !CONFIG_GPIOLIB */

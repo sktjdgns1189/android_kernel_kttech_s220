@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -209,7 +209,6 @@ static union rpc_reply_batt_chg rep_batt_chg;
 struct msm_battery_info {
 	u32 voltage_max_design;
 	u32 voltage_min_design;
-	u32 voltage_fail_safe;
 	u32 chg_api_version;
 	u32 batt_technology;
 	u32 batt_api_version;
@@ -503,13 +502,13 @@ static void msm_batt_update_psy_status(void)
 	}
 
 	if (msm_batt_info.charger_type != charger_type) {
-		if (charger_type == CHARGER_TYPE_USB_PC ||
+		if (charger_type == CHARGER_TYPE_USB_WALL ||
+		    charger_type == CHARGER_TYPE_USB_PC ||
 		    charger_type == CHARGER_TYPE_USB_CARKIT) {
 			DBG_LIMIT("BATT: USB charger plugged in\n");
 			msm_batt_info.current_chg_source = USB_CHG;
 			supp = &msm_psy_usb;
-		} else if (charger_type == CHARGER_TYPE_WALL ||
-			charger_type == CHARGER_TYPE_USB_WALL) {
+		} else if (charger_type == CHARGER_TYPE_WALL) {
 			DBG_LIMIT("BATT: AC Wall changer plugged in\n");
 			msm_batt_info.current_chg_source = AC_CHG;
 			supp = &msm_psy_ac;
@@ -761,10 +760,8 @@ void msm_batt_early_suspend(struct early_suspend *h)
 
 	if (msm_batt_info.batt_handle != INVALID_BATT_HANDLE) {
 		rc = msm_batt_modify_client(msm_batt_info.batt_handle,
-				msm_batt_info.voltage_fail_safe,
-				BATTERY_VOLTAGE_BELOW_THIS_LEVEL,
-				BATTERY_CB_ID_LOW_VOL,
-				msm_batt_info.voltage_fail_safe);
+				BATTERY_LOW, BATTERY_VOLTAGE_BELOW_THIS_LEVEL,
+				BATTERY_CB_ID_LOW_VOL, BATTERY_LOW);
 
 		if (rc < 0) {
 			pr_err("%s: msm_batt_modify_client. rc=%d\n",
@@ -787,9 +784,8 @@ void msm_batt_late_resume(struct early_suspend *h)
 
 	if (msm_batt_info.batt_handle != INVALID_BATT_HANDLE) {
 		rc = msm_batt_modify_client(msm_batt_info.batt_handle,
-				msm_batt_info.voltage_fail_safe,
-				BATTERY_ALL_ACTIVITY,
-				BATTERY_CB_ID_ALL_ACTIV, BATTERY_ALL_ACTIVITY);
+				BATTERY_LOW, BATTERY_ALL_ACTIVITY,
+			       BATTERY_CB_ID_ALL_ACTIV, BATTERY_ALL_ACTIVITY);
 		if (rc < 0) {
 			pr_err("%s: msm_batt_modify_client FAIL rc=%d\n",
 			       __func__, rc);
@@ -1377,8 +1373,6 @@ static int __devinit msm_batt_probe(struct platform_device *pdev)
 
 	msm_batt_info.voltage_max_design = pdata->voltage_max_design;
 	msm_batt_info.voltage_min_design = pdata->voltage_min_design;
-	msm_batt_info.voltage_fail_safe  = pdata->voltage_fail_safe;
-
 	msm_batt_info.batt_technology = pdata->batt_technology;
 	msm_batt_info.calculate_capacity = pdata->calculate_capacity;
 
@@ -1386,8 +1380,6 @@ static int __devinit msm_batt_probe(struct platform_device *pdev)
 		msm_batt_info.voltage_min_design = BATTERY_LOW;
 	if (!msm_batt_info.voltage_max_design)
 		msm_batt_info.voltage_max_design = BATTERY_HIGH;
-	if (!msm_batt_info.voltage_fail_safe)
-		msm_batt_info.voltage_fail_safe  = BATTERY_LOW;
 
 	if (msm_batt_info.batt_technology == POWER_SUPPLY_TECHNOLOGY_UNKNOWN)
 		msm_batt_info.batt_technology = POWER_SUPPLY_TECHNOLOGY_LION;
@@ -1405,10 +1397,8 @@ static int __devinit msm_batt_probe(struct platform_device *pdev)
 	msm_batt_info.msm_psy_batt = &msm_psy_batt;
 
 #ifndef CONFIG_BATTERY_MSM_FAKE
-	rc = msm_batt_register(msm_batt_info.voltage_fail_safe,
-			       BATTERY_ALL_ACTIVITY,
-			       BATTERY_CB_ID_ALL_ACTIV,
-			       BATTERY_ALL_ACTIVITY);
+	rc = msm_batt_register(BATTERY_LOW, BATTERY_ALL_ACTIVITY,
+			       BATTERY_CB_ID_ALL_ACTIV, BATTERY_ALL_ACTIVITY);
 	if (rc < 0) {
 		dev_err(&pdev->dev,
 			"%s: msm_batt_register failed rc = %d\n", __func__, rc);

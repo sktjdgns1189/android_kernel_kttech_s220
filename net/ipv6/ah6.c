@@ -193,9 +193,9 @@ static void ipv6_rearrange_destopt(struct ipv6hdr *iph, struct ipv6_opt_hdr *des
 						printk(KERN_WARNING "destopt hao: invalid header length: %u\n", hao->length);
 					goto bad;
 				}
-				final_addr = hao->addr;
-				hao->addr = iph->saddr;
-				iph->saddr = final_addr;
+				ipv6_addr_copy(&final_addr, &hao->addr);
+				ipv6_addr_copy(&hao->addr, &iph->saddr);
+				ipv6_addr_copy(&iph->saddr, &final_addr);
 			}
 			break;
 		}
@@ -241,13 +241,13 @@ static void ipv6_rearrange_rthdr(struct ipv6hdr *iph, struct ipv6_rt_hdr *rthdr)
 	segments = rthdr->hdrlen >> 1;
 
 	addrs = ((struct rt0_hdr *)rthdr)->addr;
-	final_addr = addrs[segments - 1];
+	ipv6_addr_copy(&final_addr, addrs + segments - 1);
 
 	addrs += segments - segments_left;
 	memmove(addrs + 1, addrs, (segments_left - 1) * sizeof(*addrs));
 
-	addrs[0] = iph->daddr;
-	iph->daddr = final_addr;
+	ipv6_addr_copy(addrs, &iph->daddr);
+	ipv6_addr_copy(&iph->daddr, &final_addr);
 }
 
 static int ipv6_clear_mutable_options(struct ipv6hdr *iph, int len, int dir)
@@ -323,6 +323,8 @@ static void ah6_output_done(struct crypto_async_request *base, int err)
 		memcpy(&top_iph->daddr, iph_ext, extlen);
 #endif
 	}
+
+	err = ah->nexthdr;
 
 	kfree(AH_SKB_CB(skb)->tmp);
 	xfrm_output_resume(skb, err);
@@ -464,12 +466,12 @@ static void ah6_input_done(struct crypto_async_request *base, int err)
 	if (err)
 		goto out;
 
-	err = ah->nexthdr;
-
 	skb->network_header += ah_hlen;
 	memcpy(skb_network_header(skb), work_iph, hdr_len);
 	__skb_pull(skb, ah_hlen + hdr_len);
 	skb_set_transport_header(skb, -hdr_len);
+
+	err = ah->nexthdr;
 out:
 	kfree(AH_SKB_CB(skb)->tmp);
 	xfrm_input_resume(skb, err);
@@ -581,6 +583,8 @@ static int ah6_input(struct xfrm_state *x, struct sk_buff *skb)
 		if (err == -EINPROGRESS)
 			goto out;
 
+		if (err == -EBUSY)
+			err = NET_XMIT_DROP;
 		goto out_free;
 	}
 

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010-2012 The Linux Foundation.  All rights reserved.
+   Copyright (c) 2010-2012 Code Aurora Forum.  All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License version 2 and
@@ -11,7 +11,6 @@
    GNU General Public License for more details.
 */
 
-#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/errno.h>
@@ -572,8 +571,20 @@ static u8 getampassoc_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 	u16 frag_len;
 
 	rsp.status = 1;
+
+#if 1     //KTTECH_BT (K9 - 2964 fix)
+	if ((evt_type == AMP_KILLED) || (!ctx->hdev))
+		goto gaa_finished;
+
+	if ((!ctx->d.gaa.assoc)) {
+		if (ctx->hdev)
+			hci_dev_put(ctx->hdev);
+		return 1;
+	}
+#else     // Original
 	if ((evt_type == AMP_KILLED) || (!ctx->hdev) || (!ctx->d.gaa.assoc))
 		goto gaa_finished;
+#endif
 
 	switch (ctx->state) {
 	case AMP_GAA_INIT:
@@ -1190,6 +1201,11 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 			goto cpl_finished;
 		hdr = (void *) skb->data;
 		arsp = (void *) skb_pull(skb, sizeof(*hdr));
+#if 1     //KTTECH_BT (K9 - 2958 fix)
+		if (arsp == NULL)
+			goto cpl_finished;
+#endif
+
 		if (arsp->status != 0)
 			goto cpl_finished;
 
@@ -1342,6 +1358,12 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 			if (skb->len < sizeof(*crsp))
 				goto cpl_finished;
 			crsp = (void *) skb_pull(skb, sizeof(*hdr));
+
+#if 1     //KTTECH_BT (K9 - 2956 fix)
+			if (crsp == NULL)
+				goto cpl_finished;
+#endif
+
 			if ((crsp->local_id != ctx->d.cpl.remote_id) ||
 				(crsp->remote_id != ctx->id) ||
 				(crsp->status != 0)) {
@@ -1417,6 +1439,11 @@ static int disconnphyslink_req(struct amp_mgr *mgr, struct sk_buff *skb)
 	if (hdr->len < sizeof(*req))
 		return -EINVAL;
 	req = (void *) skb_pull(skb, sizeof(*hdr));
+#if 1     //KTTECH_BT (K9 - 2957 fix)
+	if (req == NULL)
+		return -EINVAL;
+#endif
+
 	skb_pull(skb, sizeof(*req));
 
 	rsp.local_id = req->remote_id;
@@ -1817,8 +1844,8 @@ void amp_conn_ind(struct hci_conn *hcon, struct sk_buff *skb)
 		if (!queue_work(amp_workqueue, (struct work_struct *) work)) {
 			hci_conn_put(hcon);
 			kfree(work);
-		}
 	}
+}
 }
 
 /* L2CAP Physical Link interface */

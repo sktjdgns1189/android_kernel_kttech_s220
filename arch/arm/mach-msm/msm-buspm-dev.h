@@ -1,4 +1,4 @@
-/* Copyright (c) 2011,2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,17 +23,12 @@ struct msm_buspm_map_dev {
 
 /* Read/write data into kernel buffer */
 struct buspm_xfer_req {
-	unsigned int  size;		/* Size of this request, in bytes */
+	int size;		/* Size of this request, in bytes */
 	void *data;		/* Data buffer to transfer data to/from */
 };
 
 struct buspm_alloc_params {
 	int size;
-};
-
-enum msm_buspm_ioc_cmds {
-	MSM_BUSPM_SPDM_CLK_DIS = 0,
-	MSM_BUSPM_SPDM_CLK_EN,
 };
 
 #define MSM_BUSPM_IOC_MAGIC	'p'
@@ -52,7 +47,4 @@ enum msm_buspm_ioc_cmds {
 
 #define MSM_BUSPM_IOC_RD_PHYS_ADDR	\
 	_IOR(MSM_BUSPM_IOC_MAGIC, 4, unsigned long)
-
-#define MSM_BUSPM_IOC_CMD	\
-	_IOR(MSM_BUSPM_IOC_MAGIC, 5, uint32_t)
 #endif

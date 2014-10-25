@@ -1,6 +1,7 @@
 #ifndef _LINUX_FIRMWARE_H
 #define _LINUX_FIRMWARE_H
 
+#include <linux/module.h>
 #include <linux/types.h>
 #include <linux/compiler.h>
 #include <linux/gfp.h>
@@ -14,7 +15,6 @@ struct firmware {
 	struct page **pages;
 };
 
-struct module;
 struct device;
 
 struct builtin_fw {
@@ -36,8 +36,6 @@ struct builtin_fw {
 	__used __section(.builtin_fw) = { name, blob, size }
 
 #if defined(CONFIG_FW_LOADER) || (defined(CONFIG_FW_LOADER_MODULE) && defined(MODULE))
-int request_firmware_direct(const char *name, struct device *device,
-			    phys_addr_t addr, size_t size);
 int request_firmware(const struct firmware **fw, const char *name,
 		     struct device *device);
 int request_firmware_nowait(
@@ -47,12 +45,6 @@ int request_firmware_nowait(
 
 void release_firmware(const struct firmware *fw);
 #else
-static inline int request_firmware_direct(const char *name,
-					  struct device *device,
-					  phys_addr_t addr, size_t size)
-{
-	return -EINVAL;
-}
 static inline int request_firmware(const struct firmware **fw,
 				   const char *name,
 				   struct device *device)

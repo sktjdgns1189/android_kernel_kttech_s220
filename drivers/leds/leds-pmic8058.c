@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010, 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,8 +17,6 @@
 #include <linux/spinlock.h>
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/leds-pmic8058.h>
-#include <linux/module.h>
-#include <linux/string.h>
 
 #define SSBI_REG_ADDR_DRV_KEYPAD	0x48
 #define PM8058_DRV_KEYPAD_BL_MASK	0xf0
@@ -52,7 +50,11 @@ struct pmic8058_led_data {
 	struct mutex		lock;
 	spinlock_t		value_lock;
 	u8			reg_kp;
+#ifdef CONFIG_MACH_KTTECH
+	u8			reg_led_ctrl[5];
+#else
 	u8			reg_led_ctrl[3];
+#endif
 	u8			reg_flash_led0;
 	u8			reg_flash_led1;
 };
@@ -65,6 +67,12 @@ static void kp_bl_set(struct pmic8058_led_data *led, enum led_brightness value)
 	int rc;
 	u8 level;
 	unsigned long flags;
+
+#ifdef CONFIG_MACH_KTTECH
+	/* Fixed current 20mA for Home Key Backlight */ 
+	if (value > 0)
+		value = 0x1;
+#endif
 
 	spin_lock_irqsave(&led->value_lock, flags);
 	level = (value << PM8058_DRV_KEYPAD_BL_SHIFT) &
@@ -97,8 +105,13 @@ static void led_lc_set(struct pmic8058_led_data *led, enum led_brightness value)
 
 	spin_lock_irqsave(&led->value_lock, flags);
 
+#ifdef CONFIG_MACH_KTTECH
+	level = (value << PM8058_DRV_LED_CTRL_SHIFT) &
+		PM8058_DRV_LED_CTRL_MASK;
+#else
 	level = (led->brightness << PM8058_DRV_LED_CTRL_SHIFT) &
 		PM8058_DRV_LED_CTRL_MASK;
+#endif
 
 	offset = PMIC8058_LED_OFFSET(led->id);
 	tmp = led->reg_led_ctrl[offset];
@@ -297,7 +310,11 @@ static int pmic8058_led_probe(struct platform_device *pdev)
 	struct pmic8058_led *curr_led;
 	int rc, i = 0;
 	u8			reg_kp;
+#ifdef CONFIG_MACH_KTTECH
+	u8			reg_led_ctrl[5];
+#else
 	u8			reg_led_ctrl[3];
+#endif
 	u8			reg_flash_led0;
 	u8			reg_flash_led1;
 

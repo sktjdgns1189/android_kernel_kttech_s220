@@ -16,7 +16,6 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/kthread.h>
-#include <linux/export.h>
 #include <linux/wait.h>
 #include <linux/delay.h>
 
@@ -28,27 +27,14 @@
 
 #include "sdio_ops.h"
 
-static int process_sdio_pending_irqs(struct mmc_host *host)
+static int process_sdio_pending_irqs(struct mmc_card *card)
 {
-	struct mmc_card *card = host->card;
 	int i, ret, count;
 	unsigned char pending;
-	struct sdio_func *func;
-
-	/*
-	 * Optimization, if there is only 1 function interrupt registered
-	 * and we know an IRQ was signaled then call irq handler directly.
-	 * Otherwise do the full probe.
-	 */
-	func = card->sdio_single_irq;
-	if (func && host->sdio_irq_pending) {
-		func->irq_handler(func);
-		return 1;
-	}
 
 	ret = mmc_io_rw_direct(card, 0, 0, SDIO_CCCR_INTx, 0, &pending);
 	if (ret) {
-		pr_debug("%s: error %d reading SDIO_CCCR_INTx\n",
+		printk(KERN_DEBUG "%s: error %d reading SDIO_CCCR_INTx\n",
 		       mmc_card_id(card), ret);
 		return ret;
 	}
@@ -56,9 +42,9 @@ static int process_sdio_pending_irqs(struct mmc_host *host)
 	count = 0;
 	for (i = 1; i <= 7; i++) {
 		if (pending & (1 << i)) {
-			func = card->sdio_func[i - 1];
+			struct sdio_func *func = card->sdio_func[i - 1];
 			if (!func) {
-				pr_warning("%s: pending IRQ for "
+				printk(KERN_WARNING "%s: pending IRQ for "
 					"non-existent function\n",
 					mmc_card_id(card));
 				ret = -EINVAL;
@@ -66,7 +52,7 @@ static int process_sdio_pending_irqs(struct mmc_host *host)
 				func->irq_handler(func);
 				count++;
 			} else {
-				pr_warning("%s: pending IRQ with no handler\n",
+				printk(KERN_WARNING "%s: pending IRQ with no handler\n",
 				       sdio_func_id(func));
 				ret = -EINVAL;
 			}
@@ -85,7 +71,6 @@ static int sdio_irq_thread(void *_host)
 	struct sched_param param = { .sched_priority = 1 };
 	unsigned long period, idle_period;
 	int ret;
-	bool ws;
 
 	sched_setscheduler(current, SCHED_FIFO, &param);
 
@@ -119,19 +104,7 @@ static int sdio_irq_thread(void *_host)
 		ret = __mmc_claim_host(host, &host->sdio_irq_thread_abort);
 		if (ret)
 			break;
-		ws = false;
-		/*
-		 * prevent suspend if it has started when scheduled;
-		 * 100 msec (approx. value) should be enough for the system to
-		 * resume and attend to the card's request
-		 */
-		if ((host->dev_status == DEV_SUSPENDING) ||
-		    (host->dev_status == DEV_SUSPENDED)) {
-			pm_wakeup_event(&host->card->dev, 100);
-			ws = true;
-		}
-		ret = process_sdio_pending_irqs(host);
-		host->sdio_irq_pending = false;
+		ret = process_sdio_pending_irqs(host->card);
 		mmc_release_host(host);
 
 		/*
@@ -166,12 +139,6 @@ static int sdio_irq_thread(void *_host)
 			host->ops->enable_sdio_irq(host, 1);
 			mmc_host_clk_release(host);
 		}
-		/*
-		 * function drivers would have processed the event from card
-		 * unless suspended, hence release wake source
-		 */
-		if (ws && (host->dev_status == DEV_RESUMED))
-			pm_relax(&host->card->dev);
 		if (!kthread_should_stop())
 			schedule_timeout(period);
 		set_current_state(TASK_RUNNING);
@@ -225,24 +192,6 @@ static int sdio_card_irq_put(struct mmc_card *card)
 	return 0;
 }
 
-/* If there is only 1 function registered set sdio_single_irq */
-static void sdio_single_irq_set(struct mmc_card *card)
-{
-	struct sdio_func *func;
-	int i;
-
-	card->sdio_single_irq = NULL;
-	if ((card->host->caps & MMC_CAP_SDIO_IRQ) &&
-	    card->host->sdio_irqs == 1)
-		for (i = 0; i < card->sdio_funcs; i++) {
-		       func = card->sdio_func[i];
-		       if (func && func->irq_handler) {
-			       card->sdio_single_irq = func;
-			       break;
-		       }
-	       }
-}
-
 /**
  *	sdio_claim_irq - claim the IRQ for a SDIO function
  *	@func: SDIO function
@@ -284,7 +233,6 @@ int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 	ret = sdio_card_irq_get(func->card);
 	if (ret)
 		func->irq_handler = NULL;
-	sdio_single_irq_set(func->card);
 
 	return ret;
 }
@@ -309,7 +257,6 @@ int sdio_release_irq(struct sdio_func *func)
 	if (func->irq_handler) {
 		func->irq_handler = NULL;
 		sdio_card_irq_put(func->card);
-		sdio_single_irq_set(func->card);
 	}
 
 	ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IENx, 0, &reg);

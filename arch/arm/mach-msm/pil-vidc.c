@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,22 +13,16 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/elf.h>
 #include <linux/err.h>
-#include <linux/clk.h>
-
-#include <mach/subsystem_restart.h>
-#include <mach/msm_bus_board.h>
 
 #include "peripheral-loader.h"
 #include "scm-pas.h"
 
-struct vidc_data {
-	struct clk *smmu_iface;
-	struct clk *core;
-	struct pil_desc pil_desc;
-	struct subsys_device *subsys;
-	struct subsys_desc subsys_desc;
-};
+static int nop_verify_blob(struct pil_desc *pil, u32 phy_addr, size_t size)
+{
+	return 0;
+}
 
 static int pil_vidc_init_image(struct pil_desc *pil, const u8 *metadata,
 		size_t size)
@@ -38,22 +32,7 @@ static int pil_vidc_init_image(struct pil_desc *pil, const u8 *metadata,
 
 static int pil_vidc_reset(struct pil_desc *pil)
 {
-	int ret;
-	struct vidc_data *drv = dev_get_drvdata(pil->dev);
-
-	ret = clk_prepare_enable(drv->smmu_iface);
-	if (ret)
-		goto err_smmu;
-	ret = clk_prepare_enable(drv->core);
-	if (ret)
-		goto err_core;
-	ret = pas_auth_and_reset(PAS_VIDC);
-
-	clk_disable_unprepare(drv->core);
-err_core:
-	clk_disable_unprepare(drv->smmu_iface);
-err_smmu:
-	return ret;
+	return pas_auth_and_reset(PAS_VIDC);
 }
 
 static int pil_vidc_shutdown(struct pil_desc *pil)
@@ -63,77 +42,32 @@ static int pil_vidc_shutdown(struct pil_desc *pil)
 
 static struct pil_reset_ops pil_vidc_ops = {
 	.init_image = pil_vidc_init_image,
+	.verify_blob = nop_verify_blob,
 	.auth_and_reset = pil_vidc_reset,
 	.shutdown = pil_vidc_shutdown,
 };
 
-#define subsys_to_drv(d) container_of(d, struct vidc_data, subsys_desc)
-
-static int vidc_start(const struct subsys_desc *desc)
-{
-	struct vidc_data *drv = subsys_to_drv(desc);
-	return pil_boot(&drv->pil_desc);
-}
-
-static void vidc_stop(const struct subsys_desc *desc)
-{
-	struct vidc_data *drv = subsys_to_drv(desc);
-	pil_shutdown(&drv->pil_desc);
-}
-
 static int __devinit pil_vidc_driver_probe(struct platform_device *pdev)
 {
 	struct pil_desc *desc;
-	struct vidc_data *drv;
-	int ret;
 
 	if (pas_supported(PAS_VIDC) < 0)
 		return -ENOSYS;
 
-	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
-	if (!drv)
+	desc = devm_kzalloc(&pdev->dev, sizeof(*desc), GFP_KERNEL);
+	if (!desc)
 		return -ENOMEM;
-	platform_set_drvdata(pdev, drv);
 
-	drv->smmu_iface = devm_clk_get(&pdev->dev, "smmu_iface_clk");
-	if (IS_ERR(drv->smmu_iface))
-		return PTR_ERR(drv->smmu_iface);
-
-	drv->core = devm_clk_get(&pdev->dev, "core_clk");
-	if (IS_ERR(drv->core))
-		return PTR_ERR(drv->core);
-
-	desc = &drv->pil_desc;
 	desc->name = "vidc";
 	desc->dev = &pdev->dev;
 	desc->ops = &pil_vidc_ops;
-	desc->owner = THIS_MODULE;
-	ret = pil_desc_init(desc);
-	if (ret)
-		return ret;
-
-	drv->subsys_desc.name = "vidc";
-	drv->subsys_desc.dev = &pdev->dev;
-	drv->subsys_desc.owner = THIS_MODULE;
-	drv->subsys_desc.start = vidc_start;
-	drv->subsys_desc.stop = vidc_stop;
-
-	drv->subsys = subsys_register(&drv->subsys_desc);
-	if (IS_ERR(drv->subsys)) {
-		pil_desc_release(desc);
-		return PTR_ERR(drv->subsys);
-	}
-
-	scm_pas_init(MSM_BUS_MASTER_SPS);
-
+	if (msm_pil_register(desc))
+		return -EINVAL;
 	return 0;
 }
 
 static int __devexit pil_vidc_driver_exit(struct platform_device *pdev)
 {
-	struct vidc_data *drv = platform_get_drvdata(pdev);
-	subsys_unregister(drv->subsys);
-	pil_desc_release(&drv->pil_desc);
 	return 0;
 }
 

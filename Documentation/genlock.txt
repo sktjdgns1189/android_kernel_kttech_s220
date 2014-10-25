@@ -143,7 +143,7 @@ genlock_lock.op:
  * GENLOCK_UNLOCK - unlock an existing lock
 
 Pass flags in genlock_lock.flags:
- * GENLOCK_NOBLOCK       - Do not block if the lock is already taken
+ * GENLOCK_NOBLOCK - Do not block if the lock is already taken
  * GENLOCK_WRITE_TO_READ - Convert a write lock that the handle owns to a read
                            lock. For instance graphics may hold a write lock
                            while rendering the back buffer then when swapping

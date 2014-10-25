@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,6 +22,9 @@
 #define MSM_SSBI1_I2C_BUS_ID     6
 #define MSM_SSBI2_I2C_BUS_ID     7
 #define MSM_SSBI3_I2C_BUS_ID     8
+#ifdef CONFIG_KTTECH_TOUCHSCREEN
+#define MSM_GSBI1_QUP_I2C_BUS_ID 9
+#endif
 
 #ifdef CONFIG_SND_SOC_MSM8660_APQ
 extern struct platform_device msm_pcm;
@@ -41,9 +44,20 @@ extern struct platform_device msm_lpa_pcm;
 extern struct platform_device msm_pcm_hostless;
 #endif
 
+#if defined(CONFIG_KTTECH_BATTERY_GAUGE_MAXIM) && defined(CONFIG_KTTECH_MODEL_O3)
+#define MSM_GSBI10_QUP_I2C_BUS_ID 10
+#endif
+
+#if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6)
+#define MSM_GSBI11_QUP_I2C_BUS_ID 11
+#endif /* #if defined(CONFIG_KTTECH_SENSOR_CAPELLA_O6) || defined(CONFIG_KTTECH_SENSOR_AVAGO_O6) */
+
 #ifdef CONFIG_SPI_QUP
 extern struct platform_device msm_gsbi1_qup_spi_device;
 extern struct platform_device msm_gsbi10_qup_spi_device;
+#ifdef CONFIG_KTTECH_TDMB_SERVICE
+extern struct platform_device msm_gsbi3_qup_spi_device;
+#endif /* CONFIG_KTTECH_TDMB_SERVICE */
 #endif
 
 extern struct platform_device msm_bus_apps_fabric;
@@ -56,7 +70,6 @@ extern struct platform_device msm_bus_def_fab;
 extern struct platform_device msm_device_smd;
 extern struct platform_device msm_device_gpio;
 extern struct platform_device msm_device_vidc;
-extern struct platform_device apq8064_msm_device_vidc;
 
 extern struct platform_device msm_charm_modem;
 extern struct platform_device msm_device_tz_log;

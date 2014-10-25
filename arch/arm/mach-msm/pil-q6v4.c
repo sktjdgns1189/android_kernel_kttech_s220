@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,22 +16,34 @@
 #include <linux/io.h>
 #include <linux/ioport.h>
 #include <linux/regulator/consumer.h>
+#include <linux/elf.h>
 #include <linux/delay.h>
 #include <linux/err.h>
-#include <linux/clk.h>
+#include <linux/workqueue.h>
 
 #include <mach/msm_bus.h>
+#include <mach/msm_iomap.h>
+#include <mach/msm_xo.h>
 
 #include "peripheral-loader.h"
 #include "pil-q6v4.h"
 #include "scm-pas.h"
 
+#define PROXY_VOTE_TIMEOUT	10000
+
 #define QDSP6SS_RST_EVB		0x0
 #define QDSP6SS_RESET		0x04
+#define QDSP6SS_CGC_OVERRIDE	0x18
 #define QDSP6SS_STRAP_TCM	0x1C
 #define QDSP6SS_STRAP_AHB	0x20
 #define QDSP6SS_GFMUX_CTL	0x30
 #define QDSP6SS_PWR_CTL		0x38
+
+#define MSS_S_HCLK_CTL		(MSM_CLK_CTL_BASE + 0x2C70)
+#define MSS_SLP_CLK_CTL		(MSM_CLK_CTL_BASE + 0x2C60)
+#define SFAB_MSS_M_ACLK_CTL	(MSM_CLK_CTL_BASE + 0x2340)
+#define SFAB_MSS_S_HCLK_CTL	(MSM_CLK_CTL_BASE + 0x2C00)
+#define MSS_RESET		(MSM_CLK_CTL_BASE + 0x2C64)
 
 #define Q6SS_SS_ARES		BIT(0)
 #define Q6SS_CORE_ARES		BIT(1)
@@ -50,49 +62,87 @@
 
 #define Q6SS_CLK_ENA		BIT(1)
 #define Q6SS_SRC_SWITCH_CLK_OVR	BIT(8)
+#define Q6SS_AXIS_ACLK_EN	BIT(9)
 
-int pil_q6v4_make_proxy_votes(struct pil_desc *pil)
+struct q6v4_data {
+	void __iomem *base;
+	void __iomem *modem_base;
+	unsigned long start_addr;
+	struct regulator *vreg;
+	struct regulator *pll_supply;
+	bool vreg_enabled;
+	struct msm_xo_voter *xo;
+	struct msm_xo_voter *xo1;
+	struct msm_xo_voter *xo2;
+	struct delayed_work work;
+};
+
+static int pil_q6v4_init_image(struct pil_desc *pil, const u8 *metadata,
+		size_t size)
 {
-	const struct q6v4_data *drv = pil_to_q6v4_data(pil);
+	const struct elf32_hdr *ehdr = (struct elf32_hdr *)metadata;
+	struct q6v4_data *drv = dev_get_drvdata(pil->dev);
+	drv->start_addr = ehdr->e_entry;
+	return 0;
+}
+
+static int nop_verify_blob(struct pil_desc *pil, u32 phy_addr, size_t size)
+{
+	return 0;
+}
+
+static void pil_q6v4_make_proxy_votes(struct device *dev)
+{
+	struct q6v4_data *drv = dev_get_drvdata(dev);
 	int ret;
 
-	ret = clk_prepare_enable(drv->xo);
-	if (ret) {
-		dev_err(pil->dev, "Failed to enable XO\n");
-		goto err;
-	}
+	msm_xo_mode_vote(drv->xo, MSM_XO_MODE_ON);
+
+	if (drv->xo1)
+		msm_xo_mode_vote(drv->xo1, MSM_XO_MODE_ON);
+	if (drv->xo2)
+		msm_xo_mode_vote(drv->xo2, MSM_XO_MODE_ON);
+
 	if (drv->pll_supply) {
 		ret = regulator_enable(drv->pll_supply);
-		if (ret) {
-			dev_err(pil->dev, "Failed to enable pll supply\n");
-			goto err_regulator;
-		}
+		if (ret)
+			dev_err(dev, "failed to enable pll supply\n");
 	}
-	return 0;
-err_regulator:
-	clk_disable_unprepare(drv->xo);
-err:
-	return ret;
+	schedule_delayed_work(&drv->work, msecs_to_jiffies(PROXY_VOTE_TIMEOUT));
 }
-EXPORT_SYMBOL(pil_q6v4_make_proxy_votes);
 
-void pil_q6v4_remove_proxy_votes(struct pil_desc *pil)
+static void pil_q6v4_remove_proxy_votes(struct work_struct *work)
 {
-	const struct q6v4_data *drv = pil_to_q6v4_data(pil);
+	struct q6v4_data *drv = container_of(work, struct q6v4_data, work.work);
 	if (drv->pll_supply)
 		regulator_disable(drv->pll_supply);
-	clk_disable_unprepare(drv->xo);
-}
-EXPORT_SYMBOL(pil_q6v4_remove_proxy_votes);
+	msm_xo_mode_vote(drv->xo, MSM_XO_MODE_OFF);
+	if (drv->xo1)
+		msm_xo_mode_vote(drv->xo1, MSM_XO_MODE_OFF);
+	if (drv->xo2)
+		msm_xo_mode_vote(drv->xo2, MSM_XO_MODE_OFF);
 
-int pil_q6v4_power_up(struct q6v4_data *drv)
+}
+
+static void pil_q6v4_remove_proxy_votes_now(struct device *dev)
+{
+	struct q6v4_data *drv = dev_get_drvdata(dev);
+	flush_delayed_work(&drv->work);
+}
+
+static int pil_q6v4_power_up(struct device *dev)
 {
 	int err;
-	struct device *dev = drv->desc.dev;
+	struct q6v4_data *drv = dev_get_drvdata(dev);
 
-	err = regulator_set_voltage(drv->vreg, 743750, 743750);
+	err = regulator_set_voltage(drv->vreg, 1050000, 1050000);
 	if (err) {
-		dev_err(dev, "Failed to set regulator's voltage step.\n");
+		dev_err(dev, "Failed to set regulator's voltage.\n");
+		return err;
+	}
+	err = regulator_set_optimum_mode(drv->vreg, 100000);
+	if (err < 0) {
+		dev_err(dev, "Failed to set regulator's mode.\n");
 		return err;
 	}
 	err = regulator_enable(drv->vreg);
@@ -100,45 +150,84 @@ int pil_q6v4_power_up(struct q6v4_data *drv)
 		dev_err(dev, "Failed to enable regulator.\n");
 		return err;
 	}
-
-	/*
-	 * Q6 hardware requires a two step voltage ramp-up.
-	 * Delay between the steps.
-	 */
-	udelay(100);
-
-	err = regulator_set_voltage(drv->vreg, 1050000, 1050000);
-	if (err) {
-		dev_err(dev, "Failed to set regulator's voltage.\n");
-		return err;
-	}
 	drv->vreg_enabled = true;
 	return 0;
 }
-EXPORT_SYMBOL(pil_q6v4_power_up);
 
-void pil_q6v4_power_down(struct q6v4_data *drv)
+static DEFINE_MUTEX(pil_q6v4_modem_lock);
+static unsigned pil_q6v4_modem_count;
+
+/* Bring modem subsystem out of reset */
+static void pil_q6v4_init_modem(void __iomem *base, void __iomem *jtag_clk)
 {
-	if (drv->vreg_enabled) {
-		regulator_disable(drv->vreg);
-		drv->vreg_enabled = false;
+	mutex_lock(&pil_q6v4_modem_lock);
+	if (!pil_q6v4_modem_count) {
+		/* Enable MSS clocks */
+		writel_relaxed(0x10, SFAB_MSS_M_ACLK_CTL);
+		writel_relaxed(0x10, SFAB_MSS_S_HCLK_CTL);
+		writel_relaxed(0x10, MSS_S_HCLK_CTL);
+		writel_relaxed(0x10, MSS_SLP_CLK_CTL);
+		/* Wait for clocks to enable */
+		mb();
+		udelay(10);
+
+		/* De-assert MSS reset */
+		writel_relaxed(0x0, MSS_RESET);
+		mb();
+		udelay(10);
+		/* Enable MSS */
+		writel_relaxed(0x7, base);
 	}
+
+	/* Enable JTAG clocks */
+	/* TODO: Remove if/when Q6 software enables them? */
+	writel_relaxed(0x10, jtag_clk);
+
+	pil_q6v4_modem_count++;
+	mutex_unlock(&pil_q6v4_modem_lock);
 }
-EXPORT_SYMBOL(pil_q6v4_power_down);
 
-int pil_q6v4_boot(struct pil_desc *pil)
+/* Put modem subsystem back into reset */
+static void pil_q6v4_shutdown_modem(void)
 {
-	u32 reg, err;
-	const struct q6v4_data *drv = pil_to_q6v4_data(pil);
-	phys_addr_t start_addr = pil_get_entry_addr(pil);
+	mutex_lock(&pil_q6v4_modem_lock);
+	if (pil_q6v4_modem_count)
+		pil_q6v4_modem_count--;
+	if (pil_q6v4_modem_count == 0)
+		writel_relaxed(0x1, MSS_RESET);
+	mutex_unlock(&pil_q6v4_modem_lock);
+}
 
+static int pil_q6v4_reset(struct pil_desc *pil)
+{
+	u32 reg, err = 0;
+	const struct q6v4_data *drv = dev_get_drvdata(pil->dev);
+	const struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
+
+	pil_q6v4_make_proxy_votes(pil->dev);
+
+	err = pil_q6v4_power_up(pil->dev);
+	if (err)
+		return err;
 	/* Enable Q6 ACLK */
-	writel_relaxed(0x10, drv->aclk_reg);
+	writel_relaxed(0x10, pdata->aclk_reg);
+
+	if (drv->modem_base)
+		pil_q6v4_init_modem(drv->modem_base, pdata->jtag_clk_reg);
 
 	/* Unhalt bus port */
-	err = msm_bus_axi_portunhalt(drv->bus_port);
+	err = msm_bus_axi_portunhalt(pdata->bus_port);
 	if (err)
 		dev_err(pil->dev, "Failed to unhalt bus port\n");
+
+	/*
+	 * Assert AXIS_ACLK_EN override to allow for correct updating of the
+	 * QDSP6_CORE_STATE status bit. This is mandatory only for the SW Q6
+	 * in 8960v1 and optional elsewhere.
+	 */
+	reg = readl_relaxed(drv->base + QDSP6SS_CGC_OVERRIDE);
+	reg |= Q6SS_AXIS_ACLK_EN;
+	writel_relaxed(reg, drv->base + QDSP6SS_CGC_OVERRIDE);
 
 	/* Deassert Q6SS_SS_ARES */
 	reg = readl_relaxed(drv->base + QDSP6SS_RESET);
@@ -146,12 +235,12 @@ int pil_q6v4_boot(struct pil_desc *pil)
 	writel_relaxed(reg, drv->base + QDSP6SS_RESET);
 
 	/* Program boot address */
-	writel_relaxed((start_addr >> 8) & 0xFFFFFF,
+	writel_relaxed((drv->start_addr >> 8) & 0xFFFFFF,
 			drv->base + QDSP6SS_RST_EVB);
 
 	/* Program TCM and AHB address ranges */
-	writel_relaxed(drv->strap_tcm_base, drv->base + QDSP6SS_STRAP_TCM);
-	writel_relaxed(drv->strap_ahb_upper | drv->strap_ahb_lower,
+	writel_relaxed(pdata->strap_tcm_base, drv->base + QDSP6SS_STRAP_TCM);
+	writel_relaxed(pdata->strap_ahb_upper | pdata->strap_ahb_lower,
 		       drv->base + QDSP6SS_STRAP_AHB);
 
 	/* Turn off Q6 core clock */
@@ -189,17 +278,27 @@ int pil_q6v4_boot(struct pil_desc *pil)
 	/* Bring Q6 core out of reset and start execution. */
 	writel_relaxed(0x0, drv->base + QDSP6SS_RESET);
 
+	/*
+	 * Re-enable auto-gating of AXIS_ACLK at lease one AXI clock cycle
+	 * after resets are de-asserted.
+	 */
+	mb();
+	usleep_range(1, 10);
+	reg = readl_relaxed(drv->base + QDSP6SS_CGC_OVERRIDE);
+	reg &= ~Q6SS_AXIS_ACLK_EN;
+	writel_relaxed(reg, drv->base + QDSP6SS_CGC_OVERRIDE);
+
 	return 0;
 }
-EXPORT_SYMBOL(pil_q6v4_boot);
 
-int pil_q6v4_shutdown(struct pil_desc *pil)
+static int pil_q6v4_shutdown(struct pil_desc *pil)
 {
 	u32 reg;
-	struct q6v4_data *drv = pil_to_q6v4_data(pil);
+	struct q6v4_data *drv = dev_get_drvdata(pil->dev);
+	const struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
 
 	/* Make sure bus port is halted */
-	msm_bus_axi_porthalt(drv->bus_port);
+	msm_bus_axi_porthalt(pdata->bus_port);
 
 	/* Turn off Q6 core clock */
 	writel_relaxed(Q6SS_SRC_SWITCH_CLK_OVR,
@@ -213,67 +312,214 @@ int pil_q6v4_shutdown(struct pil_desc *pil)
 	/* Turn off Q6 memories */
 	writel_relaxed(Q6SS_CLAMP_IO, drv->base + QDSP6SS_PWR_CTL);
 
+	if (drv->modem_base)
+		pil_q6v4_shutdown_modem();
+
+	if (drv->vreg_enabled) {
+		regulator_disable(drv->vreg);
+		drv->vreg_enabled = false;
+	}
+
+	pil_q6v4_remove_proxy_votes_now(pil->dev);
+
 	return 0;
 }
-EXPORT_SYMBOL(pil_q6v4_shutdown);
 
-int pil_q6v4_init_image_trusted(struct pil_desc *pil,
+static struct pil_reset_ops pil_q6v4_ops = {
+	.init_image = pil_q6v4_init_image,
+	.verify_blob = nop_verify_blob,
+	.auth_and_reset = pil_q6v4_reset,
+	.shutdown = pil_q6v4_shutdown,
+};
+
+static int pil_q6v4_init_image_trusted(struct pil_desc *pil,
 		const u8 *metadata, size_t size)
 {
-	struct q6v4_data *drv = pil_to_q6v4_data(pil);
-	return pas_init_image(drv->pas_id, metadata, size);
+	const struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
+	return pas_init_image(pdata->pas_id, metadata, size);
 }
-EXPORT_SYMBOL(pil_q6v4_init_image_trusted);
 
-int pil_q6v4_boot_trusted(struct pil_desc *pil)
+static int pil_q6v4_reset_trusted(struct pil_desc *pil)
 {
-	struct q6v4_data *drv = pil_to_q6v4_data(pil);
+	const struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
 	int err;
 
-	err = pil_q6v4_power_up(drv);
+	pil_q6v4_make_proxy_votes(pil->dev);
+
+	err = pil_q6v4_power_up(pil->dev);
 	if (err)
 		return err;
 
 	/* Unhalt bus port */
-	err = msm_bus_axi_portunhalt(drv->bus_port);
+	err = msm_bus_axi_portunhalt(pdata->bus_port);
 	if (err)
 		dev_err(pil->dev, "Failed to unhalt bus port\n");
-	return pas_auth_and_reset(drv->pas_id);
+	return pas_auth_and_reset(pdata->pas_id);
 }
-EXPORT_SYMBOL(pil_q6v4_boot_trusted);
 
-int pil_q6v4_shutdown_trusted(struct pil_desc *pil)
+static int pil_q6v4_shutdown_trusted(struct pil_desc *pil)
 {
 	int ret;
-	struct q6v4_data *drv = pil_to_q6v4_data(pil);
+	struct q6v4_data *drv = dev_get_drvdata(pil->dev);
+	struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
 
 	/* Make sure bus port is halted */
-	msm_bus_axi_porthalt(drv->bus_port);
+	msm_bus_axi_porthalt(pdata->bus_port);
 
-	ret = pas_shutdown(drv->pas_id);
+	ret = pas_shutdown(pdata->pas_id);
 	if (ret)
 		return ret;
 
-	pil_q6v4_power_down(drv);
+	if (drv->vreg_enabled) {
+		regulator_disable(drv->vreg);
+		drv->vreg_enabled = false;
+	}
+
+	pil_q6v4_remove_proxy_votes_now(pil->dev);
 
 	return ret;
 }
-EXPORT_SYMBOL(pil_q6v4_shutdown_trusted);
 
-void __devinit
-pil_q6v4_init(struct q6v4_data *drv, const struct pil_q6v4_pdata *pdata)
+static struct pil_reset_ops pil_q6v4_ops_trusted = {
+	.init_image = pil_q6v4_init_image_trusted,
+	.verify_blob = nop_verify_blob,
+	.auth_and_reset = pil_q6v4_reset_trusted,
+	.shutdown = pil_q6v4_shutdown_trusted,
+};
+
+static int __devinit pil_q6v4_driver_probe(struct platform_device *pdev)
 {
-	drv->strap_tcm_base	= pdata->strap_tcm_base;
-	drv->strap_ahb_upper	= pdata->strap_ahb_upper;
-	drv->strap_ahb_lower	= pdata->strap_ahb_lower;
-	drv->aclk_reg		= pdata->aclk_reg;
-	drv->jtag_clk_reg	= pdata->jtag_clk_reg;
-	drv->pas_id		= pdata->pas_id;
-	drv->bus_port		= pdata->bus_port;
+	const struct pil_q6v4_pdata *pdata = pdev->dev.platform_data;
+	struct q6v4_data *drv;
+	struct resource *res;
+	struct pil_desc *desc;
+	int ret;
 
-	regulator_set_optimum_mode(drv->vreg, 100000);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		return -EINVAL;
+
+	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
+	if (!drv)
+		return -ENOMEM;
+	platform_set_drvdata(pdev, drv);
+
+	drv->base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
+	if (!drv->base)
+		return -ENOMEM;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (res) {
+		drv->modem_base = devm_ioremap(&pdev->dev, res->start,
+				resource_size(res));
+		if (!drv->modem_base)
+			return -ENOMEM;
+	}
+
+	desc = devm_kzalloc(&pdev->dev, sizeof(*desc), GFP_KERNEL);
+	if (!desc)
+		return -ENOMEM;
+
+	drv->pll_supply = regulator_get(&pdev->dev, "pll_vdd");
+	if (IS_ERR(drv->pll_supply)) {
+		drv->pll_supply = NULL;
+	} else {
+		ret = regulator_set_voltage(drv->pll_supply, 1800000, 1800000);
+		if (ret) {
+			dev_err(&pdev->dev, "failed to set pll voltage\n");
+			goto err;
+		}
+
+		ret = regulator_set_optimum_mode(drv->pll_supply, 100000);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "failed to set pll optimum mode\n");
+			goto err;
+		}
+	}
+
+	desc->name = pdata->name;
+	desc->depends_on = pdata->depends;
+	desc->dev = &pdev->dev;
+
+	if (pas_supported(pdata->pas_id) > 0) {
+		desc->ops = &pil_q6v4_ops_trusted;
+		dev_info(&pdev->dev, "using secure boot\n");
+	} else {
+		desc->ops = &pil_q6v4_ops;
+		dev_info(&pdev->dev, "using non-secure boot\n");
+	}
+
+	drv->vreg = regulator_get(&pdev->dev, "core_vdd");
+	if (IS_ERR(drv->vreg)) {
+		ret = PTR_ERR(drv->vreg);
+		goto err;
+	}
+
+	drv->xo = msm_xo_get(pdata->xo_id, pdata->name);
+	if (IS_ERR(drv->xo)) {
+		ret = PTR_ERR(drv->xo);
+		goto err_xo;
+	}
+
+	if (pdata->xo1_id)
+		drv->xo1 = msm_xo_get(pdata->xo1_id, pdata->name);
+	if (IS_ERR(drv->xo1)) {
+		ret = PTR_ERR(drv->xo1);
+		goto err_xo;
+	}
+
+	if (pdata->xo2_id)
+		drv->xo2 = msm_xo_get(pdata->xo2_id, pdata->name);
+	if (IS_ERR(drv->xo2)) {
+		ret = PTR_ERR(drv->xo2);
+		goto err_xo;
+	}
+	INIT_DELAYED_WORK(&drv->work, pil_q6v4_remove_proxy_votes);
+
+	ret = msm_pil_register(desc);
+	if (ret)
+		goto err_pil;
+	return 0;
+err_pil:
+	cancel_delayed_work_sync(&drv->work);
+	msm_xo_put(drv->xo);
+err_xo:
+	regulator_put(drv->vreg);
+err:
+	regulator_put(drv->pll_supply);
+	return ret;
 }
-EXPORT_SYMBOL(pil_q6v4_init);
+
+static int __devexit pil_q6v4_driver_exit(struct platform_device *pdev)
+{
+	struct q6v4_data *drv = platform_get_drvdata(pdev);
+	cancel_delayed_work_sync(&drv->work);
+	msm_xo_put(drv->xo);
+	regulator_put(drv->vreg);
+	regulator_put(drv->pll_supply);
+	return 0;
+}
+
+static struct platform_driver pil_q6v4_driver = {
+	.probe = pil_q6v4_driver_probe,
+	.remove = __devexit_p(pil_q6v4_driver_exit),
+	.driver = {
+		.name = "pil_qdsp6v4",
+		.owner = THIS_MODULE,
+	},
+};
+
+static int __init pil_q6v4_init(void)
+{
+	return platform_driver_register(&pil_q6v4_driver);
+}
+module_init(pil_q6v4_init);
+
+static void __exit pil_q6v4_exit(void)
+{
+	platform_driver_unregister(&pil_q6v4_driver);
+}
+module_exit(pil_q6v4_exit);
 
 MODULE_DESCRIPTION("Support for booting QDSP6v4 (Hexagon) processors");
 MODULE_LICENSE("GPL v2");

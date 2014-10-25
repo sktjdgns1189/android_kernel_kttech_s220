@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,7 +12,6 @@
  */
 #ifndef _VCD_API_H_
 #define _VCD_API_H_
-#include <linux/types.h>
 #include "vcd_property.h"
 #include "vcd_status.h"
 
@@ -54,12 +53,6 @@ enum vcd_power_state {
 	VCD_PWR_STATE_SLEEP,
 };
 
-struct vcd_aspect_ratio {
-	u32 aspect_ratio;
-	u32 par_width;
-	u32 par_height;
-};
-
 struct vcd_frame_data {
 	u8 *virtual;
 	u8 *physical;
@@ -78,7 +71,6 @@ struct vcd_frame_data {
 	u8 *desc_buf;
 	u32 desc_size;
 	struct ion_handle *buff_ion_handle;
-	struct vcd_aspect_ratio aspect_ratio_info;
 };
 
 struct vcd_sequence_hdr {
@@ -101,7 +93,6 @@ struct vcd_buffer_requirement {
 	size_t sz;
 	u32 align;
 	u32 buf_pool_id;
-	size_t meta_buffer_size;
 };
 
 struct vcd_init_config {

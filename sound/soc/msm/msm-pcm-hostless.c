@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,26 +13,11 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/of_device.h>
 #include <sound/core.h>
 #include <sound/soc.h>
 #include <sound/pcm.h>
 
-
-static int msm_pcm_hostless_prepare(struct snd_pcm_substream *substream)
-{
-	if (!substream) {
-		pr_err("%s: invalid params\n", __func__);
-		return -EINVAL;
-	}
-	if (pm_qos_request_active(&substream->latency_pm_qos_req))
-		pm_qos_remove_request(&substream->latency_pm_qos_req);
-	return 0;
-}
-
-static struct snd_pcm_ops msm_pcm_hostless_ops = {
-	.prepare = msm_pcm_hostless_prepare
-};
+static struct snd_pcm_ops msm_pcm_hostless_ops = {};
 
 static struct snd_soc_platform_driver msm_soc_hostless_platform = {
 	.ops		= &msm_pcm_hostless_ops,
@@ -40,9 +25,6 @@ static struct snd_soc_platform_driver msm_soc_hostless_platform = {
 
 static __devinit int msm_pcm_hostless_probe(struct platform_device *pdev)
 {
-	if (pdev->dev.of_node)
-		dev_set_name(&pdev->dev, "%s", "msm-pcm-hostless");
-
 	pr_debug("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
 	return snd_soc_register_platform(&pdev->dev,
 				   &msm_soc_hostless_platform);
@@ -54,16 +36,10 @@ static int msm_pcm_hostless_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id msm_pcm_hostless_dt_match[] = {
-	{.compatible = "qcom,msm-pcm-hostless"},
-	{}
-};
-
 static struct platform_driver msm_pcm_hostless_driver = {
 	.driver = {
 		.name = "msm-pcm-hostless",
 		.owner = THIS_MODULE,
-		.of_match_table = msm_pcm_hostless_dt_match,
 	},
 	.probe = msm_pcm_hostless_probe,
 	.remove = __devexit_p(msm_pcm_hostless_remove),

@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,6 +29,11 @@
 /* skip N 32-bit words to get to the next packet */
 #define CP_NOP			0x10
 
+/* indirect buffer dispatch.  prefetch parser uses this packet type to determine
+*  whether to pre-fetch the IB
+*/
+#define CP_INDIRECT_BUFFER	0x3f
+
 /* indirect buffer dispatch.  same as IB, but init is pipelined */
 #define CP_INDIRECT_BUFFER_PFD	0x37
 
@@ -52,9 +57,6 @@
 
 /* register read/modify/write */
 #define CP_REG_RMW		0x21
-
-/* Set binning configuration registers */
-#define CP_SET_BIN_DATA             0x2f
 
 /* reads register in chip and writes to memory */
 #define CP_REG_TO_MEM		0x3e
@@ -115,9 +117,6 @@
 /* load constants from a location in memory */
 #define CP_LOAD_CONSTANT_CONTEXT 0x2e
 
-/* (A2x) sets binning configuration registers */
-#define CP_SET_BIN_DATA             0x2f
-
 /* selective invalidation of state pointers */
 #define CP_INVALIDATE_STATE	0x3b
 
@@ -142,12 +141,6 @@
 /* copy sequencer instruction memory to system memory */
 #define CP_IM_STORE            0x2c
 
-/* test 2 memory locations to dword values specified */
-#define CP_TEST_TWO_MEMS	0x71
-
-/* PFP waits until the FIFO between the PFP and the ME is empty */
-#define CP_WAIT_FOR_ME		0x13
-
 /*
  * for a20x
  * program an offset that will added to the BIN_BASE value of
@@ -164,13 +157,9 @@
 
 #define CP_SET_PROTECTED_MODE  0x5f /* sets the register protection mode */
 
-#define CP_BOOTSTRAP_UCODE  0x6f /* bootstraps microcode */
-
 /*
  * for a3xx
  */
-
-#define CP_LOAD_STATE 0x30 /* load high level sequencer command */
 
 /* Conditionally load a IB based on a flag */
 #define CP_COND_INDIRECT_BUFFER_PFE 0x3A /* prefetch enabled */
@@ -178,15 +167,6 @@
 
 /* Load a buffer with pre-fetch enabled */
 #define CP_INDIRECT_BUFFER_PFE 0x3F
-
-#define CP_EXEC_CL 0x31
-
-#define CP_LOADSTATE_DSTOFFSET_SHIFT 0x00000000
-#define CP_LOADSTATE_STATESRC_SHIFT 0x00000010
-#define CP_LOADSTATE_STATEBLOCKID_SHIFT 0x00000013
-#define CP_LOADSTATE_NUMOFUNITS_SHIFT 0x00000016
-#define CP_LOADSTATE_STATETYPE_SHIFT 0x00000000
-#define CP_LOADSTATE_EXTSRCADDR_SHIFT 0x00000002
 
 /* packet header building macros */
 #define cp_type0_packet(regindx, cnt) \
@@ -208,27 +188,11 @@
 #define cp_nop_packet(cnt) \
 	 (CP_TYPE3_PKT | (((cnt)-1) << 16) | (CP_NOP << 8))
 
-#define pkt_is_type0(pkt) (((pkt) & 0XC0000000) == CP_TYPE0_PKT)
-
-#define type0_pkt_size(pkt) ((((pkt) >> 16) & 0x3FFF) + 1)
-#define type0_pkt_offset(pkt) ((pkt) & 0x7FFF)
-
-/*
- * Check both for the type3 opcode and make sure that the reserved bits [1:7]
- * and 15 are 0
- */
-
-#define pkt_is_type3(pkt) \
-	((((pkt) & 0xC0000000) == CP_TYPE3_PKT) && \
-	 (((pkt) & 0x80FE) == 0))
-
-#define cp_type3_opcode(pkt) (((pkt) >> 8) & 0xFF)
-#define type3_pkt_size(pkt) ((((pkt) >> 16) & 0x3FFF) + 1)
 
 /* packet headers */
 #define CP_HDR_ME_INIT	cp_type3_packet(CP_ME_INIT, 18)
 #define CP_HDR_INDIRECT_BUFFER_PFD cp_type3_packet(CP_INDIRECT_BUFFER_PFD, 2)
-#define CP_HDR_INDIRECT_BUFFER_PFE cp_type3_packet(CP_INDIRECT_BUFFER_PFE, 2)
+#define CP_HDR_INDIRECT_BUFFER	cp_type3_packet(CP_INDIRECT_BUFFER, 2)
 
 /* dword base address of the GFX decode space */
 #define SUBBLOCK_OFFSET(reg) ((unsigned int)((reg) - (0x2000)))

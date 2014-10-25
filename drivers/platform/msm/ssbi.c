@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  * Copyright (c) 2010, Google Inc.
  *
  * Original authors: Code Aurora Forum
@@ -18,7 +18,6 @@
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
 
-#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/io.h>
@@ -264,9 +263,9 @@ int msm_ssbi_read(struct device *dev, u16 addr, u8 *buf, int len)
 		ret = ssbi->read(ssbi, addr, buf, len);
 		remote_spin_unlock_irqrestore(&ssbi->rspin_lock, flags);
 	} else {
-		spin_lock_irqsave(&ssbi->lock, flags);
-		ret = ssbi->read(ssbi, addr, buf, len);
-		spin_unlock_irqrestore(&ssbi->lock, flags);
+	spin_lock_irqsave(&ssbi->lock, flags);
+	ret = ssbi->read(ssbi, addr, buf, len);
+	spin_unlock_irqrestore(&ssbi->lock, flags);
 	}
 
 	return ret;
@@ -287,9 +286,9 @@ int msm_ssbi_write(struct device *dev, u16 addr, u8 *buf, int len)
 		ret = ssbi->write(ssbi, addr, buf, len);
 		remote_spin_unlock_irqrestore(&ssbi->rspin_lock, flags);
 	} else {
-		spin_lock_irqsave(&ssbi->lock, flags);
-		ret = ssbi->write(ssbi, addr, buf, len);
-		spin_unlock_irqrestore(&ssbi->lock, flags);
+	spin_lock_irqsave(&ssbi->lock, flags);
+	ret = ssbi->write(ssbi, addr, buf, len);
+	spin_unlock_irqrestore(&ssbi->lock, flags);
 	}
 
 	return ret;
@@ -362,7 +361,7 @@ static int __devinit msm_ssbi_probe(struct platform_device *pdev)
 
 	ssbi->base = ioremap(mem_res->start, resource_size(mem_res));
 	if (!ssbi->base) {
-		pr_err("ioremap failed: %pr\n", mem_res);
+		pr_err("ioremap of 0x%p failed\n", (void *)mem_res->start);
 		ret = -EINVAL;
 		goto err_ioremap;
 	}

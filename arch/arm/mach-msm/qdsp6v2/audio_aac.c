@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -20,6 +20,28 @@
 
 #define AUDIO_AAC_DUAL_MONO_INVALID -1
 #define PCM_BUFSZ_MIN_AAC	((8*1024) + sizeof(struct dec_meta_out))
+
+static void q6_audio_aac_cb(uint32_t opcode, uint32_t token,
+		uint32_t *payload, void *priv)
+{
+	struct q6audio_aio *audio = (struct q6audio_aio *)priv;
+
+	pr_debug("%s:opcode = %x token = 0x%x\n", __func__, opcode, token);
+	switch (opcode) {
+	case ASM_DATA_EVENT_WRITE_DONE:
+	case ASM_DATA_EVENT_READ_DONE:
+	case ASM_DATA_CMDRSP_EOS:
+	case ASM_DATA_CMD_MEDIA_FORMAT_UPDATE:
+	case ASM_STREAM_CMD_SET_ENCDEC_PARAM:
+	case ASM_DATA_EVENT_SR_CM_CHANGE_NOTIFY:
+	case ASM_DATA_EVENT_ENC_SR_CM_NOTIFY:
+		audio_aio_cb(opcode, token, payload, audio);
+		break;
+	default:
+		pr_debug("%s:Unhandled event = 0x%8x\n", __func__, opcode);
+		break;
+	}
+}
 
 #ifdef CONFIG_DEBUG_FS
 static const struct file_operations audio_aac_debug_fops = {
@@ -81,13 +103,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		aac_cfg.spectral_data_resilience =
 			aac_config->aac_spectral_data_resilience_flag;
 		aac_cfg.ch_cfg = audio->pcm_cfg.channel_count;
-		if (audio->feedback == TUNNEL_MODE) {
-			aac_cfg.sample_rate = aac_config->sample_rate;
-			aac_cfg.ch_cfg = aac_config->channel_configuration;
-		} else {
-			aac_cfg.sample_rate =  audio->pcm_cfg.sample_rate;
-			aac_cfg.ch_cfg = audio->pcm_cfg.channel_count;
-		}
+		aac_cfg.sample_rate =  audio->pcm_cfg.sample_rate;
 
 		pr_debug("%s:format=%x aot=%d  ch=%d sr=%d\n",
 			__func__, aac_cfg.format,
@@ -104,11 +120,6 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		audio->eos_rsp = 0;
 		audio->eos_flag = 0;
 		if (!rc) {
-			rc = enable_volume_ramp(audio);
-			if (rc < 0) {
-				pr_err("%s: Failed to enable volume ramp\n",
-					__func__);
-			}
 			audio->enabled = 1;
 		} else {
 			audio->enabled = 0;
@@ -140,9 +151,10 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		} else {
 			uint16_t sce_left = 1, sce_right = 2;
 			aac_config = audio->codec_cfg;
-			/* PL_PR is 0 only need to check PL_SR */
-			if (aac_config->dual_mono_mode >
-			    AUDIO_AAC_DUAL_MONO_PL_SR) {
+			if ((aac_config->dual_mono_mode <
+				AUDIO_AAC_DUAL_MONO_PL_PR) ||
+				(aac_config->dual_mono_mode >
+				AUDIO_AAC_DUAL_MONO_PL_SR)) {
 				pr_err("%s:AUDIO_SET_AAC_CONFIG: Invalid"
 					"dual_mono mode =%d\n", __func__,
 					aac_config->dual_mono_mode);
@@ -210,8 +222,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->codec_cfg = kzalloc(sizeof(struct msm_audio_aac_config),
 					GFP_KERNEL);
 	if (audio->codec_cfg == NULL) {
-		pr_err("%s:Could not allocate memory for aac"
-			"config\n", __func__);
+		pr_err("%s:Could not allocate memory for aac\
+			config\n", __func__);
 		kfree(audio);
 		return -ENOMEM;
 	}
@@ -223,7 +235,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->pcm_cfg.buffer_size = PCM_BUFSZ_MIN_AAC;
 	aac_config->dual_mono_mode = AUDIO_AAC_DUAL_MONO_INVALID;
 
-	audio->ac = q6asm_audio_client_alloc((app_cb) q6_audio_cb,
+	audio->ac = q6asm_audio_client_alloc((app_cb) q6_audio_aac_cb,
 					     (void *)audio);
 
 	if (!audio->ac) {
@@ -232,12 +244,7 @@ static int audio_open(struct inode *inode, struct file *file)
 		kfree(audio);
 		return -ENOMEM;
 	}
-	rc = audio_aio_open(audio, file);
-	if (rc < 0) {
-		pr_err("%s: audio_aio_open rc=%d\n",
-			__func__, rc);
-		goto fail;
-	}
+
 	/* open in T/NT mode */
 	if ((file->f_mode & FMODE_WRITE) && (file->f_mode & FMODE_READ)) {
 		rc = q6asm_open_read_write(audio->ac, FORMAT_LINEAR_PCM,
@@ -263,6 +270,12 @@ static int audio_open(struct inode *inode, struct file *file)
 		audio->buf_cfg.meta_info_enable = 0x00;
 	} else {
 		pr_err("Not supported mode\n");
+		rc = -EACCES;
+		goto fail;
+	}
+	rc = audio_aio_open(audio, file);
+	if (IS_ERR_OR_NULL(audio)) {
+		pr_err("%s: audio_aio_open failed\n", __func__);
 		rc = -EACCES;
 		goto fail;
 	}

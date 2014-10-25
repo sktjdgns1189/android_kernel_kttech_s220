@@ -1,6 +1,6 @@
 /* arch/arm/mach-msm/rpc_server_handset.c
  *
- * Copyright (c) 2008-2010,2012 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -280,13 +280,6 @@ static void report_hs_key(uint32_t key_code, uint32_t key_parm)
 	switch (key) {
 	case KEY_POWER:
 	case KEY_END:
-		if (hs->hs_pdata->ignore_end_key)
-			input_report_key(hs->ipdev, KEY_POWER,
-						(key_code != HS_REL_K));
-		else
-			input_report_key(hs->ipdev, key,
-						(key_code != HS_REL_K));
-		break;
 	case KEY_MEDIA:
 	case KEY_VOLUMEUP:
 	case KEY_VOLUMEDOWN:
@@ -524,7 +517,7 @@ static int hs_cb_func(struct msm_rpc_client *client, void *buffer, int in_size)
 	return 0;
 }
 
-static int __devinit hs_rpc_cb_init(void)
+static int __init hs_rpc_cb_init(void)
 {
 	int rc = 0, i, num_vers;
 

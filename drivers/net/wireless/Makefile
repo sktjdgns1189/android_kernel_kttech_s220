@@ -41,8 +41,8 @@ obj-$(CONFIG_ADM8211)	+= adm8211.o
 
 obj-$(CONFIG_MWL8K)	+= mwl8k.o
 
-obj-$(CONFIG_IWLWIFI)	+= iwlwifi/
-obj-$(CONFIG_IWLEGACY)	+= iwlegacy/
+obj-$(CONFIG_IWLAGN)	+= iwlwifi/
+obj-$(CONFIG_IWLWIFI_LEGACY)	+= iwlegacy/
 obj-$(CONFIG_RT2X00)	+= rt2x00/
 
 obj-$(CONFIG_P54_COMMON)	+= p54/
@@ -59,10 +59,13 @@ obj-$(CONFIG_IWM)	+= iwmc3200wifi/
 
 obj-$(CONFIG_MWIFIEX)	+= mwifiex/
 
+ifdef CONFIG_MACH_KTTECH
+obj-$(CONFIG_KTTECH_WIFI_BCM4329)	+= bcm4329-kttech/
+obj-$(CONFIG_KTTECH_WIRELESS_BCM4330)	+= bcmdhd/
+else
+obj-$(CONFIG_BCM4329)	+= bcm4329/
 obj-$(CONFIG_BCMDHD)	+= bcmdhd/
-
-obj-$(CONFIG_BRCMFMAC)	+= brcm80211/
-obj-$(CONFIG_BRCMSMAC)	+= brcm80211/
+endif
 
 obj-$(CONFIG_LIBRA_SDIOIF)	+= libra/
 obj-$(CONFIG_WCNSS_CORE)	+= wcnss/

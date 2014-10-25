@@ -21,7 +21,6 @@
 #include <linux/phy.h>
 #include <linux/ptp_classify.h>
 #include <linux/skbuff.h>
-#include <linux/export.h>
 
 static struct sock_filter ptp_filter[] = {
 	PTP_FILTER
@@ -58,13 +57,9 @@ void skb_clone_tx_timestamp(struct sk_buff *skb)
 	case PTP_CLASS_V2_VLAN:
 		phydev = skb->dev->phydev;
 		if (likely(phydev->drv->txtstamp)) {
-			if (!atomic_inc_not_zero(&sk->sk_refcnt))
-				return;
 			clone = skb_clone(skb, GFP_ATOMIC);
-			if (!clone) {
-				sock_put(sk);
+			if (!clone)
 				return;
-			}
 			clone->sk = sk;
 			phydev->drv->txtstamp(phydev, clone, type);
 		}
@@ -73,7 +68,6 @@ void skb_clone_tx_timestamp(struct sk_buff *skb)
 		break;
 	}
 }
-EXPORT_SYMBOL_GPL(skb_clone_tx_timestamp);
 
 void skb_complete_tx_timestamp(struct sk_buff *skb,
 			       struct skb_shared_hwtstamps *hwtstamps)
@@ -82,11 +76,8 @@ void skb_complete_tx_timestamp(struct sk_buff *skb,
 	struct sock_exterr_skb *serr;
 	int err;
 
-	if (!hwtstamps) {
-		sock_put(sk);
-		kfree_skb(skb);
+	if (!hwtstamps)
 		return;
-	}
 
 	*skb_hwtstamps(skb) = *hwtstamps;
 	serr = SKB_EXT_ERR(skb);
@@ -95,7 +86,6 @@ void skb_complete_tx_timestamp(struct sk_buff *skb,
 	serr->ee.ee_origin = SO_EE_ORIGIN_TIMESTAMPING;
 	skb->sk = NULL;
 	err = sock_queue_err_skb(sk, skb);
-	sock_put(sk);
 	if (err)
 		kfree_skb(skb);
 }
@@ -131,7 +121,6 @@ bool skb_defer_rx_timestamp(struct sk_buff *skb)
 
 	return false;
 }
-EXPORT_SYMBOL_GPL(skb_defer_rx_timestamp);
 
 void __init skb_timestamping_init(void)
 {

@@ -125,42 +125,10 @@ static struct us_unusual_dev us_unusual_dev_list[] = {
 	{ }		/* Terminating entry */
 };
 
-static struct us_unusual_dev for_dynamic_ids =
-		USUAL_DEV(USB_SC_SCSI, USB_PR_BULK, 0);
-
 #undef UNUSUAL_DEV
 #undef COMPLIANT_DEV
 #undef USUAL_DEV
 
-#ifdef CONFIG_LOCKDEP
-
-static struct lock_class_key us_interface_key[USB_MAXINTERFACES];
-
-static void us_set_lock_class(struct mutex *mutex,
-		struct usb_interface *intf)
-{
-	struct usb_device *udev = interface_to_usbdev(intf);
-	struct usb_host_config *config = udev->actconfig;
-	int i;
-
-	for (i = 0; i < config->desc.bNumInterfaces; i++) {
-		if (config->interface[i] == intf)
-			break;
-	}
-
-	BUG_ON(i == config->desc.bNumInterfaces);
-
-	lockdep_set_class(mutex, &us_interface_key[i]);
-}
-
-#else
-
-static void us_set_lock_class(struct mutex *mutex,
-		struct usb_interface *intf)
-{
-}
-
-#endif
 
 #ifdef CONFIG_PM	/* Minimal support for suspend and resume */
 
@@ -742,28 +710,6 @@ static int get_pipes(struct us_data *us)
 	return 0;
 }
 
-/* Initialize SCSI device auto-suspend timeout here */
-static void usb_stor_set_scsi_autosuspend(struct us_data *us)
-{
-	struct usb_device *udev = us->pusb_dev;
-	struct usb_host_config *config = udev->actconfig;
-	struct usb_host_interface *intf;
-	int i;
-
-	/*
-	 * Some USB UICC devices has Mass storage interface along
-	 * with CCID interface.  These cards are inserted all the
-	 * time.  Enable SCSI auto-suspend for such devices.
-	 */
-	for (i = 0; i < config->desc.bNumInterfaces; i++) {
-		intf = config->interface[i]->cur_altsetting;
-		if (intf->desc.bInterfaceClass == USB_CLASS_CSCID) {
-			us->sdev_autosuspend_delay = 2000; /* msec */
-			return;
-		}
-	}
-}
-
 /* Initialize all the dynamic resources we need */
 static int usb_stor_acquire_resources(struct us_data *us)
 {
@@ -842,19 +788,15 @@ static void quiesce_and_remove_host(struct us_data *us)
 	struct Scsi_Host *host = us_to_host(us);
 
 	/* If the device is really gone, cut short reset delays */
-	if (us->pusb_dev->state == USB_STATE_NOTATTACHED) {
+	if (us->pusb_dev->state == USB_STATE_NOTATTACHED)
 		set_bit(US_FLIDX_DISCONNECTING, &us->dflags);
-		wake_up(&us->delay_wait);
-	}
 
-	/* Prevent SCSI scanning (if it hasn't started yet)
-	 * or wait for the SCSI-scanning routine to stop.
+	/* Prevent SCSI-scanning (if it hasn't started yet)
+	 * and wait for the SCSI-scanning thread to stop.
 	 */
-	cancel_delayed_work_sync(&us->scan_dwork);
-
-	/* Balance autopm calls if scanning was cancelled */
-	if (test_bit(US_FLIDX_SCAN_PENDING, &us->dflags))
-		usb_autopm_put_interface_no_suspend(us->pusb_intf);
+	set_bit(US_FLIDX_DONT_SCAN, &us->dflags);
+	wake_up(&us->delay_wait);
+	wait_for_completion(&us->scanning_done);
 
 	/* Removing the host will perform an orderly shutdown: caches
 	 * synchronized, disks spun down, etc.
@@ -881,28 +823,42 @@ static void release_everything(struct us_data *us)
 	scsi_host_put(us_to_host(us));
 }
 
-/* Delayed-work routine to carry out SCSI-device scanning */
-static void usb_stor_scan_dwork(struct work_struct *work)
+/* Thread to carry out delayed SCSI-device scanning */
+static int usb_stor_scan_thread(void * __us)
 {
-	struct us_data *us = container_of(work, struct us_data,
-			scan_dwork.work);
+	struct us_data *us = (struct us_data *)__us;
 	struct device *dev = &us->pusb_intf->dev;
 
-	dev_dbg(dev, "starting scan\n");
+	dev_dbg(dev, "device found\n");
 
-	/* For bulk-only devices, determine the max LUN value */
-	if (us->protocol == USB_PR_BULK && !(us->fflags & US_FL_SINGLE_LUN)) {
-		mutex_lock(&us->dev_mutex);
-		us->max_lun = usb_stor_Bulk_max_lun(us);
-		mutex_unlock(&us->dev_mutex);
+	set_freezable();
+	/* Wait for the timeout to expire or for a disconnect */
+	if (delay_use > 0) {
+		dev_dbg(dev, "waiting for device to settle "
+				"before scanning\n");
+		wait_event_freezable_timeout(us->delay_wait,
+				test_bit(US_FLIDX_DONT_SCAN, &us->dflags),
+				delay_use * HZ);
 	}
-	scsi_scan_host(us_to_host(us));
-	dev_dbg(dev, "scan complete\n");
 
-	/* Should we unbind if no devices were detected? */
+	/* If the device is still connected, perform the scanning */
+	if (!test_bit(US_FLIDX_DONT_SCAN, &us->dflags)) {
+
+		/* For bulk-only devices, determine the max LUN value */
+		if (us->protocol == USB_PR_BULK &&
+				!(us->fflags & US_FL_SINGLE_LUN)) {
+			mutex_lock(&us->dev_mutex);
+			us->max_lun = usb_stor_Bulk_max_lun(us);
+			mutex_unlock(&us->dev_mutex);
+		}
+		scsi_scan_host(us_to_host(us));
+		dev_dbg(dev, "scan complete\n");
+
+		/* Should we unbind if no devices were detected? */
+	}
 
 	usb_autopm_put_interface(us->pusb_intf);
-	clear_bit(US_FLIDX_SCAN_PENDING, &us->dflags);
+	complete_and_exit(&us->scanning_done, 0);
 }
 
 static unsigned int usb_stor_sg_tablesize(struct usb_interface *intf)
@@ -946,11 +902,10 @@ int usb_stor_probe1(struct us_data **pus,
 	*pus = us = host_to_us(host);
 	memset(us, 0, sizeof(struct us_data));
 	mutex_init(&(us->dev_mutex));
-	us_set_lock_class(&us->dev_mutex, intf);
 	init_completion(&us->cmnd_ready);
 	init_completion(&(us->notify));
 	init_waitqueue_head(&us->delay_wait);
-	INIT_DELAYED_WORK(&us->scan_dwork, usb_stor_scan_dwork);
+	init_completion(&us->scanning_done);
 
 	/* Associate the us_data structure with the USB device */
 	result = associate_dev(us, intf);
@@ -981,6 +936,7 @@ EXPORT_SYMBOL_GPL(usb_stor_probe1);
 /* Second part of general USB mass-storage probing */
 int usb_stor_probe2(struct us_data *us)
 {
+	struct task_struct *th;
 	int result;
 	struct device *dev = &us->pusb_intf->dev;
 
@@ -1012,10 +968,6 @@ int usb_stor_probe2(struct us_data *us)
 	result = usb_stor_acquire_resources(us);
 	if (result)
 		goto BadDevice;
-
-	us->sdev_autosuspend_delay = -1;
-	usb_stor_set_scsi_autosuspend(us);
-
 	snprintf(us->scsi_name, sizeof(us->scsi_name), "usb-storage %s",
 					dev_name(&us->pusb_intf->dev));
 	result = scsi_add_host(us_to_host(us), dev);
@@ -1025,14 +977,20 @@ int usb_stor_probe2(struct us_data *us)
 		goto BadDevice;
 	}
 
-	/* Submit the delayed_work for SCSI-device scanning */
-	usb_autopm_get_interface_no_resume(us->pusb_intf);
-	set_bit(US_FLIDX_SCAN_PENDING, &us->dflags);
+	/* Start up the thread for delayed SCSI-device scanning */
+	th = kthread_create(usb_stor_scan_thread, us, "usb-stor-scan");
+	if (IS_ERR(th)) {
+		dev_warn(dev,
+				"Unable to start the device-scanning thread\n");
+		complete(&us->scanning_done);
+		quiesce_and_remove_host(us);
+		result = PTR_ERR(th);
+		goto BadDevice;
+	}
 
-	if (delay_use > 0)
-		dev_dbg(dev, "waiting for device to settle before scanning\n");
-	queue_delayed_work(system_freezable_wq, &us->scan_dwork,
-			delay_use * HZ);
+	usb_autopm_get_interface_no_resume(us->pusb_intf);
+	wake_up_process(th);
+
 	return 0;
 
 	/* We come here if there are any problems */
@@ -1058,10 +1016,8 @@ EXPORT_SYMBOL_GPL(usb_stor_disconnect);
 static int storage_probe(struct usb_interface *intf,
 			 const struct usb_device_id *id)
 {
-	struct us_unusual_dev *unusual_dev;
 	struct us_data *us;
 	int result;
-	int size;
 
 	/*
 	 * If libusual is configured, let it decide whether a standard
@@ -1080,19 +1036,8 @@ static int storage_probe(struct usb_interface *intf,
 	 * table, so we use the index of the id entry to find the
 	 * corresponding unusual_devs entry.
 	 */
-
-	size = ARRAY_SIZE(us_unusual_dev_list);
-	if (id >= usb_storage_usb_ids && id < usb_storage_usb_ids + size) {
-		unusual_dev = (id - usb_storage_usb_ids) + us_unusual_dev_list;
-	} else {
-		unusual_dev = &for_dynamic_ids;
-
-		US_DEBUGP("%s %s 0x%04x 0x%04x\n", "Use Bulk-Only transport",
-			"with the Transparent SCSI protocol for dynamic id:",
-			id->idVendor, id->idProduct);
-	}
-
-	result = usb_stor_probe1(&us, intf, id, unusual_dev);
+	result = usb_stor_probe1(&us, intf, id,
+			(id - usb_storage_usb_ids) + us_unusual_dev_list);
 	if (result)
 		return result;
 

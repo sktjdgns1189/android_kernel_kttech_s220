@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -13,6 +13,7 @@
  * GNU General Public License for more details.
  *
  */
+
 #include <linux/kernel.h>
 #include <linux/gpio.h>
 #include <linux/init.h>
@@ -54,6 +55,7 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 #include <linux/i2c.h>
+#include <linux/android_pmem.h>
 #include <mach/camera.h>
 
 #ifdef CONFIG_USB_G_ANDROID
@@ -64,6 +66,7 @@
 #include "board-msm7627-regulator.h"
 #include "devices.h"
 #include "clock.h"
+#include "acpuclock.h"
 #include "msm-keypad-devices.h"
 #include "pm.h"
 #include "pm-boot.h"
@@ -89,7 +92,6 @@
 
 #define PMEM_KERNEL_EBI1_SIZE	0x1C000
 #endif
-#define ADSP_RPC_PROG           0x3000000a
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -1061,10 +1063,10 @@ static void config_camera_off_gpios(void)
 static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.camera_gpio_on  = config_camera_on_gpios,
 	.camera_gpio_off = config_camera_off_gpios,
-	.ioext.mdcphy = MSM7XXX_MDC_PHYS,
-	.ioext.mdcsz  = MSM7XXX_MDC_SIZE,
-	.ioext.appphy = MSM7XXX_CLK_CTL_PHYS,
-	.ioext.appsz  = MSM7XXX_CLK_CTL_SIZE,
+	.ioext.mdcphy = MSM_MDC_PHYS,
+	.ioext.mdcsz  = MSM_MDC_SIZE,
+	.ioext.appphy = MSM_CLK_CTL_PHYS,
+	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 };
 
 int pmic_set_flash_led_current(enum pmic8058_leds id, unsigned mA)
@@ -1584,17 +1586,15 @@ static void __init msm7x2x_init_mmc(void)
 
 
 static struct msm_pm_platform_data msm7x25_pm_data[MSM_PM_SLEEP_MODE_NR] = {
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE)].latency = 16000,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].latency = 16000,
 
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN)]
-		.latency = 12000,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].latency = 12000,
 
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT)]
-		.latency = 2000,
+	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency = 2000,
 };
 
 static struct msm_pm_platform_data msm7x27_pm_data[MSM_PM_SLEEP_MODE_NR] = {
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE)] = {
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE] = {
 		.idle_supported = 1,
 		.suspend_supported = 1,
 		.idle_enabled = 1,
@@ -1603,7 +1603,7 @@ static struct msm_pm_platform_data msm7x27_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 		.residency = 20000,
 	},
 
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN)] = {
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN] = {
 		.idle_supported = 1,
 		.suspend_supported = 1,
 		.idle_enabled = 1,
@@ -1612,7 +1612,7 @@ static struct msm_pm_platform_data msm7x27_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 		.residency = 20000,
 	},
 
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT)] = {
+	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT] = {
 		.idle_supported = 1,
 		.suspend_supported = 1,
 		.idle_enabled = 1,
@@ -1727,25 +1727,6 @@ static void msm7x27_wlan_init(void)
 	}
 }
 
-static void msm_adsp_add_pdev(void)
-{
-	int rc = 0;
-	struct rpc_board_dev *rpc_adsp_pdev;
-
-	rpc_adsp_pdev = kzalloc(sizeof(struct rpc_board_dev), GFP_KERNEL);
-	if (rpc_adsp_pdev == NULL) {
-		pr_err("%s: Memory Allocation failure\n", __func__);
-		return;
-	}
-	rpc_adsp_pdev->prog = ADSP_RPC_PROG;
-	rpc_adsp_pdev->pdev = msm_adsp_device;
-	rc = msm_rpc_add_board_dev(rpc_adsp_pdev, 1);
-	if (rc < 0) {
-		pr_err("%s: return val: %d\n",	__func__, rc);
-		kfree(rpc_adsp_pdev);
-	}
-}
-
 static void __init msm7x2x_init(void)
 {
 
@@ -1773,7 +1754,7 @@ static void __init msm7x2x_init(void)
 		}
 	}
 #endif
-	platform_device_register(&msm7x27_device_acpuclk);
+	acpuclk_init(&acpuclk_7x27_soc_data);
 
 	usb_mpp_init();
 
@@ -1812,7 +1793,6 @@ static void __init msm7x2x_init(void)
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */
 #endif
-	msm_adsp_add_pdev();
 	msm_device_i2c_init();
 	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
 
@@ -1983,7 +1963,7 @@ static void __init msm7x2x_map_io(void)
 }
 
 MACHINE_START(MSM7X27_SURF, "QCT MSM7x27 SURF")
-	.atag_offset	= 0x100,
+	.boot_params	= PLAT_PHYS_OFFSET + 0x100,
 	.map_io		= msm7x2x_map_io,
 	.reserve	= msm7x27_reserve,
 	.init_irq	= msm7x2x_init_irq,
@@ -1994,7 +1974,7 @@ MACHINE_START(MSM7X27_SURF, "QCT MSM7x27 SURF")
 MACHINE_END
 
 MACHINE_START(MSM7X27_FFA, "QCT MSM7x27 FFA")
-	.atag_offset	= 0x100,
+	.boot_params	= PLAT_PHYS_OFFSET + 0x100,
 	.map_io		= msm7x2x_map_io,
 	.reserve	= msm7x27_reserve,
 	.init_irq	= msm7x2x_init_irq,
@@ -2005,7 +1985,7 @@ MACHINE_START(MSM7X27_FFA, "QCT MSM7x27 FFA")
 MACHINE_END
 
 MACHINE_START(MSM7X25_SURF, "QCT MSM7x25 SURF")
-	.atag_offset	= 0x100,
+	.boot_params	= PLAT_PHYS_OFFSET + 0x100,
 	.map_io		= msm7x2x_map_io,
 	.reserve	= msm7x27_reserve,
 	.init_irq	= msm7x2x_init_irq,
@@ -2016,7 +1996,7 @@ MACHINE_START(MSM7X25_SURF, "QCT MSM7x25 SURF")
 MACHINE_END
 
 MACHINE_START(MSM7X25_FFA, "QCT MSM7x25 FFA")
-	.atag_offset	= 0x100,
+	.boot_params	= PLAT_PHYS_OFFSET + 0x100,
 	.map_io		= msm7x2x_map_io,
 	.reserve	= msm7x27_reserve,
 	.init_irq	= msm7x2x_init_irq,

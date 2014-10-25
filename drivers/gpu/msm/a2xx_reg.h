@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -140,9 +140,24 @@ union reg_rb_edram_info {
 	struct rb_edram_info_t f;
 };
 
-#define RBBM_READ_ERROR_ADDRESS_MASK	0x0001fffc
-#define RBBM_READ_ERROR_REQUESTER	(1<<30)
-#define RBBM_READ_ERROR_ERROR		(1<<31)
+#define RBBM_READ_ERROR_UNUSED0_SIZE		2
+#define RBBM_READ_ERROR_READ_ADDRESS_SIZE	15
+#define RBBM_READ_ERROR_UNUSED1_SIZE		13
+#define RBBM_READ_ERROR_READ_REQUESTER_SIZE	1
+#define RBBM_READ_ERROR_READ_ERROR_SIZE		1
+
+struct rbbm_read_error_t {
+	unsigned int unused0:RBBM_READ_ERROR_UNUSED0_SIZE;
+	unsigned int read_address:RBBM_READ_ERROR_READ_ADDRESS_SIZE;
+	unsigned int unused1:RBBM_READ_ERROR_UNUSED1_SIZE;
+	unsigned int read_requester:RBBM_READ_ERROR_READ_REQUESTER_SIZE;
+	unsigned int read_error:RBBM_READ_ERROR_READ_ERROR_SIZE;
+};
+
+union rbbm_read_error_u {
+	unsigned int val:32;
+	struct rbbm_read_error_t f;
+};
 
 #define CP_RB_CNTL_RB_BUFSZ_SIZE                           6
 #define CP_RB_CNTL_UNUSED0_SIZE                            2
@@ -252,15 +267,7 @@ union reg_cp_rb_cntl {
 #define REG_CP_CSQ_IB1_STAT              0x01FE
 #define REG_CP_CSQ_IB2_STAT              0x01FF
 #define REG_CP_CSQ_RB_STAT               0x01FD
-
 #define REG_CP_DEBUG                     0x01FC
-/*
- * CP DEBUG settings for a3xx and a2xx cores:
- * DYNAMIC_CLK_DISABLE [27] - turn off the dynamic clock control
- * MIU_128BIT_WRITE_ENABLE [25] - Allow 128 bit writes to the VBIF
- */
-#define A2XX_CP_DEBUG_DEFAULT ((1 << 27) | (1 << 25))
-
 #define REG_CP_IB1_BASE                  0x0458
 #define REG_CP_IB1_BUFSZ                 0x0459
 #define REG_CP_IB2_BASE                  0x045A
@@ -271,7 +278,6 @@ union reg_cp_rb_cntl {
 #define REG_CP_ME_CNTL                   0x01F6
 #define REG_CP_ME_RAM_DATA               0x01FA
 #define REG_CP_ME_RAM_WADDR              0x01F8
-#define REG_CP_ME_RAM_RADDR              0x01F9
 #define REG_CP_ME_STATUS                 0x01F7
 #define REG_CP_PFP_UCODE_ADDR            0x00C0
 #define REG_CP_PFP_UCODE_DATA            0x00C1

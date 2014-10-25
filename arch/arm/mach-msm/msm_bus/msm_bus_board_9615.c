@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -184,8 +184,6 @@ static struct msm_bus_node_info system_fabric_info[]  = {
 		.tier = tier2,
 		.num_tiers = ARRAY_SIZE(tier2),
 		.buswidth = 8,
-		.slaveclk[DUAL_CTX] = "dfab_clk",
-		.slaveclk[ACTIVE_CTX] = "dfab_a_clk",
 	},
 	{
 		.id = MSM_BUS_SLAVE_EBI_CH0,
@@ -310,8 +308,4 @@ struct msm_bus_fabric_registration msm_bus_9615_def_fab_pdata = {
 int msm_bus_board_rpm_get_il_ids(uint16_t id[])
 {
 	return -ENXIO;
-}
-
-void msm_bus_board_init(struct msm_bus_fabric_registration *pdata)
-{
 }

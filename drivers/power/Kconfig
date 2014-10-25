@@ -70,25 +70,10 @@ config BATTERY_DS2760
 
 config BATTERY_DS2780
 	tristate "DS2780 battery driver"
-	depends on HAS_IOMEM
 	select W1
 	select W1_SLAVE_DS2780
 	help
 	  Say Y here to enable support for batteries with ds2780 chip.
-
-config BATTERY_DS2781
-	tristate "2781 battery driver"
-	depends on HAS_IOMEM
-	select W1
-	select W1_SLAVE_DS2781
-	help
-	  If you enable this you will have the DS2781 battery driver support.
-
-	  The battery monitor chip is used in many batteries/devices
-	  as the one who is responsible for charging/discharging/monitoring
-	  Li+ batteries.
-
-	  If you are unsure, say N.
 
 config BATTERY_DS2782
 	tristate "DS2782/DS2786 standalone gas-gauge"
@@ -130,12 +115,12 @@ config BATTERY_WM97XX
 	help
 	  Say Y to enable support for battery measured by WM97xx aux port.
 
-config BATTERY_SBS
-        tristate "SBS Compliant gas gauge"
+config BATTERY_BQ20Z75
+        tristate "TI BQ20z75 gas gauge"
         depends on I2C
         help
-	  Say Y to include support for SBS battery driver for SBS-compliant
-	  gas gauges.
+         Say Y to include support for TI BQ20z75 SBS-compliant
+         gas gauge and protection IC.
 
 config BATTERY_BQ27x00
 	tristate "BQ27x00 battery driver"
@@ -163,14 +148,6 @@ config BATTERY_DA9030
 	help
 	  Say Y here to enable support for batteries charger integrated into
 	  DA9030 PMIC.
-
-config BATTERY_DA9052
-	tristate "Dialog DA9052 Battery"
-	depends on PMIC_DA9052
-	depends on BROKEN
-	help
-	  Say Y here to enable support for batteries charger integrated into
-	  DA9052 PMIC.
 
 config BATTERY_MAX17040
 	tristate "Maxim MAX17040 Fuel Gauge"
@@ -248,12 +225,6 @@ config CHARGER_TWL4030
 	help
 	  Say Y here to enable support for TWL4030 Battery Charge Interface.
 
-config CHARGER_LP8727
-	tristate "TI/National Semiconductor LP8727 charger driver"
-	depends on I2C
-	help
-	  Say Y here to enable support for LP8727 Charger Driver.
-
 config CHARGER_GPIO
 	tristate "GPIO charger"
 	depends on GPIOLIB
@@ -264,42 +235,12 @@ config CHARGER_GPIO
 	  This driver can be build as a module. If so, the module will be
 	  called gpio-charger.
 
-config CHARGER_MANAGER
-	bool "Battery charger manager for multiple chargers"
-	depends on REGULATOR && RTC_CLASS
-	help
-          Say Y to enable charger-manager support, which allows multiple
-          chargers attached to a battery and multiple batteries attached to a
-          system. The charger-manager also can monitor charging status in
-          runtime and in suspend-to-RAM by waking up the system periodically
-          with help of suspend_again support.
-
-config CHARGER_MAX8997
-	tristate "Maxim MAX8997/MAX8966 PMIC battery charger driver"
-	depends on MFD_MAX8997 && REGULATOR_MAX8997
-	help
-	  Say Y to enable support for the battery charger control sysfs and
-	  platform data of MAX8997/LP3974 PMICs.
-
-config CHARGER_MAX8998
-	tristate "Maxim MAX8998/LP3974 PMIC battery charger driver"
-	depends on MFD_MAX8998 && REGULATOR_MAX8998
-	help
-	  Say Y to enable support for the battery charger control sysfs and
-	  platform data of MAX8998/LP3974 PMICs.
-
 config BATTERY_MSM
 	tristate "MSM battery"
-	depends on ARCH_MSM && MSM_ONCRPCROUTER
+	depends on ARCH_MSM
+	default m
 	help
 	  Say Y to enable support for the battery in Qualcomm MSM.
-
-config BATTERY_MSM_FAKE
-	tristate "Fake MSM battery"
-	depends on ARCH_MSM && BATTERY_MSM
-	default n
-	help
-	  Say Y to bypass actual battery queries.
 
 config BATTERY_MSM8X60
 	tristate "MSM8X60 battery"
@@ -340,37 +281,12 @@ config SMB137B_CHARGER
 	  To compile this driver as a module, choose M here: the module will
 	  be called smb137b.
 
-config SMB137C_CHARGER
-	tristate "Summit SMB137C Battery Charger"
-	depends on I2C
-	depends on OF
+config BATTERY_MSM_FAKE
+	tristate "Fake MSM battery"
+	depends on ARCH_MSM && BATTERY_MSM
+	default n
 	help
-	  The SMB137C charger chip from Summit is a switching mode based
-	  charging solution.  This driver supports enabling and disabling
-	  charging, setting the input current limit, and enabling USB OTG mode
-	  in order to supply 5 V on the VBUS line.
-
-config SMB349_CHARGER
-	tristate "smb349 charger"
-	depends on I2C
-	help
-	  Say Y to enable support for the SMB349 switching mode based charger
-	  and sysfs. The driver supports controlling charger-enable and
-	  current limiting capabilities. The driver also lets the
-	  SMB349 be operated as a slave device via the power supply
-	  framework.
-
-config SMB350_CHARGER
-	tristate "smb350 charger"
-	depends on I2C
-	help
-	  Say Y to enable battery charging by SMB350 switching mode based
-	  external charger. The device supports stack-cell battery charging.
-	  The driver configures the device volatile parameters
-	  and the charger device works autonomously.
-	  The driver supports charger-enable and charger-suspend/resume.
-	  The driver reports the charger status via the power supply framework.
-	  A charger status change triggers an IRQ via the device STAT pin.
+	  Say Y to bypass actual battery queries.
 
 config PM8058_FIX_USB
 	tristate "pmic8058 software workaround for usb removal"
@@ -396,16 +312,12 @@ config BATTERY_BQ27520
 	help
 	  Say Y here to enable support for batteries with BQ27520 (I2C) chips.
 
-config SMB358_CHARGER
-	tristate "SMB358 Battery Charger"
+config BATTERY_BQ27541
+	tristate "BQ27541 battery driver"
 	depends on I2C
+	default n
 	help
-	  Say Y to include support for SMB358 Battery Charger.
-	  SMB358 is a single path switching mode charger capable of charging
-	  the battery with 2Amps of current.
-	  The driver supports charger enable/disable.
-	  The driver reports the charger status via the power supply framework.
-	  A charger status change triggers an IRQ via the device STAT pin.
+	  Say Y here to enable support for batteries with BQ27541 (I2C) chips.
 
 config BQ27520_TEST_ENABLE
 	bool "Enable BQ27520 Fuel Gauge Chip Test"
@@ -414,41 +326,11 @@ config BQ27520_TEST_ENABLE
 	help
 	  Say Y here to enable Test sysfs Interface for BQ27520 Drivers.
 
-config BATTERY_BQ27541
-	tristate "BQ27541 battery driver"
-	depends on I2C
-	default n
-	help
-	  Say Y here to enable support for batteries with BQ27541 (I2C) chips.
-
-config BATTERY_BQ28400
-	tristate "BQ28400 battery driver"
-	depends on I2C
-	default n
-	help
-	  Say Y here to enable support for batteries with BQ28400 (I2C) chips.
-	  The bq28400 Texas Instruments Inc device monitors the battery
-	  charging/discharging status via Rsens resistor, typically 10 mohm.
-	  It monitors the battery temperature via Thermistor.
-	  The device monitors the battery level (Relative-State-Of-Charge).
-	  The device is SBS compliant, providing battery info over I2C.
-
 config PM8921_CHARGER
 	tristate "PM8921 Charger driver"
 	depends on MFD_PM8921_CORE
 	help
 	  Say Y here to enable support for pm8921 chip charger subdevice
-
-config QPNP_CHARGER
-	tristate "QPNP Charger driver"
-	depends on SPMI
-	depends on OF_SPMI
-	depends on THERMAL_QPNP_ADC_TM
-	help
-	  Say Y here to enable the switch mode battery charger
-	  and boost device which supports USB detection and charging. The driver
-	  also offers relevant information to userspace via the power supply
-	  framework.
 
 config PM8XXX_CCADC
 	tristate "PM8XXX battery current adc driver"
@@ -470,40 +352,4 @@ config PM8921_BMS
 	help
 	  Say Y here to enable support for pm8921 chip bms subdevice
 
-config BATTERY_BCL
-	tristate "Battery Current Limit driver"
-	help
-	  Say Y here to enable support for battery current limit
-	  device. The BCL driver will poll BMS if
-	  thermal daemon enables BCL.
-	  It will notify thermal daemon if IBat crosses Imax threshold.
-
-config CHARGER_SMB347
-	tristate "Summit Microelectronics SMB347 Battery Charger"
-	depends on I2C
-	help
-	  Say Y to include support for Summit Microelectronics SMB347
-	  Battery Charger.
-
-config AB8500_BM
-	bool "AB8500 Battery Management Driver"
-	depends on AB8500_CORE && AB8500_GPADC
-	help
-	  Say Y to include support for AB5500 battery management.
-
-config AB8500_BATTERY_THERM_ON_BATCTRL
-	bool "Thermistor connected on BATCTRL ADC"
-	depends on AB8500_BM
-	help
-	  Say Y to enable battery temperature measurements using
-	  thermistor connected on BATCTRL ADC.
-
-config QPNP_BMS
-	tristate "QPNP Battery Monitoring System driver"
-	depends on SPMI
-	depends on MSM_QPNP_INT
-	help
-	  Say Y here to enable support for QPNP chip bms device.
-	  It registers a fuelgauge bms power supply to report
-	  State of Charge.
 endif # POWER_SUPPLY

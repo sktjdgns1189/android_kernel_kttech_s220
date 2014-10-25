@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2010, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,8 +10,13 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+	.macro	disable_fiq
+	.endm
 
-#if !defined(CONFIG_ARM_GIC)
+	.macro	arch_ret_to_user, tmp1, tmp2
+	.endm
+
+#if !defined(CONFIG_ARM_GIC) && !defined(CONFIG_MULTI_IRQ_HANDLER)
 #include <mach/msm_iomap.h>
 
 	.macro	get_irqnr_preamble, base, tmp

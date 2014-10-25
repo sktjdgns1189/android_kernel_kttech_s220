@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,19 +15,11 @@
 
 #include <mach/qdsp6v2/apr_us.h>
 
-#define Q6USM_EVENT_UNDEF                0
-#define Q6USM_EVENT_READ_DONE            1
-#define Q6USM_EVENT_WRITE_DONE           2
-#define Q6USM_EVENT_SIGNAL_DETECT_RESULT 3
-
 /* cyclic buffer with 1 gap support */
 #define USM_MIN_BUF_CNT 3
 
 #define FORMAT_USPS_EPOS	0x00000000
 #define FORMAT_USRAW		0x00000001
-#define FORMAT_USPROX		0x00000002
-#define FORMAT_USGES_SYNC	0x00000003
-#define FORMAT_USRAW_SYNC	0x00000004
 #define INVALID_FORMAT		0xffffffff
 
 #define IN			0x000
@@ -46,6 +38,16 @@
 /* bit 4 represents META enable of encoded data buffer */
 #define BUFFER_META_ENABLE	0x0010
 
+struct us_region {
+	dma_addr_t	phys;
+	/* If == NULL, the region isn't allocated */
+	void		*data;
+	/* number of buffers in the region */
+	uint32_t	buf_cnt;
+	/* size of buffer */
+	uint32_t	buf_size;
+};
+
 struct us_port_data {
 	dma_addr_t	phys;
 	/* cyclic region of buffers with 1 gap */
@@ -54,25 +56,15 @@ struct us_port_data {
 	uint32_t	buf_cnt;
 	/* size of buffer */
 	uint32_t	buf_size;
-	/* write index */
+	/* TX: write index */
 	uint32_t	dsp_buf;
-	/* read index */
+	/* TX: read index */
 	uint32_t	cpu_buf;
 	/* expected token from dsp */
 	uint32_t	expected_token;
 	/* read or write locks */
 	struct mutex	lock;
 	spinlock_t	dsp_lock;
-	/* extended parameters, related to q6 variants */
-	void		*ext;
-	/* physical address of parameter buffer */
-	dma_addr_t	param_phys;
-	/* buffer which stores the parameter data */
-	u8		*param_buf;
-	/* size of parameter buffer */
-	uint32_t	param_buf_size;
-	/* parameter buffer memory handle */
-	void		*param_buf_mem_handle;
 };
 
 struct us_client {
@@ -96,8 +88,6 @@ int q6usm_run(struct us_client *usc, uint32_t flags,
 int q6usm_cmd(struct us_client *usc, int cmd);
 int q6usm_us_client_buf_alloc(unsigned int dir, struct us_client *usc,
 			      unsigned int bufsz, unsigned int bufcnt);
-int q6usm_us_param_buf_alloc(unsigned int dir, struct us_client *usc,
-			      unsigned int bufsz);
 int q6usm_enc_cfg_blk(struct us_client *usc, struct us_encdec_cfg *us_cfg);
 int q6usm_dec_cfg_blk(struct us_client *usc, struct us_encdec_cfg *us_cfg);
 int q6usm_read(struct us_client *usc, uint32_t read_ind);
@@ -106,17 +96,21 @@ struct us_client *q6usm_us_client_alloc(
 	void *priv);
 int q6usm_open_read(struct us_client *usc, uint32_t format);
 void q6usm_us_client_free(struct us_client *usc);
+int q6usm_memory_map(struct us_client *usc, uint32_t buf_add,
+		     int dir, uint32_t bufsz, uint32_t bufcnt);
+int q6usm_memory_unmap(struct us_client *usc, uint32_t buf_add,
+		       int dir);
+
+uint32_t q6usm_get_ready_data(int dir, struct us_client *usc);
 uint32_t q6usm_get_virtual_address(int dir, struct us_client *usc,
 				   struct vm_area_struct *vms);
+
 int q6usm_open_write(struct us_client *usc,  uint32_t format);
 int q6usm_write(struct us_client *usc, uint32_t write_ind);
-bool q6usm_is_write_buf_full(struct us_client *usc, uint32_t *free_region);
+bool q6usm_is_write_buf_full(struct us_client *usc, uint32_t* free_region);
+
 int q6usm_set_us_detection(struct us_client *usc,
 			   struct usm_session_cmd_detect_info *detect_info,
 			   uint16_t detect_info_size);
-int q6usm_set_us_stream_param(int dir, struct us_client *usc,
-		uint32_t module_id, uint32_t param_id, uint32_t buf_size);
-int q6usm_get_us_stream_param(int dir, struct us_client *usc,
-		uint32_t module_id, uint32_t param_id, uint32_t buf_size);
 
 #endif /* __Q6_USM_H__ */

@@ -14,7 +14,6 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/skbuff.h>
-#include <linux/module.h>
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
 #include <net/sch_generic.h>
@@ -107,7 +106,7 @@ static int mqprio_init(struct Qdisc *sch, struct nlattr *opt)
 	if (!netif_is_multiqueue(dev))
 		return -EOPNOTSUPP;
 
-	if (!opt || nla_len(opt) < sizeof(*qopt))
+	if (nla_len(opt) < sizeof(*qopt))
 		return -EINVAL;
 
 	qopt = nla_data(opt);

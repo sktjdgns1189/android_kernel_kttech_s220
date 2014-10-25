@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,11 +10,7 @@
  * GNU General Public License for more details.
  *
  */
-
-#define pr_fmt(fmt) "AXI: %s(): " fmt, __func__
-
 #include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/seq_file.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
@@ -385,11 +381,11 @@ static int msm_bus_dbg_fill_cl_buffer(const struct msm_bus_scale_pdata *pdata,
 			pdata->usecase[index].vectors[j].dst);
 	i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "\nab     : ");
 	for (j = 0; j < pdata->usecase->num_paths; j++)
-		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%llu  ",
+		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%u  ",
 			pdata->usecase[index].vectors[j].ab);
 	i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "\nib     : ");
 	for (j = 0; j < pdata->usecase->num_paths; j++)
-		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%llu  ",
+		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%u  ",
 			pdata->usecase[index].vectors[j].ib);
 	i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "\n");
 

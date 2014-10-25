@@ -19,9 +19,6 @@
 #include <linux/math64.h>
 #include <linux/writeback.h>
 #include <linux/compaction.h>
-#include <linux/mm_inline.h>
-
-#include "internal.h"
 
 #ifdef CONFIG_VM_EVENT_COUNTERS
 DEFINE_PER_CPU(struct vm_event_state, vm_event_states) = {{0}};
@@ -81,7 +78,7 @@ void vm_events_fold_cpu(int cpu)
  *
  * vm_stat contains the global counters
  */
-atomic_long_t vm_stat[NR_VM_ZONE_STAT_ITEMS] __cacheline_aligned_in_smp;
+atomic_long_t vm_stat[NR_VM_ZONE_STAT_ITEMS];
 EXPORT_SYMBOL(vm_stat);
 
 #ifdef CONFIG_SMP
@@ -298,7 +295,7 @@ void __dec_zone_page_state(struct page *page, enum zone_stat_item item)
 }
 EXPORT_SYMBOL(__dec_zone_page_state);
 
-#ifdef CONFIG_HAVE_CMPXCHG_LOCAL
+#ifdef CONFIG_CMPXCHG_LOCAL
 /*
  * If we have cmpxchg_local support then we do not need to incur the overhead
  * that comes with local_irq_save/restore if we use this_cpu_cmpxchg.
@@ -616,9 +613,6 @@ static char * const migratetype_names[MIGRATE_TYPES] = {
 	"Reclaimable",
 	"Movable",
 	"Reserve",
-#ifdef CONFIG_CMA
-	"CMA",
-#endif
 	"Isolate",
 };
 
@@ -665,7 +659,7 @@ static void walk_zones_in_node(struct seq_file *m, pg_data_t *pgdat,
 }
 #endif
 
-#if defined(CONFIG_PROC_FS) || defined(CONFIG_SYSFS) || defined(CONFIG_NUMA)
+#if defined(CONFIG_PROC_FS) || defined(CONFIG_SYSFS)
 #ifdef CONFIG_ZONE_DMA
 #define TEXT_FOR_DMA(xx) xx "_dma",
 #else
@@ -708,7 +702,6 @@ const char * const vmstat_text[] = {
 	"nr_unstable",
 	"nr_bounce",
 	"nr_vmscan_write",
-	"nr_vmscan_immediate_reclaim",
 	"nr_writeback_temp",
 	"nr_isolated_anon",
 	"nr_isolated_file",
@@ -725,7 +718,6 @@ const char * const vmstat_text[] = {
 	"numa_other",
 #endif
 	"nr_anon_transparent_hugepages",
-	"nr_free_cma",
 	"nr_dirty_threshold",
 	"nr_dirty_background_threshold",
 
@@ -745,8 +737,7 @@ const char * const vmstat_text[] = {
 	"pgmajfault",
 
 	TEXTS_FOR_ZONES("pgrefill")
-	TEXTS_FOR_ZONES("pgsteal_kswapd")
-	TEXTS_FOR_ZONES("pgsteal_direct")
+	TEXTS_FOR_ZONES("pgsteal")
 	TEXTS_FOR_ZONES("pgscan_kswapd")
 	TEXTS_FOR_ZONES("pgscan_direct")
 
@@ -755,6 +746,7 @@ const char * const vmstat_text[] = {
 #endif
 	"pginodesteal",
 	"slabs_scanned",
+	"kswapd_steal",
 	"kswapd_inodesteal",
 	"kswapd_low_wmark_hit_quickly",
 	"kswapd_high_wmark_hit_quickly",
@@ -764,14 +756,10 @@ const char * const vmstat_text[] = {
 
 	"pgrotated",
 
-#ifdef CONFIG_MIGRATION
-	"pgmigrate_success",
-	"pgmigrate_fail",
-#endif
 #ifdef CONFIG_COMPACTION
-	"compact_migrate_scanned",
-	"compact_free_scanned",
-	"compact_isolated",
+	"compact_blocks_moved",
+	"compact_pages_moved",
+	"compact_pagemigrate_failed",
 	"compact_stall",
 	"compact_fail",
 	"compact_success",
@@ -800,7 +788,7 @@ const char * const vmstat_text[] = {
 
 #endif /* CONFIG_VM_EVENTS_COUNTERS */
 };
-#endif /* CONFIG_PROC_FS || CONFIG_SYSFS || CONFIG_NUMA */
+#endif /* CONFIG_PROC_FS || CONFIG_SYSFS */
 
 
 #ifdef CONFIG_PROC_FS
@@ -1030,7 +1018,7 @@ static void zoneinfo_show_print(struct seq_file *m, pg_data_t *pgdat,
 		   "\n  all_unreclaimable: %u"
 		   "\n  start_pfn:         %lu"
 		   "\n  inactive_ratio:    %u",
-		   !zone_reclaimable(zone),
+		   zone->all_unreclaimable,
 		   zone->zone_start_pfn,
 		   zone->inactive_ratio);
 	seq_putc(m, '\n');

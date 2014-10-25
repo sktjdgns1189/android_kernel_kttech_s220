@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,12 +33,11 @@
 #include <mach/msm_iomap.h>
 #include <mach/dma.h>
 #include <mach/sirc.h>
-#include <mach/restart.h>
 
 #include <mach/socinfo.h>
 #include "devices.h"
 #include "timer.h"
-#include "clock.h"
+#include "acpuclock.h"
 #include "pm.h"
 #include "spm.h"
 #include <linux/regulator/consumer.h>
@@ -46,7 +45,6 @@
 #include <linux/msm_adc.h>
 #include <linux/m_adcproc.h>
 #include <linux/platform_data/qcom_crypto_device.h>
-#include <linux/msm_ion.h>
 
 #define PMIC_GPIO_INT		144
 #define PMIC_VREG_WLAN_LEVEL	2900
@@ -91,15 +89,6 @@
 #define GPIO_USER_FIRST		58
 #define GPIO_USER_LAST		63
 
-#define GPIO_UIM_RESET		75
-#define GPIO_UIM_DATA_IO	76
-#define GPIO_UIM_CLOCK		77
-
-#define GPIO_PM_UIM_M_RST	26	/* UIM_RST input */
-#define GPIO_PM_UIM_RST		27	/* UIM_RST output */
-#define GPIO_PM_UIM_M_CLK	28	/* UIM_CLK input */
-#define GPIO_PM_UIM_CLK		29	/* UIM_CLK output */
-
 #define FPGA_SDCC_STATUS        0x8E0001A8
 
 /* Macros assume PMIC GPIOs start at 0 */
@@ -111,8 +100,6 @@
 
 #define PMIC_GPIO_5V_PA_PWR	21	/* PMIC GPIO Number 22 */
 #define PMIC_GPIO_4_2V_PA_PWR	22	/* PMIC GPIO Number 23 */
-#define PMIC_MPP_UIM_M_DATA	0	/* UIM_DATA input */
-#define PMIC_MPP_UIM_DATA	1	/* UIM_DATA output */
 #define PMIC_MPP_3		2	/* PMIC MPP Number 3 */
 #define PMIC_MPP_6		5	/* PMIC MPP Number 6 */
 #define PMIC_MPP_7		6	/* PMIC MPP Number 7 */
@@ -194,10 +181,6 @@ static int pm8058_mpps_init(void)
 			PM8XXX_MPP_AOUT_LVL_1V25_2, AOUT_CTRL_ENABLE),
 		PM8XXX_MPP_INIT(PMIC_MPP_6, A_OUTPUT,
 			PM8XXX_MPP_AOUT_LVL_1V25_2, AOUT_CTRL_ENABLE),
-		PM8XXX_MPP_INIT(PMIC_MPP_UIM_M_DATA, D_BI_DIR,
-			PM8058_MPP_DIG_LEVEL_S3, BI_PULLUP_1KOHM),
-		PM8XXX_MPP_INIT(PMIC_MPP_UIM_DATA, D_BI_DIR,
-			PM8058_MPP_DIG_LEVEL_L3, BI_PULLUP_30KOHM),
 	};
 
 	for (i = 0; i < ARRAY_SIZE(pm8058_mpps); i++) {
@@ -263,7 +246,7 @@ static struct regulator_consumer_supply pm8058_vreg_supply[PM8058_VREG_MAX] = {
 			REGULATOR_CHANGE_STATUS, 0, 0, 1)
 
 static struct pm8058_vreg_pdata pm8058_vreg_init[] = {
-	PM8058_VREG_INIT_LDO(PM8058_VREG_ID_L3, 3000000, 3000000),
+	PM8058_VREG_INIT_LDO(PM8058_VREG_ID_L3, 1800000, 1800000),
 	PM8058_VREG_INIT_LDO(PM8058_VREG_ID_L8, 2200000, 2200000),
 	PM8058_VREG_INIT_LDO(PM8058_VREG_ID_L9, 2050000, 2050000),
 	PM8058_VREG_INIT_LDO(PM8058_VREG_ID_L14, 2850000, 2850000),
@@ -614,52 +597,6 @@ static void fsm9xxx_init_uart1(void)
 }
 #endif
 
-static struct msm_gpio uart3_uim_config_data[] = {
-	{ GPIO_CFG(GPIO_UIM_RESET, 0, GPIO_CFG_OUTPUT,
-		GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "UIM_Reset" },
-	{ GPIO_CFG(GPIO_UIM_DATA_IO, 2, GPIO_CFG_OUTPUT,
-		GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "UIM_Data" },
-	{ GPIO_CFG(GPIO_UIM_CLOCK, 2, GPIO_CFG_OUTPUT,
-		GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "UIM_Clock" },
-};
-
-static void fsm9xxx_init_uart3_uim(void)
-{
-	struct pm_gpio pmic_uim_gpio_in = {
-		.direction	= PM_GPIO_DIR_IN,
-		.pull		= PM_GPIO_PULL_NO,
-		.out_strength	= PM_GPIO_STRENGTH_HIGH,
-		.function	= PM_GPIO_FUNC_PAIRED,
-		.vin_sel	= PM8058_GPIO_VIN_L3,
-	};
-	struct pm_gpio pmic_uim_gpio_out = {
-		.direction	= PM_GPIO_DIR_OUT,
-		.pull		= PM_GPIO_PULL_NO,
-		.out_strength	= PM_GPIO_STRENGTH_HIGH,
-		.function	= PM_GPIO_FUNC_PAIRED,
-		.vin_sel	= PM8058_GPIO_VIN_L3,
-	};
-
-	/* TLMM */
-	msm_gpios_request_enable(uart3_uim_config_data,
-			ARRAY_SIZE(uart3_uim_config_data));
-
-	/* Put UIM to reset state */
-	gpio_direction_output(GPIO_UIM_RESET, 0);
-	gpio_set_value(GPIO_UIM_RESET, 0);
-	gpio_export(GPIO_UIM_RESET, false);
-
-	/* PMIC */
-	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_M_RST),
-		&pmic_uim_gpio_in);
-	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_RST),
-		&pmic_uim_gpio_out);
-	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_M_CLK),
-		&pmic_uim_gpio_in);
-	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_CLK),
-		&pmic_uim_gpio_out);
-}
-
 /*
  * SSBI
  */
@@ -724,32 +661,32 @@ static void user_gpios_init(void)
 
 static struct resource qcrypto_resources[] = {
 	[0] = {
-		.start = QCE_1_BASE,
-		.end = QCE_1_BASE + QCE_SIZE - 1,
+		.start = QCE_0_BASE,
+		.end = QCE_0_BASE + QCE_SIZE - 1,
 		.flags = IORESOURCE_MEM,
 	},
 	[1] = {
 		.name = "crypto_channels",
-		.start = DMOV_CE2_IN_CHAN,
-		.end = DMOV_CE2_OUT_CHAN,
+		.start = DMOV_CE1_IN_CHAN,
+		.end = DMOV_CE1_OUT_CHAN,
 		.flags = IORESOURCE_DMA,
 	},
 	[2] = {
 		.name = "crypto_crci_in",
-		.start = DMOV_CE2_IN_CRCI,
-		.end = DMOV_CE2_IN_CRCI,
+		.start = DMOV_CE1_IN_CRCI,
+		.end = DMOV_CE1_IN_CRCI,
 		.flags = IORESOURCE_DMA,
 	},
 	[3] = {
 		.name = "crypto_crci_out",
-		.start = DMOV_CE2_OUT_CRCI,
-		.end = DMOV_CE2_OUT_CRCI,
+		.start = DMOV_CE1_OUT_CRCI,
+		.end = DMOV_CE1_OUT_CRCI,
 		.flags = IORESOURCE_DMA,
 	},
 	[4] = {
 		.name = "crypto_crci_hash",
-		.start = DMOV_CE2_HASH_CRCI,
-		.end = DMOV_CE2_HASH_CRCI,
+		.start = DMOV_CE1_HASH_CRCI,
+		.end = DMOV_CE1_HASH_CRCI,
 		.flags = IORESOURCE_DMA,
 	},
 };
@@ -775,6 +712,57 @@ struct platform_device qcrypto_device = {
 
 static struct resource qcedev_resources[] = {
 	[0] = {
+		.start = QCE_0_BASE,
+		.end = QCE_0_BASE + QCE_SIZE - 1,
+		.flags = IORESOURCE_MEM,
+	},
+	[1] = {
+		.name = "crypto_channels",
+		.start = DMOV_CE1_IN_CHAN,
+		.end = DMOV_CE1_OUT_CHAN,
+		.flags = IORESOURCE_DMA,
+	},
+	[2] = {
+		.name = "crypto_crci_in",
+		.start = DMOV_CE1_IN_CRCI,
+		.end = DMOV_CE1_IN_CRCI,
+		.flags = IORESOURCE_DMA,
+	},
+	[3] = {
+		.name = "crypto_crci_out",
+		.start = DMOV_CE1_OUT_CRCI,
+		.end = DMOV_CE1_OUT_CRCI,
+		.flags = IORESOURCE_DMA,
+	},
+	[4] = {
+		.name = "crypto_crci_hash",
+		.start = DMOV_CE1_HASH_CRCI,
+		.end = DMOV_CE1_HASH_CRCI,
+		.flags = IORESOURCE_DMA,
+	},
+};
+
+static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
+	.ce_shared = QCE_NO_CE_SHARED,
+	.shared_ce_resource = QCE_NO_SHARE_CE_RESOURCE,
+	.hw_key_support = QCE_NO_HW_KEY_SUPPORT,
+	.sha_hmac = QCE_NO_SHA_HMAC_SUPPORT,
+	.bus_scale_table = NULL,
+};
+
+static struct platform_device qcedev_device = {
+	.name		= "qce",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(qcedev_resources),
+	.resource	= qcedev_resources,
+	.dev		= {
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+		.platform_data = &qcedev_ce_hw_suppport,
+	},
+};
+
+static struct resource ota_qcrypto_resources[] = {
+	[0] = {
 		.start = QCE_1_BASE,
 		.end = QCE_1_BASE + QCE_SIZE - 1,
 		.flags = IORESOURCE_MEM,
@@ -805,57 +793,6 @@ static struct resource qcedev_resources[] = {
 	},
 };
 
-static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
-	.ce_shared = QCE_NO_CE_SHARED,
-	.shared_ce_resource = QCE_NO_SHARE_CE_RESOURCE,
-	.hw_key_support = QCE_NO_HW_KEY_SUPPORT,
-	.sha_hmac = QCE_NO_SHA_HMAC_SUPPORT,
-	.bus_scale_table = NULL,
-};
-
-static struct platform_device qcedev_device = {
-	.name		= "qce",
-	.id		= 0,
-	.num_resources	= ARRAY_SIZE(qcedev_resources),
-	.resource	= qcedev_resources,
-	.dev		= {
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-		.platform_data = &qcedev_ce_hw_suppport,
-	},
-};
-
-static struct resource ota_qcrypto_resources[] = {
-	[0] = {
-		.start = QCE_2_BASE,
-		.end = QCE_2_BASE + QCE_SIZE - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.name = "crypto_channels",
-		.start = DMOV_CE3_IN_CHAN,
-		.end = DMOV_CE3_OUT_CHAN,
-		.flags = IORESOURCE_DMA,
-	},
-	[2] = {
-		.name = "crypto_crci_in",
-		.start = DMOV_CE3_IN_CRCI,
-		.end = DMOV_CE3_IN_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-	[3] = {
-		.name = "crypto_crci_out",
-		.start = DMOV_CE3_OUT_CRCI,
-		.end = DMOV_CE3_OUT_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-	[4] = {
-		.name = "crypto_crci_hash",
-		.start = DMOV_CE3_HASH_DONE_CRCI,
-		.end = DMOV_CE3_HASH_DONE_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-};
-
 struct platform_device ota_qcrypto_device = {
 	.name		= "qcota",
 	.id		= 0,
@@ -866,38 +803,11 @@ struct platform_device ota_qcrypto_device = {
 	},
 };
 
-static struct platform_device fsm9xxx_device_acpuclk = {
-	.name		= "acpuclk-9xxx",
-	.id		= -1,
-};
-
-struct ion_platform_heap msm_ion_heaps[] = {
-	{
-		.id = ION_SYSTEM_HEAP_ID,
-		.type = ION_HEAP_TYPE_SYSTEM_CONTIG,
-		.name = "kmalloc",
-	},
-};
-
-static struct ion_platform_data msm_ion_pdata = {
-	.nr = 1,
-	.heaps = msm_ion_heaps,
-};
-
-static struct platform_device msm_ion_device = {
-	.name = "ion-msm",
-	.id = 1,
-	.dev = {
-		.platform_data = &msm_ion_pdata,
-	},
-};
-
 /*
  * Devices
  */
 
 static struct platform_device *devices[] __initdata = {
-	&fsm9xxx_device_acpuclk,
 	&msm_device_smd,
 	&msm_device_dmov,
 	&msm_device_nand,
@@ -917,7 +827,6 @@ static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	&msm_device_uart1,
 #endif
-	&msm_device_uart3,
 #if defined(CONFIG_QFP_FUSE)
 	&fsm_qfp_fuse_device,
 #endif
@@ -926,8 +835,6 @@ static struct platform_device *devices[] __initdata = {
 	&qcedev_device,
 	&ota_qcrypto_device,
 	&fsm_xo_device,
-	&fsm9xxx_device_watchdog,
-	&msm_ion_device,
 };
 
 static void __init fsm9xxx_init_irq(void)
@@ -964,7 +871,7 @@ static struct msm_spm_platform_data msm_spm_data __initdata = {
 
 static void __init fsm9xxx_init(void)
 {
-	msm_clock_init(&fsm9xxx_clock_init_data);
+	acpuclk_init(&acpuclk_9xxx_soc_data);
 
 	regulator_has_full_constraints();
 
@@ -991,7 +898,6 @@ static void __init fsm9xxx_init(void)
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	fsm9xxx_init_uart1();
 #endif
-	fsm9xxx_init_uart3_uim();
 #ifdef CONFIG_I2C_SSBI
 	msm_device_ssbi2.dev.platform_data = &msm_i2c_ssbi2_pdata;
 	msm_device_ssbi3.dev.platform_data = &msm_i2c_ssbi3_pdata;
@@ -1002,16 +908,18 @@ static void __init fsm9xxx_map_io(void)
 {
 	msm_shared_ram_phys = 0x00100000;
 	msm_map_fsm9xxx_io();
+	msm_clock_init(&fsm9xxx_clock_init_data);
 	if (socinfo_init() < 0)
-		pr_err("socinfo_init() failed!\n");
+		pr_err("%s: socinfo_init() failed!\n",
+		       __func__);
+
 }
 
 MACHINE_START(FSM9XXX_SURF, "QCT FSM9XXX")
-	.atag_offset = 0x100,
+	.boot_params = PHYS_OFFSET + 0x100,
 	.map_io = fsm9xxx_map_io,
 	.init_irq = fsm9xxx_init_irq,
 	.handle_irq = vic_handle_irq,
 	.init_machine = fsm9xxx_init,
 	.timer = &msm_timer,
-	.restart = fsm_restart,
 MACHINE_END

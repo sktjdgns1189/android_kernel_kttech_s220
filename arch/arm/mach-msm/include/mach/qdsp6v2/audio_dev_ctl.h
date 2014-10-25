@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +14,10 @@
 #define __MACH_QDSP6_V2_SNDDEV_H
 #include <mach/qdsp5v2/audio_def.h>
 #include <sound/q6afe.h>
+
+#if defined(CONFIG_KTTECH_SOUND_WM8993)
+#define CONFIG_KTTECH_I2S_MSM_SLAVE
+#endif /*CONFIG_KTTECH_SND_CODEC_WM8993*/
 
 #define AUDIO_DEV_CTL_MAX_DEV 64
 #define DIR_TX	2
@@ -215,6 +219,9 @@ int msm_snddev_get_enc_freq(int session_id);
 int msm_set_voice_vol(int dir, s32 volume, u32 session_id);
 int msm_set_voice_mute(int dir, int mute, u32 session_id);
 int msm_get_voice_state(void);
+#ifdef CONFIG_KTTECH_SOUND // 20110207 by ssgun - check voice call
+int msm_device_get_isvoice(void);
+#endif /*CONFIG_KTTECH_SOUND*/
 int msm_enable_incall_recording(int popp_id, int rec_mode, int rate,
 				int channel_mode);
 int msm_disable_incall_recording(uint32_t popp_id, uint32_t rec_mode);

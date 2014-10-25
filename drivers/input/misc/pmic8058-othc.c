@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -537,8 +537,8 @@ static void detect_work_f(struct work_struct *work)
 		container_of(work, struct pm8058_othc, detect_work.work);
 
 	/* Accessory has been inserted */
-	rc = pm8058_accessory_report(dd, 1);
-	if (rc)
+		rc = pm8058_accessory_report(dd, 1);
+		if (rc)
 		pr_err("Accessory insertion could not be detected\n");
 
 	enable_irq(dd->othc_irq_ir);
@@ -642,7 +642,7 @@ static irqreturn_t pm8058_nc_ir(int irq, void *dev_id)
 		/* disable irq, this gets enabled in the workqueue */
 		disable_irq_nosync(dd->othc_irq_ir);
 		/* Accessory has been inserted, report with detection delay */
-		schedule_delayed_work(&dd->detect_work,
+	schedule_delayed_work(&dd->detect_work,
 				msecs_to_jiffies(dd->detection_delay_ms));
 	} else {
 		/* Accessory has been removed, report removal immediately */

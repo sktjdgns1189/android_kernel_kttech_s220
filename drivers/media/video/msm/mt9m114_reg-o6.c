@@ -1,0 +1,1251 @@
+#include "mt9m114-o6.h"
+
+static const struct mt9m114_i2c_reg_conf const mt9m114_reg_settings_array[] = {
+//////////////////////////
+// sensor init (1280x960)
+//////////////////////////
+  {0x301A, 0x0230, WORD_LEN, 0	}, 	// RESET_REGISTER
+  {0x098E, 0x1000, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x098E, 0xC97E, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0100, WORD_LEN, 0  }, 	// CAM_SYSCTL_PLL_ENABLE
+  {0xC980, 0x0120, WORD_LEN, 0  }, 	// CAM_SYSCTL_PLL_DIVIDER_M_N
+  {0xC982, 0x0700, WORD_LEN, 0  }, 	// CAM_SYSCTL_PLL_DIVIDER_P
+  {0xC800, 0x0004, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_Y_ADDR_START
+  {0xC802, 0x0004, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_X_ADDR_START
+  {0xC804, 0x03CB, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_Y_ADDR_END
+  {0xC806, 0x050B, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_X_ADDR_END
+  {0x098E, 0x4808, WORD_LEN, 0  },
+  {0x0990, 0x02DC, WORD_LEN, 0  }, 	// cam_sensor_cfg_pixclk
+  {0x0992, 0x6C00, WORD_LEN, 0  }, 	// cam_sensor_cfg_pixclk
+  {0xC80C, 0x0001, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_ROW_SPEED
+  {0xC80E, 0x00DB, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_FINE_INTEG_TIME_MIN
+  {0xC810, 0x05B3, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_FINE_INTEG_TIME_MAX
+  {0xC812, 0x03EE, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_FRAME_LENGTH_LINES
+  {0xC814, 0x0636, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_LINE_LENGTH_PCK
+  {0xC816, 0x0060, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_FINE_CORRECTION
+  {0xC818, 0x03C3, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_CPIPE_LAST_ROW
+  {0xC826, 0x0020, WORD_LEN, 0  }, 	// CAM_SENSOR_CFG_REG_0_DATA
+  {0xC834, 0x0000, WORD_LEN, 0  }, 	// CAM_SENSOR_CONTROL_READ_MODE //rotation 0003=180
+  {0xC854, 0x0000, WORD_LEN, 0  }, 	// CAM_CROP_WINDOW_XOFFSET
+  {0xC856, 0x0000, WORD_LEN, 0  }, 	// CAM_CROP_WINDOW_YOFFSET
+  {0xC858, 0x0500, WORD_LEN, 0  }, 	// CAM_CROP_WINDOW_WIDTH
+  {0xC85A, 0x03C0, WORD_LEN, 0  }, 	// CAM_CROP_WINDOW_HEIGHT
+  {0x098E, 0xC85C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0300, WORD_LEN, 0  }, 	// cam_crop_cropmode
+  {0xC868, 0x0500, WORD_LEN, 0  }, 	// CAM_OUTPUT_WIDTH
+  {0xC86A, 0x03C0, WORD_LEN, 0  }, 	// CAM_OUTPUT_HEIGHT
+  {0xC86C, 0x0012, WORD_LEN, 0  }, 	// CAM_OUTPUT_FORMAT
+  {0x098E, 0xC878, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0000, WORD_LEN, 0  }, 	// cam_aet_aemode
+  {0xC88C, 0x1E02, WORD_LEN, 0  }, 	// CAM_AET_MAX_FRAME_RATE
+  {0xC88E, 0x0F00, WORD_LEN, 0  }, 	// CAM_AET_MIN_FRAME_RATE
+  {0xC914, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_XSTART
+  {0xC916, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_YSTART
+  {0xC918, 0x04FF, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_XEND
+  {0xC91A, 0x03BF, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_YEND
+  {0xC91C, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_AE_INITIAL_WINDOW_XSTART
+  {0xC91E, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_AE_INITIAL_WINDOW_YSTART
+  {0xC920, 0x00FF, WORD_LEN, 0  }, 	// CAM_STAT_AE_INITIAL_WINDOW_XEND
+  {0xC922, 0x00BF, WORD_LEN, 0  }, 	// CAM_STAT_AE_INITIAL_WINDOW_YEND
+  {0x098E, 0xE801, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0000, WORD_LEN, 0  }, 	// cam_aet_aemode
+  {0x098E, 0xCC03, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS [UVC_POWER_LINE_FREQUENCY_CONTROL]
+  {0x0990, 0x0200, WORD_LEN, 0  }, 	// UVC_POWER_LINE_FREQUENCY_CONTROL  ==> 60Hz : 0x0200 , 50Hz ==>0x0100      
+  {0x098E, 0xDC00, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x2800, WORD_LEN, 0  }, 	// AE_TRACK_AE_TRACKING_DAMPENING_SPEED
+  {0x0080, 0x8002, WORD_LEN,50}, 	// COMMAND_REGISTER
+  {0x316A, 0x8270, WORD_LEN, 0  }, 	// DAC_TXLO_ROW
+  {0x316C, 0x8270, WORD_LEN, 0  }, 	// DAC_TXLO
+  {0x3ED0, 0x2305, WORD_LEN, 0  }, 	// DAC_LD_4_5
+  {0x3ED2, 0x77CF, WORD_LEN, 0  }, 	// DAC_LD_6_7
+  {0x316E, 0x8202, WORD_LEN, 0  }, 	// DAC_ECL
+  {0x3180, 0x87FF, WORD_LEN, 0  }, 	// DELTA_DK_CONTROL
+  {0x30D4, 0x6080, WORD_LEN, 0  }, 	// COLUMN_CORRECTION
+  {0xA802, 0x0008, WORD_LEN, 0  }, 	// AE_TRACK_MODE
+  {0x3E14, 0xFF39, WORD_LEN, 0  }, 	// SAMP_COL_PUP2
+  //0204
+  {0x0982, 0x0001, WORD_LEN, 0  }, 	// ACCESS_CTL_STAT
+  {0x098A, 0x5000, WORD_LEN, 0  }, 	// PHYSICAL_ADDRESS_ACCESS
+  {0xD000, 0x70CF, WORD_LEN, 0  }, 
+  {0xD002, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD004, 0xC5D4, WORD_LEN, 0  }, 
+  {0xD006, 0x903A, WORD_LEN, 0  }, 
+  {0xD008, 0x2144, WORD_LEN, 0  }, 
+  {0xD00A, 0x0C00, WORD_LEN, 0  }, 
+  {0xD00C, 0x2186, WORD_LEN, 0  }, 
+  {0xD00E, 0x0FF3, WORD_LEN, 0  }, 
+  {0xD010, 0xB844, WORD_LEN, 0  }, 
+  {0xD012, 0xB948, WORD_LEN, 0  }, 
+  {0xD014, 0xE082, WORD_LEN, 0  }, 
+  {0xD016, 0x20CC, WORD_LEN, 0  }, 
+  {0xD018, 0x80E2, WORD_LEN, 0  }, 
+  {0xD01A, 0x21CC, WORD_LEN, 0  }, 
+  {0xD01C, 0x80A2, WORD_LEN, 0  }, 
+  {0xD01E, 0x21CC, WORD_LEN, 0  }, 
+  {0xD020, 0x80E2, WORD_LEN, 0  }, 
+  {0xD022, 0xF404, WORD_LEN, 0  }, 
+  {0xD024, 0xD801, WORD_LEN, 0  }, 
+  {0xD026, 0xF003, WORD_LEN, 0  }, 
+  {0xD028, 0xD800, WORD_LEN, 0  }, 
+  {0xD02A, 0x7EE0, WORD_LEN, 0  }, 
+  {0xD02C, 0xC0F1, WORD_LEN, 0  }, 
+  {0xD02E, 0x08BA, WORD_LEN, 0  }, 
+  {0xD030, 0x0600, WORD_LEN, 0  }, 
+  {0xD032, 0xC1A1, WORD_LEN, 0  }, 
+  {0xD034, 0x76CF, WORD_LEN, 0  }, 
+  {0xD036, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD038, 0xC130, WORD_LEN, 0  }, 
+  {0xD03A, 0x6E04, WORD_LEN, 0  }, 
+  {0xD03C, 0xC040, WORD_LEN, 0  }, 
+  {0xD03E, 0x71CF, WORD_LEN, 0  }, 
+  {0xD040, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD042, 0xC790, WORD_LEN, 0  }, 
+  {0xD044, 0x8103, WORD_LEN, 0  }, 
+  {0xD046, 0x77CF, WORD_LEN, 0  }, 
+  {0xD048, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD04A, 0xC7C0, WORD_LEN, 0  }, 
+  {0xD04C, 0xE001, WORD_LEN, 0  }, 
+  {0xD04E, 0xA103, WORD_LEN, 0  }, 
+  {0xD050, 0xD800, WORD_LEN, 0  }, 
+  {0xD052, 0x0C6A, WORD_LEN, 0  }, 
+  {0xD054, 0x04E0, WORD_LEN, 0  }, 
+  {0xD056, 0xB89E, WORD_LEN, 0  }, 
+  {0xD058, 0x7508, WORD_LEN, 0  }, 
+  {0xD05A, 0x8E1C, WORD_LEN, 0  }, 
+  {0xD05C, 0x0809, WORD_LEN, 0  }, 
+  {0xD05E, 0x0191, WORD_LEN, 0  }, 
+  {0xD060, 0xD801, WORD_LEN, 0  }, 
+  {0xD062, 0xAE1D, WORD_LEN, 0  }, 
+  {0xD064, 0xE580, WORD_LEN, 0  }, 
+  {0xD066, 0x20CA, WORD_LEN, 0  }, 
+  {0xD068, 0x0022, WORD_LEN, 0  }, 
+  {0xD06A, 0x20CF, WORD_LEN, 0  }, 
+  {0xD06C, 0x0522, WORD_LEN, 0  }, 
+  {0xD06E, 0x0C5C, WORD_LEN, 0  }, 
+  {0xD070, 0x04E2, WORD_LEN, 0  }, 
+  {0xD072, 0x21CA, WORD_LEN, 0  }, 
+  {0xD074, 0x0062, WORD_LEN, 0  }, 
+  {0xD076, 0xE580, WORD_LEN, 0  }, 
+  {0xD078, 0xD901, WORD_LEN, 0  }, 
+  {0xD07A, 0x79C0, WORD_LEN, 0  }, 
+  {0xD07C, 0xD800, WORD_LEN, 0  }, 
+  {0xD07E, 0x0BE6, WORD_LEN, 0  }, 
+  {0xD080, 0x04E0, WORD_LEN, 0  }, 
+  {0xD082, 0xB89E, WORD_LEN, 0  }, 
+  {0xD084, 0x70CF, WORD_LEN, 0  }, 
+  {0xD086, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD088, 0xC8D4, WORD_LEN, 0  }, 
+  {0xD08A, 0x9002, WORD_LEN, 0  }, 
+  {0xD08C, 0x0857, WORD_LEN, 0  }, 
+  {0xD08E, 0x025E, WORD_LEN, 0  }, 
+  {0xD090, 0xFFDC, WORD_LEN, 0  }, 
+  {0xD092, 0xE080, WORD_LEN, 0  }, 
+  {0xD094, 0x25CC, WORD_LEN, 0  }, 
+  {0xD096, 0x9022, WORD_LEN, 0  }, 
+  {0xD098, 0xF225, WORD_LEN, 0  }, 
+  {0xD09A, 0x1700, WORD_LEN, 0  }, 
+  {0xD09C, 0x108A, WORD_LEN, 0  }, 
+  {0xD09E, 0x73CF, WORD_LEN, 0  }, 
+  {0xD0A0, 0xFF00, WORD_LEN, 0  }, 
+  {0xD0A2, 0x3174, WORD_LEN, 0  }, 
+  {0xD0A4, 0x9307, WORD_LEN, 0  }, 
+  {0xD0A6, 0x2A04, WORD_LEN, 0  }, 
+  {0xD0A8, 0x103E, WORD_LEN, 0  }, 
+  {0xD0AA, 0x9328, WORD_LEN, 0  }, 
+  {0xD0AC, 0x2942, WORD_LEN, 0  }, 
+  {0xD0AE, 0x7140, WORD_LEN, 0  }, 
+  {0xD0B0, 0x2A04, WORD_LEN, 0  }, 
+  {0xD0B2, 0x107E, WORD_LEN, 0  }, 
+  {0xD0B4, 0x9349, WORD_LEN, 0  }, 
+  {0xD0B6, 0x2942, WORD_LEN, 0  }, 
+  {0xD0B8, 0x7141, WORD_LEN, 0  }, 
+  {0xD0BA, 0x2A04, WORD_LEN, 0  }, 
+  {0xD0BC, 0x10BE, WORD_LEN, 0  }, 
+  {0xD0BE, 0x934A, WORD_LEN, 0  }, 
+  {0xD0C0, 0x2942, WORD_LEN, 0  }, 
+  {0xD0C2, 0x714B, WORD_LEN, 0  }, 
+  {0xD0C4, 0x2A04, WORD_LEN, 0  }, 
+  {0xD0C6, 0x10BE, WORD_LEN, 0  }, 
+  {0xD0C8, 0x130C, WORD_LEN, 0  }, 
+  {0xD0CA, 0x010A, WORD_LEN, 0  }, 
+  {0xD0CC, 0x2942, WORD_LEN, 0  }, 
+  {0xD0CE, 0x7142, WORD_LEN, 0  }, 
+  {0xD0D0, 0x2250, WORD_LEN, 0  }, 
+  {0xD0D2, 0x13CA, WORD_LEN, 0  }, 
+  {0xD0D4, 0x1B0C, WORD_LEN, 0  }, 
+  {0xD0D6, 0x0284, WORD_LEN, 0  }, 
+  {0xD0D8, 0xB307, WORD_LEN, 0  }, 
+  {0xD0DA, 0xB328, WORD_LEN, 0  }, 
+  {0xD0DC, 0x1B12, WORD_LEN, 0  }, 
+  {0xD0DE, 0x02C4, WORD_LEN, 0  }, 
+  {0xD0E0, 0xB34A, WORD_LEN, 0  }, 
+  {0xD0E2, 0xED88, WORD_LEN, 0  }, 
+  {0xD0E4, 0x71CF, WORD_LEN, 0  }, 
+  {0xD0E6, 0xFF00, WORD_LEN, 0  }, 
+  {0xD0E8, 0x3174, WORD_LEN, 0  }, 
+  {0xD0EA, 0x9106, WORD_LEN, 0  }, 
+  {0xD0EC, 0xB88F, WORD_LEN, 0  }, 
+  {0xD0EE, 0xB106, WORD_LEN, 0  }, 
+  {0xD0F0, 0x210A, WORD_LEN, 0  }, 
+  {0xD0F2, 0x8340, WORD_LEN, 0  }, 
+  {0xD0F4, 0xC000, WORD_LEN, 0  }, 
+  {0xD0F6, 0x21CA, WORD_LEN, 0  }, 
+  {0xD0F8, 0x0062, WORD_LEN, 0  }, 
+  {0xD0FA, 0x20F0, WORD_LEN, 0  }, 
+  {0xD0FC, 0x0040, WORD_LEN, 0  }, 
+  {0xD0FE, 0x0B02, WORD_LEN, 0  }, 
+  {0xD100, 0x0320, WORD_LEN, 0  }, 
+  {0xD102, 0xD901, WORD_LEN, 0  }, 
+  {0xD104, 0x07F1, WORD_LEN, 0  }, 
+  {0xD106, 0x05E0, WORD_LEN, 0  }, 
+  {0xD108, 0xC0A1, WORD_LEN, 0  }, 
+  {0xD10A, 0x78E0, WORD_LEN, 0  }, 
+  {0xD10C, 0xC0F1, WORD_LEN, 0  }, 
+  {0xD10E, 0x71CF, WORD_LEN, 0  }, 
+  {0xD110, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD112, 0xC7C0, WORD_LEN, 0  }, 
+  {0xD114, 0xD840, WORD_LEN, 0  }, 
+  {0xD116, 0xA900, WORD_LEN, 0  }, 
+  {0xD118, 0x71CF, WORD_LEN, 0  }, 
+  {0xD11A, 0xFFFF, WORD_LEN, 0  }, 
+  {0xD11C, 0xD02C, WORD_LEN, 0  }, 
+  {0xD11E, 0xD81E, WORD_LEN, 0  }, 
+  {0xD120, 0x0A5A, WORD_LEN, 0  }, 
+  {0xD122, 0x04E0, WORD_LEN, 0  }, 
+  {0xD124, 0xDA00, WORD_LEN, 0  }, 
+  {0xD126, 0xD800, WORD_LEN, 0  }, 
+  {0xD128, 0xC0D1, WORD_LEN, 0  }, 
+  {0xD12A, 0x7EE0, WORD_LEN, 0  }, 
+  {0x098E, 0x0000, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  //apply patch 0204   
+  {0xE000, 0x010C, WORD_LEN, 0  }, 	// PATCHLDR_LOADER_ADDRESS
+  {0xE002, 0x0204, WORD_LEN, 0  }, 	// PATCHLDR_PATCH_ID
+  {0x098E, 0x6004, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x4103, WORD_LEN, 0  }, 	// MCU_VARIABLE_DATA0
+  {0x0992, 0x0202, WORD_LEN, 0  }, 	// MCU_VARIABLE_DATA1
+  {0x0080, 0xFFF0, WORD_LEN, 50 }, 	// COMMAND_REGISTER
+  {0x0080, 0xFFF1, WORD_LEN, 50 }, 	// COMMAND_REGISTER
+  //0304
+  {0x0982, 0x0001, WORD_LEN, 0  }, 	// ACCESS_CTL_STAT
+  {0x098A, 0x512C, WORD_LEN, 0  }, 	// PHYSICAL_ADDRESS_ACCESS
+  {0xD12C, 0x70CF, WORD_LEN, 0  },
+  {0xD12E, 0xFFFF, WORD_LEN, 0  },
+  {0xD130, 0xC5D4, WORD_LEN, 0  },
+  {0xD132, 0x903A, WORD_LEN, 0  },
+  {0xD134, 0x2144, WORD_LEN, 0  },
+  {0xD136, 0x0C00, WORD_LEN, 0  },
+  {0xD138, 0x2186, WORD_LEN, 0  },
+  {0xD13A, 0x0FF3, WORD_LEN, 0  },
+  {0xD13C, 0xB844, WORD_LEN, 0  },
+  {0xD13E, 0x262F, WORD_LEN, 0  },
+  {0xD140, 0xF008, WORD_LEN, 0  },
+  {0xD142, 0xB948, WORD_LEN, 0  },
+  {0xD144, 0x21CC, WORD_LEN, 0  },
+  {0xD146, 0x8021, WORD_LEN, 0  },
+  {0xD148, 0xD801, WORD_LEN, 0  },
+  {0xD14A, 0xF203, WORD_LEN, 0  },
+  {0xD14C, 0xD800, WORD_LEN, 0  },
+  {0xD14E, 0x7EE0, WORD_LEN, 0  },
+  {0xD150, 0xC0F1, WORD_LEN, 0  },
+  {0xD152, 0x71CF, WORD_LEN, 0  },
+  {0xD154, 0xFFFF, WORD_LEN, 0  },
+  {0xD156, 0xC610, WORD_LEN, 0  },
+  {0xD158, 0x910E, WORD_LEN, 0  },
+  {0xD15A, 0x208C, WORD_LEN, 0  },
+  {0xD15C, 0x8014, WORD_LEN, 0  },
+  {0xD15E, 0xF418, WORD_LEN, 0  },
+  {0xD160, 0x910F, WORD_LEN, 0  },
+  {0xD162, 0x208C, WORD_LEN, 0  },
+  {0xD164, 0x800F, WORD_LEN, 0  },
+  {0xD166, 0xF414, WORD_LEN, 0  },
+  {0xD168, 0x9116, WORD_LEN, 0  },
+  {0xD16A, 0x208C, WORD_LEN, 0  },
+  {0xD16C, 0x800A, WORD_LEN, 0  },
+  {0xD16E, 0xF410, WORD_LEN, 0  },
+  {0xD170, 0x9117, WORD_LEN, 0  },
+  {0xD172, 0x208C, WORD_LEN, 0  },
+  {0xD174, 0x8807, WORD_LEN, 0  },
+  {0xD176, 0xF40C, WORD_LEN, 0  },
+  {0xD178, 0x9118, WORD_LEN, 0  },
+  {0xD17A, 0x2086, WORD_LEN, 0  },
+  {0xD17C, 0x0FF3, WORD_LEN, 0  },
+  {0xD17E, 0xB848, WORD_LEN, 0  },
+  {0xD180, 0x080D, WORD_LEN, 0  },
+  {0xD182, 0x0090, WORD_LEN, 0  },
+  {0xD184, 0xFFEA, WORD_LEN, 0  },
+  {0xD186, 0xE081, WORD_LEN, 0  },
+  {0xD188, 0xD801, WORD_LEN, 0  },
+  {0xD18A, 0xF203, WORD_LEN, 0  },
+  {0xD18C, 0xD800, WORD_LEN, 0  },
+  {0xD18E, 0xC0D1, WORD_LEN, 0  },
+  {0xD190, 0x7EE0, WORD_LEN, 0  },
+  {0xD192, 0x78E0, WORD_LEN, 0  },
+  {0xD194, 0xC0F1, WORD_LEN, 0  },
+  {0xD196, 0x71CF, WORD_LEN, 0  },
+  {0xD198, 0xFFFF, WORD_LEN, 0  },
+  {0xD19A, 0xC610, WORD_LEN, 0  },
+  {0xD19C, 0x910E, WORD_LEN, 0  },
+  {0xD19E, 0x208C, WORD_LEN, 0  },
+  {0xD1A0, 0x800A, WORD_LEN, 0  },
+  {0xD1A2, 0xF418, WORD_LEN, 0  },
+  {0xD1A4, 0x910F, WORD_LEN, 0  },
+  {0xD1A6, 0x208C, WORD_LEN, 0  },
+  {0xD1A8, 0x8807, WORD_LEN, 0  },
+  {0xD1AA, 0xF414, WORD_LEN, 0  },
+  {0xD1AC, 0x9116, WORD_LEN, 0  },
+  {0xD1AE, 0x208C, WORD_LEN, 0  },
+  {0xD1B0, 0x800A, WORD_LEN, 0  },
+  {0xD1B2, 0xF410, WORD_LEN, 0  },
+  {0xD1B4, 0x9117, WORD_LEN, 0  },
+  {0xD1B6, 0x208C, WORD_LEN, 0  },
+  {0xD1B8, 0x8807, WORD_LEN, 0  },
+  {0xD1BA, 0xF40C, WORD_LEN, 0  },
+  {0xD1BC, 0x9118, WORD_LEN, 0  },
+  {0xD1BE, 0x2086, WORD_LEN, 0  },
+  {0xD1C0, 0x0FF3, WORD_LEN, 0  },
+  {0xD1C2, 0xB848, WORD_LEN, 0  },
+  {0xD1C4, 0x080D, WORD_LEN, 0  },
+  {0xD1C6, 0x0090, WORD_LEN, 0  },
+  {0xD1C8, 0xFFD9, WORD_LEN, 0  },
+  {0xD1CA, 0xE080, WORD_LEN, 0  },
+  {0xD1CC, 0xD801, WORD_LEN, 0  },
+  {0xD1CE, 0xF203, WORD_LEN, 0  },
+  {0xD1D0, 0xD800, WORD_LEN, 0  },
+  {0xD1D2, 0xF1DF, WORD_LEN, 0  },
+  {0xD1D4, 0x9040, WORD_LEN, 0  },
+  {0xD1D6, 0x71CF, WORD_LEN, 0  },
+  {0xD1D8, 0xFFFF, WORD_LEN, 0  },
+  {0xD1DA, 0xC5D4, WORD_LEN, 0  },
+  {0xD1DC, 0xB15A, WORD_LEN, 0  },
+  {0xD1DE, 0x9041, WORD_LEN, 0  },
+  {0xD1E0, 0x73CF, WORD_LEN, 0  },
+  {0xD1E2, 0xFFFF, WORD_LEN, 0  },
+  {0xD1E4, 0xC7D0, WORD_LEN, 0  },
+  {0xD1E6, 0xB140, WORD_LEN, 0  },
+  {0xD1E8, 0x9042, WORD_LEN, 0  },
+  {0xD1EA, 0xB141, WORD_LEN, 0  },
+  {0xD1EC, 0x9043, WORD_LEN, 0  },
+  {0xD1EE, 0xB142, WORD_LEN, 0  },
+  {0xD1F0, 0x9044, WORD_LEN, 0  },
+  {0xD1F2, 0xB143, WORD_LEN, 0  },
+  {0xD1F4, 0x9045, WORD_LEN, 0  },
+  {0xD1F6, 0xB147, WORD_LEN, 0  },
+  {0xD1F8, 0x9046, WORD_LEN, 0  },
+  {0xD1FA, 0xB148, WORD_LEN, 0  },
+  {0xD1FC, 0x9047, WORD_LEN, 0  },
+  {0xD1FE, 0xB14B, WORD_LEN, 0  },
+  {0xD200, 0x9048, WORD_LEN, 0  },
+  {0xD202, 0xB14C, WORD_LEN, 0  },
+  {0xD204, 0x9049, WORD_LEN, 0  },
+  {0xD206, 0x1958, WORD_LEN, 0  },
+  {0xD208, 0x0084, WORD_LEN, 0  },
+  {0xD20A, 0x904A, WORD_LEN, 0  },
+  {0xD20C, 0x195A, WORD_LEN, 0  },
+  {0xD20E, 0x0084, WORD_LEN, 0  },
+  {0xD210, 0x8856, WORD_LEN, 0  },
+  {0xD212, 0x1B36, WORD_LEN, 0  },
+  {0xD214, 0x8082, WORD_LEN, 0  },
+  {0xD216, 0x8857, WORD_LEN, 0  },
+  {0xD218, 0x1B37, WORD_LEN, 0  },
+  {0xD21A, 0x8082, WORD_LEN, 0  },
+  {0xD21C, 0x904C, WORD_LEN, 0  },
+  {0xD21E, 0x19A7, WORD_LEN, 0  },
+  {0xD220, 0x009C, WORD_LEN, 0  },
+  {0xD222, 0x881A, WORD_LEN, 0  },
+  {0xD224, 0x7FE0, WORD_LEN, 0  },
+  {0xD226, 0x1B54, WORD_LEN, 0  },
+  {0xD228, 0x8002, WORD_LEN, 0  },
+  {0xD22A, 0x78E0, WORD_LEN, 0  },
+  {0xD22C, 0x71CF, WORD_LEN, 0  },
+  {0xD22E, 0xFFFF, WORD_LEN, 0  },
+  {0xD230, 0xC350, WORD_LEN, 0  },
+  {0xD232, 0xD828, WORD_LEN, 0  },
+  {0xD234, 0xA90B, WORD_LEN, 0  },
+  {0xD236, 0x8100, WORD_LEN, 0  },
+  {0xD238, 0x01C5, WORD_LEN, 0  },
+  {0xD23A, 0x0320, WORD_LEN, 0  },
+  {0xD23C, 0xD900, WORD_LEN, 0  },
+  {0xD23E, 0x78E0, WORD_LEN, 0  },
+  {0xD240, 0x220A, WORD_LEN, 0  },
+  {0xD242, 0x1F80, WORD_LEN, 0  },
+  {0xD244, 0xFFFF, WORD_LEN, 0  },
+  {0xD246, 0xD4E0, WORD_LEN, 0  },
+  {0xD248, 0xC0F1, WORD_LEN, 0  },
+  {0xD24A, 0x0811, WORD_LEN, 0  },
+  {0xD24C, 0x0051, WORD_LEN, 0  },
+  {0xD24E, 0x2240, WORD_LEN, 0  },
+  {0xD250, 0x1200, WORD_LEN, 0  },
+  {0xD252, 0xFFE1, WORD_LEN, 0  },
+  {0xD254, 0xD801, WORD_LEN, 0  },
+  {0xD256, 0xF006, WORD_LEN, 0  },
+  {0xD258, 0x2240, WORD_LEN, 0  },
+  {0xD25A, 0x1900, WORD_LEN, 0  },
+  {0xD25C, 0xFFDE, WORD_LEN, 0  },
+  {0xD25E, 0xD802, WORD_LEN, 0  },
+  {0xD260, 0x1A05, WORD_LEN, 0  },
+  {0xD262, 0x1002, WORD_LEN, 0  },
+  {0xD264, 0xFFF2, WORD_LEN, 0  },
+  {0xD266, 0xF195, WORD_LEN, 0  },
+  {0xD268, 0xC0F1, WORD_LEN, 0  },
+  {0xD26A, 0x0E7E, WORD_LEN, 0  },
+  {0xD26C, 0x05C0, WORD_LEN, 0  },
+  {0xD26E, 0x75CF, WORD_LEN, 0  },
+  {0xD270, 0xFFFF, WORD_LEN, 0  },
+  {0xD272, 0xC84C, WORD_LEN, 0  },
+  {0xD274, 0x9502, WORD_LEN, 0  },
+  {0xD276, 0x77CF, WORD_LEN, 0  },
+  {0xD278, 0xFFFF, WORD_LEN, 0  },
+  {0xD27A, 0xC344, WORD_LEN, 0  },
+  {0xD27C, 0x2044, WORD_LEN, 0  },
+  {0xD27E, 0x008E, WORD_LEN, 0  },
+  {0xD280, 0xB8A1, WORD_LEN, 0  },
+  {0xD282, 0x0926, WORD_LEN, 0  },
+  {0xD284, 0x03E0, WORD_LEN, 0  },
+  {0xD286, 0xB502, WORD_LEN, 0  },
+  {0xD288, 0x9502, WORD_LEN, 0  },
+  {0xD28A, 0x952E, WORD_LEN, 0  },
+  {0xD28C, 0x7E05, WORD_LEN, 0  },
+  {0xD28E, 0xB5C2, WORD_LEN, 0  },
+  {0xD290, 0x70CF, WORD_LEN, 0  },
+  {0xD292, 0xFFFF, WORD_LEN, 0  },
+  {0xD294, 0xC610, WORD_LEN, 0  },
+  {0xD296, 0x099A, WORD_LEN, 0  },
+  {0xD298, 0x04A0, WORD_LEN, 0  },
+  {0xD29A, 0xB026, WORD_LEN, 0  },
+  {0xD29C, 0x0E02, WORD_LEN, 0  },
+  {0xD29E, 0x0560, WORD_LEN, 0  },
+  {0xD2A0, 0xDE00, WORD_LEN, 0  },
+  {0xD2A2, 0x0A12, WORD_LEN, 0  },
+  {0xD2A4, 0x0320, WORD_LEN, 0  },
+  {0xD2A6, 0xB7C4, WORD_LEN, 0  },
+  {0xD2A8, 0x0B36, WORD_LEN, 0  },
+  {0xD2AA, 0x03A0, WORD_LEN, 0  },
+  {0xD2AC, 0x70C9, WORD_LEN, 0  },
+  {0xD2AE, 0x9502, WORD_LEN, 0  },
+  {0xD2B0, 0x7608, WORD_LEN, 0  },
+  {0xD2B2, 0xB8A8, WORD_LEN, 0  },
+  {0xD2B4, 0xB502, WORD_LEN, 0  },
+  {0xD2B6, 0x70CF, WORD_LEN, 0  },
+  {0xD2B8, 0x0000, WORD_LEN, 0  },
+  {0xD2BA, 0x5536, WORD_LEN, 0  },
+  {0xD2BC, 0x7860, WORD_LEN, 0  },
+  {0xD2BE, 0x2686, WORD_LEN, 0  },
+  {0xD2C0, 0x1FFB, WORD_LEN, 0  },
+  {0xD2C2, 0x9502, WORD_LEN, 0  },
+  {0xD2C4, 0x78C5, WORD_LEN, 0  },
+  {0xD2C6, 0x0631, WORD_LEN, 0  },
+  {0xD2C8, 0x05E0, WORD_LEN, 0  },
+  {0xD2CA, 0xB502, WORD_LEN, 0  },
+  {0xD2CC, 0x72CF, WORD_LEN, 0  },
+  {0xD2CE, 0xFFFF, WORD_LEN, 0  },
+  {0xD2D0, 0xC5D4, WORD_LEN, 0  },
+  {0xD2D2, 0x923A, WORD_LEN, 0  },
+  {0xD2D4, 0x73CF, WORD_LEN, 0  },
+  {0xD2D6, 0xFFFF, WORD_LEN, 0  },
+  {0xD2D8, 0xC7D0, WORD_LEN, 0  },
+  {0xD2DA, 0xB020, WORD_LEN, 0  },
+  {0xD2DC, 0x9220, WORD_LEN, 0  },
+  {0xD2DE, 0xB021, WORD_LEN, 0  },
+  {0xD2E0, 0x9221, WORD_LEN, 0  },
+  {0xD2E2, 0xB022, WORD_LEN, 0  },
+  {0xD2E4, 0x9222, WORD_LEN, 0  },
+  {0xD2E6, 0xB023, WORD_LEN, 0  },
+  {0xD2E8, 0x9223, WORD_LEN, 0  },
+  {0xD2EA, 0xB024, WORD_LEN, 0  },
+  {0xD2EC, 0x9227, WORD_LEN, 0  },
+  {0xD2EE, 0xB025, WORD_LEN, 0  },
+  {0xD2F0, 0x9228, WORD_LEN, 0  },
+  {0xD2F2, 0xB026, WORD_LEN, 0  },
+  {0xD2F4, 0x922B, WORD_LEN, 0  },
+  {0xD2F6, 0xB027, WORD_LEN, 0  },
+  {0xD2F8, 0x922C, WORD_LEN, 0  },
+  {0xD2FA, 0xB028, WORD_LEN, 0  },
+  {0xD2FC, 0x1258, WORD_LEN, 0  },
+  {0xD2FE, 0x0101, WORD_LEN, 0  },
+  {0xD300, 0xB029, WORD_LEN, 0  },
+  {0xD302, 0x125A, WORD_LEN, 0  },
+  {0xD304, 0x0101, WORD_LEN, 0  },
+  {0xD306, 0xB02A, WORD_LEN, 0  },
+  {0xD308, 0x1336, WORD_LEN, 0  },
+  {0xD30A, 0x8081, WORD_LEN, 0  },
+  {0xD30C, 0xA836, WORD_LEN, 0  },
+  {0xD30E, 0x1337, WORD_LEN, 0  },
+  {0xD310, 0x8081, WORD_LEN, 0  },
+  {0xD312, 0xA837, WORD_LEN, 0  },
+  {0xD314, 0x12A7, WORD_LEN, 0  },
+  {0xD316, 0x0701, WORD_LEN, 0  },
+  {0xD318, 0xB02C, WORD_LEN, 0  },
+  {0xD31A, 0x1354, WORD_LEN, 0  },
+  {0xD31C, 0x8081, WORD_LEN, 0  },
+  {0xD31E, 0x7FE0, WORD_LEN, 0  },
+  {0xD320, 0xA83A, WORD_LEN, 0  },
+  {0xD322, 0x78E0, WORD_LEN, 0  },
+  {0xD324, 0xC0F1, WORD_LEN, 0  },
+  {0xD326, 0x0DC2, WORD_LEN, 0  },
+  {0xD328, 0x05C0, WORD_LEN, 0  },
+  {0xD32A, 0x7608, WORD_LEN, 0  },
+  {0xD32C, 0x09BB, WORD_LEN, 0  },
+  {0xD32E, 0x0010, WORD_LEN, 0  },
+  {0xD330, 0x75CF, WORD_LEN, 0  },
+  {0xD332, 0xFFFF, WORD_LEN, 0  },
+  {0xD334, 0xD4E0, WORD_LEN, 0  },
+  {0xD336, 0x8D21, WORD_LEN, 0  },
+  {0xD338, 0x8D00, WORD_LEN, 0  },
+  {0xD33A, 0x2153, WORD_LEN, 0  },
+  {0xD33C, 0x0003, WORD_LEN, 0  },
+  {0xD33E, 0xB8C0, WORD_LEN, 0  },
+  {0xD340, 0x8D45, WORD_LEN, 0  },
+  {0xD342, 0x0B23, WORD_LEN, 0  },
+  {0xD344, 0x0000, WORD_LEN, 0  },
+  {0xD346, 0xEA8F, WORD_LEN, 0  },
+  {0xD348, 0x0915, WORD_LEN, 0  },
+  {0xD34A, 0x001E, WORD_LEN, 0  },
+  {0xD34C, 0xFF81, WORD_LEN, 0  },
+  {0xD34E, 0xE808, WORD_LEN, 0  },
+  {0xD350, 0x2540, WORD_LEN, 0  },
+  {0xD352, 0x1900, WORD_LEN, 0  },
+  {0xD354, 0xFFDE, WORD_LEN, 0  },
+  {0xD356, 0x8D00, WORD_LEN, 0  },
+  {0xD358, 0xB880, WORD_LEN, 0  },
+  {0xD35A, 0xF004, WORD_LEN, 0  },
+  {0xD35C, 0x8D00, WORD_LEN, 0  },
+  {0xD35E, 0xB8A0, WORD_LEN, 0  },
+  {0xD360, 0xAD00, WORD_LEN, 0  },
+  {0xD362, 0x8D05, WORD_LEN, 0  },
+  {0xD364, 0xE081, WORD_LEN, 0  },
+  {0xD366, 0x20CC, WORD_LEN, 0  },
+  {0xD368, 0x80A2, WORD_LEN, 0  },
+  {0xD36A, 0xDF00, WORD_LEN, 0  },
+  {0xD36C, 0xF40A, WORD_LEN, 0  },
+  {0xD36E, 0x71CF, WORD_LEN, 0  },
+  {0xD370, 0xFFFF, WORD_LEN, 0  },
+  {0xD372, 0xC84C, WORD_LEN, 0  },
+  {0xD374, 0x9102, WORD_LEN, 0  },
+  {0xD376, 0x7708, WORD_LEN, 0  },
+  {0xD378, 0xB8A6, WORD_LEN, 0  },
+  {0xD37A, 0x2786, WORD_LEN, 0  },
+  {0xD37C, 0x1FFE, WORD_LEN, 0  },
+  {0xD37E, 0xB102, WORD_LEN, 0  },
+  {0xD380, 0x0B42, WORD_LEN, 0  },
+  {0xD382, 0x0180, WORD_LEN, 0  },
+  {0xD384, 0x0E3E, WORD_LEN, 0  },
+  {0xD386, 0x0180, WORD_LEN, 0  },
+  {0xD388, 0x0F4A, WORD_LEN, 0  },
+  {0xD38A, 0x0160, WORD_LEN, 0  },
+  {0xD38C, 0x70C9, WORD_LEN, 0  },
+  {0xD38E, 0x8D05, WORD_LEN, 0  },
+  {0xD390, 0xE081, WORD_LEN, 0  },
+  {0xD392, 0x20CC, WORD_LEN, 0  },
+  {0xD394, 0x80A2, WORD_LEN, 0  },
+  {0xD396, 0xF429, WORD_LEN, 0  },
+  {0xD398, 0x76CF, WORD_LEN, 0  },
+  {0xD39A, 0xFFFF, WORD_LEN, 0  },
+  {0xD39C, 0xC84C, WORD_LEN, 0  },
+  {0xD39E, 0x082D, WORD_LEN, 0  },
+  {0xD3A0, 0x0051, WORD_LEN, 0  },
+  {0xD3A2, 0x70CF, WORD_LEN, 0  },
+  {0xD3A4, 0xFFFF, WORD_LEN, 0  },
+  {0xD3A6, 0xC90C, WORD_LEN, 0  },
+  {0xD3A8, 0x8805, WORD_LEN, 0  },
+  {0xD3AA, 0x09B6, WORD_LEN, 0  },
+  {0xD3AC, 0x0360, WORD_LEN, 0  },
+  {0xD3AE, 0xD908, WORD_LEN, 0  },
+  {0xD3B0, 0x2099, WORD_LEN, 0  },
+  {0xD3B2, 0x0802, WORD_LEN, 0  },
+  {0xD3B4, 0x9634, WORD_LEN, 0  },
+  {0xD3B6, 0xB503, WORD_LEN, 0  },
+  {0xD3B8, 0x7902, WORD_LEN, 0  },
+  {0xD3BA, 0x1523, WORD_LEN, 0  },
+  {0xD3BC, 0x1080, WORD_LEN, 0  },
+  {0xD3BE, 0xB634, WORD_LEN, 0  },
+  {0xD3C0, 0xE001, WORD_LEN, 0  },
+  {0xD3C2, 0x1D23, WORD_LEN, 0  },
+  {0xD3C4, 0x1002, WORD_LEN, 0  },
+  {0xD3C6, 0xF00B, WORD_LEN, 0  },
+  {0xD3C8, 0x9634, WORD_LEN, 0  },
+  {0xD3CA, 0x9503, WORD_LEN, 0  },
+  {0xD3CC, 0x6038, WORD_LEN, 0  },
+  {0xD3CE, 0xB614, WORD_LEN, 0  },
+  {0xD3D0, 0x153F, WORD_LEN, 0  },
+  {0xD3D2, 0x1080, WORD_LEN, 0  },
+  {0xD3D4, 0xE001, WORD_LEN, 0  },
+  {0xD3D6, 0x1D3F, WORD_LEN, 0  },
+  {0xD3D8, 0x1002, WORD_LEN, 0  },
+  {0xD3DA, 0xFFA4, WORD_LEN, 0  },
+  {0xD3DC, 0x9602, WORD_LEN, 0  },
+  {0xD3DE, 0x7F05, WORD_LEN, 0  },
+  {0xD3E0, 0xD800, WORD_LEN, 0  },
+  {0xD3E2, 0xB6E2, WORD_LEN, 0  },
+  {0xD3E4, 0xAD05, WORD_LEN, 0  },
+  {0xD3E6, 0x0511, WORD_LEN, 0  },
+  {0xD3E8, 0x05E0, WORD_LEN, 0  },
+  {0xD3EA, 0xD800, WORD_LEN, 0  },
+  {0xD3EC, 0xC0F1, WORD_LEN, 0  },
+  {0xD3EE, 0x0CFE, WORD_LEN, 0  },
+  {0xD3F0, 0x05C0, WORD_LEN, 0  },
+  {0xD3F2, 0x0A96, WORD_LEN, 0  },
+  {0xD3F4, 0x05A0, WORD_LEN, 0  },
+  {0xD3F6, 0x7608, WORD_LEN, 0  },
+  {0xD3F8, 0x0C22, WORD_LEN, 0  },
+  {0xD3FA, 0x0240, WORD_LEN, 0  },
+  {0xD3FC, 0xE080, WORD_LEN, 0  },
+  {0xD3FE, 0x20CA, WORD_LEN, 0  },
+  {0xD400, 0x0F82, WORD_LEN, 0  },
+  {0xD402, 0x0000, WORD_LEN, 0  },
+  {0xD404, 0x190B, WORD_LEN, 0  },
+  {0xD406, 0x0C60, WORD_LEN, 0  },
+  {0xD408, 0x05A2, WORD_LEN, 0  },
+  {0xD40A, 0x21CA, WORD_LEN, 0  },
+  {0xD40C, 0x0022, WORD_LEN, 0  },
+  {0xD40E, 0x0C56, WORD_LEN, 0  },
+  {0xD410, 0x0240, WORD_LEN, 0  },
+  {0xD412, 0xE806, WORD_LEN, 0  },
+  {0xD414, 0x0E0E, WORD_LEN, 0  },
+  {0xD416, 0x0220, WORD_LEN, 0  },
+  {0xD418, 0x70C9, WORD_LEN, 0  },
+  {0xD41A, 0xF048, WORD_LEN, 0  },
+  {0xD41C, 0x0896, WORD_LEN, 0  },
+  {0xD41E, 0x0440, WORD_LEN, 0  },
+  {0xD420, 0x0E96, WORD_LEN, 0  },
+  {0xD422, 0x0400, WORD_LEN, 0  },
+  {0xD424, 0x0966, WORD_LEN, 0  },
+  {0xD426, 0x0380, WORD_LEN, 0  },
+  {0xD428, 0x75CF, WORD_LEN, 0  },
+  {0xD42A, 0xFFFF, WORD_LEN, 0  },
+  {0xD42C, 0xD4E0, WORD_LEN, 0  },
+  {0xD42E, 0x8D00, WORD_LEN, 0  },
+  {0xD430, 0x084D, WORD_LEN, 0  },
+  {0xD432, 0x001E, WORD_LEN, 0  },
+  {0xD434, 0xFF47, WORD_LEN, 0  },
+  {0xD436, 0x080D, WORD_LEN, 0  },
+  {0xD438, 0x0050, WORD_LEN, 0  },
+  {0xD43A, 0xFF57, WORD_LEN, 0  },
+  {0xD43C, 0x0841, WORD_LEN, 0  },
+  {0xD43E, 0x0051, WORD_LEN, 0  },
+  {0xD440, 0x8D04, WORD_LEN, 0  },
+  {0xD442, 0x9521, WORD_LEN, 0  },
+  {0xD444, 0xE064, WORD_LEN, 0  },
+  {0xD446, 0x790C, WORD_LEN, 0  },
+  {0xD448, 0x702F, WORD_LEN, 0  },
+  {0xD44A, 0x0CE2, WORD_LEN, 0  },
+  {0xD44C, 0x05E0, WORD_LEN, 0  },
+  {0xD44E, 0xD964, WORD_LEN, 0  },
+  {0xD450, 0x72CF, WORD_LEN, 0  },
+  {0xD452, 0xFFFF, WORD_LEN, 0  },
+  {0xD454, 0xC700, WORD_LEN, 0  },
+  {0xD456, 0x9235, WORD_LEN, 0  },
+  {0xD458, 0x0811, WORD_LEN, 0  },
+  {0xD45A, 0x0043, WORD_LEN, 0  },
+  {0xD45C, 0xFF3D, WORD_LEN, 0  },
+  {0xD45E, 0x080D, WORD_LEN, 0  },
+  {0xD460, 0x0051, WORD_LEN, 0  },
+  {0xD462, 0xD801, WORD_LEN, 0  },
+  {0xD464, 0xFF77, WORD_LEN, 0  },
+  {0xD466, 0xF025, WORD_LEN, 0  },
+  {0xD468, 0x9501, WORD_LEN, 0  },
+  {0xD46A, 0x9235, WORD_LEN, 0  },
+  {0xD46C, 0x0911, WORD_LEN, 0  },
+  {0xD46E, 0x0003, WORD_LEN, 0  },
+  {0xD470, 0xFF49, WORD_LEN, 0  },
+  {0xD472, 0x080D, WORD_LEN, 0  },
+  {0xD474, 0x0051, WORD_LEN, 0  },
+  {0xD476, 0xD800, WORD_LEN, 0  },
+  {0xD478, 0xFF72, WORD_LEN, 0  },
+  {0xD47A, 0xF01B, WORD_LEN, 0  },
+  {0xD47C, 0x0886, WORD_LEN, 0  },
+  {0xD47E, 0x03E0, WORD_LEN, 0  },
+  {0xD480, 0xD801, WORD_LEN, 0  },
+  {0xD482, 0x0EF6, WORD_LEN, 0  },
+  {0xD484, 0x03C0, WORD_LEN, 0  },
+  {0xD486, 0x0F52, WORD_LEN, 0  },
+  {0xD488, 0x0340, WORD_LEN, 0  },
+  {0xD48A, 0x0DBA, WORD_LEN, 0  },
+  {0xD48C, 0x0200, WORD_LEN, 0  },
+  {0xD48E, 0x0AF6, WORD_LEN, 0  },
+  {0xD490, 0x0440, WORD_LEN, 0  },
+  {0xD492, 0x0C22, WORD_LEN, 0  },
+  {0xD494, 0x0400, WORD_LEN, 0  },
+  {0xD496, 0x0D72, WORD_LEN, 0  },
+  {0xD498, 0x0440, WORD_LEN, 0  },
+  {0xD49A, 0x0DC2, WORD_LEN, 0  },
+  {0xD49C, 0x0200, WORD_LEN, 0  },
+  {0xD49E, 0x0972, WORD_LEN, 0  },
+  {0xD4A0, 0x0440, WORD_LEN, 0  },
+  {0xD4A2, 0x0D3A, WORD_LEN, 0  },
+  {0xD4A4, 0x0220, WORD_LEN, 0  },
+  {0xD4A6, 0xD820, WORD_LEN, 0  },
+  {0xD4A8, 0x0BFA, WORD_LEN, 0  },
+  {0xD4AA, 0x0260, WORD_LEN, 0  },
+  {0xD4AC, 0x70C9, WORD_LEN, 0  },
+  {0xD4AE, 0x0451, WORD_LEN, 0  },
+  {0xD4B0, 0x05C0, WORD_LEN, 0  },
+  {0xD4B2, 0x78E0, WORD_LEN, 0  },
+  {0xD4B4, 0xD900, WORD_LEN, 0  },
+  {0xD4B6, 0xF00A, WORD_LEN, 0  },
+  {0xD4B8, 0x70CF, WORD_LEN, 0  },
+  {0xD4BA, 0xFFFF, WORD_LEN, 0  },
+  {0xD4BC, 0xD520, WORD_LEN, 0  },
+  {0xD4BE, 0x7835, WORD_LEN, 0  },
+  {0xD4C0, 0x8041, WORD_LEN, 0  },
+  {0xD4C2, 0x8000, WORD_LEN, 0  },
+  {0xD4C4, 0xE102, WORD_LEN, 0  },
+  {0xD4C6, 0xA040, WORD_LEN, 0  },
+  {0xD4C8, 0x09F1, WORD_LEN, 0  },
+  {0xD4CA, 0x8114, WORD_LEN, 0  },
+  {0xD4CC, 0x71CF, WORD_LEN, 0  },
+  {0xD4CE, 0xFFFF, WORD_LEN, 0  },
+  {0xD4D0, 0xD4E0, WORD_LEN, 0  },
+  {0xD4D2, 0x70CF, WORD_LEN, 0  },
+  {0xD4D4, 0xFFFF, WORD_LEN, 0  },
+  {0xD4D6, 0xC594, WORD_LEN, 0  },
+  {0xD4D8, 0xB03A, WORD_LEN, 0  },
+  {0xD4DA, 0x7FE0, WORD_LEN, 0  },
+  {0xD4DC, 0xD800, WORD_LEN, 0  },
+  {0xD4DE, 0x0000, WORD_LEN, 0  },
+  {0xD4E0, 0x0000, WORD_LEN, 0  },
+  {0xD4E2, 0x0500, WORD_LEN, 0  },
+  {0xD4E4, 0x0500, WORD_LEN, 0  },
+  {0xD4E6, 0x0200, WORD_LEN, 0  },
+  {0xD4E8, 0x0330, WORD_LEN, 0  },
+  {0xD4EA, 0x0000, WORD_LEN, 0  },
+  {0xD4EC, 0x0000, WORD_LEN, 0  },
+  {0xD4EE, 0x03CD, WORD_LEN, 0  },
+  {0xD4F0, 0x050D, WORD_LEN, 0  },
+  {0xD4F2, 0x01C5, WORD_LEN, 0  },
+  {0xD4F4, 0x03B3, WORD_LEN, 0  },
+  {0xD4F6, 0x00E0, WORD_LEN, 0  },
+  {0xD4F8, 0x01E3, WORD_LEN, 0  },
+  {0xD4FA, 0x0280, WORD_LEN, 0  },
+  {0xD4FC, 0x01E0, WORD_LEN, 0  },
+  {0xD4FE, 0x0109, WORD_LEN, 0  },
+  {0xD500, 0x0080, WORD_LEN, 0  },
+  {0xD502, 0x0500, WORD_LEN, 0  },
+  {0xD504, 0x0000, WORD_LEN, 0  },
+  {0xD506, 0x0000, WORD_LEN, 0  },
+  {0xD508, 0x0000, WORD_LEN, 0  },
+  {0xD50A, 0x0000, WORD_LEN, 0  },
+  {0xD50C, 0x0000, WORD_LEN, 0  },
+  {0xD50E, 0x0000, WORD_LEN, 0  },
+  {0xD510, 0x0000, WORD_LEN, 0  },
+  {0xD512, 0x0000, WORD_LEN, 0  },
+  {0xD514, 0x0000, WORD_LEN, 0  },
+  {0xD516, 0x0000, WORD_LEN, 0  },
+  {0xD518, 0x0000, WORD_LEN, 0  },
+  {0xD51A, 0x0000, WORD_LEN, 0  },
+  {0xD51C, 0x0000, WORD_LEN, 0  },
+  {0xD51E, 0x0000, WORD_LEN, 0  },
+  {0xD520, 0xFFFF, WORD_LEN, 0  },
+  {0xD522, 0xC9B4, WORD_LEN, 0  },
+  {0xD524, 0xFFFF, WORD_LEN, 0  },
+  {0xD526, 0xD324, WORD_LEN, 0  },
+  {0xD528, 0xFFFF, WORD_LEN, 0  },
+  {0xD52A, 0xCA34, WORD_LEN, 0  },
+  {0xD52C, 0xFFFF, WORD_LEN, 0  },
+  {0xD52E, 0xD3EC, WORD_LEN, 0  },
+  {0x098E, 0x0000, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  //apply 0304
+  {0xE000, 0x04B4, WORD_LEN, 0  }, 	// PATCHLDR_LOADER_ADDRESS
+  {0xE002, 0x0304, WORD_LEN, 0  }, 	// PATCHLDR_PATCH_ID
+  {0x098E, 0x6004, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS 
+  {0x0990, 0x4103, WORD_LEN, 0  }, 	// MCU_VARIABLE_DATA0		  
+  {0x0992, 0x0202, WORD_LEN, 0  }, 	// MCU_VARIABLE_DATA1		  
+  {0x0080, 0xFFF0, WORD_LEN, 50}, 	// COMMAND_REGISTER			  
+  {0x0080, 0xFFF1, WORD_LEN, 50}, 	// COMMAND_REGISTER			  
+  //patch 1204
+  {0x0982, 0x0001, WORD_LEN, 0  },    // ACCESS_CTL_STAT
+  {0x098A, 0x60BC, WORD_LEN, 0  },    // PHYSICAL_ADDRESS_ACCESS
+  {0xE0BC, 0xC0F1, WORD_LEN, 0  },
+  {0xE0BE, 0x082A, WORD_LEN, 0  },
+  {0xE0C0, 0x05A0, WORD_LEN, 0  },
+  {0xE0C2, 0xD800, WORD_LEN, 0  },
+  {0xE0C4, 0x71CF, WORD_LEN, 0  },
+  {0xE0C6, 0xFFFF, WORD_LEN, 0  },
+  {0xE0C8, 0xC344, WORD_LEN, 0  },
+  {0xE0CA, 0x77CF, WORD_LEN, 0  },
+  {0xE0CC, 0xFFFF, WORD_LEN, 0  },
+  {0xE0CE, 0xC7C0, WORD_LEN, 0  },
+  {0xE0D0, 0xB104, WORD_LEN, 0  },
+  {0xE0D2, 0x8F1F, WORD_LEN, 0  },
+  {0xE0D4, 0x75CF, WORD_LEN, 0  },
+  {0xE0D6, 0xFFFF, WORD_LEN, 0  },
+  {0xE0D8, 0xC84C, WORD_LEN, 0  },
+  {0xE0DA, 0x0811, WORD_LEN, 0  },
+  {0xE0DC, 0x005E, WORD_LEN, 0  },
+  {0xE0DE, 0x70CF, WORD_LEN, 0  },
+  {0xE0E0, 0x0000, WORD_LEN, 0  },
+  {0xE0E2, 0x500E, WORD_LEN, 0  },
+  {0xE0E4, 0x7840, WORD_LEN, 0  },
+  {0xE0E6, 0xF019, WORD_LEN, 0  },
+  {0xE0E8, 0x0CC6, WORD_LEN, 0  },
+  {0xE0EA, 0x0340, WORD_LEN, 0  },
+  {0xE0EC, 0x0E26, WORD_LEN, 0  },
+  {0xE0EE, 0x0340, WORD_LEN, 0  },
+  {0xE0F0, 0x95C2, WORD_LEN, 0  },
+  {0xE0F2, 0x0E21, WORD_LEN, 0  },
+  {0xE0F4, 0x101E, WORD_LEN, 0  },
+  {0xE0F6, 0x0E0D, WORD_LEN, 0  },
+  {0xE0F8, 0x119E, WORD_LEN, 0  },
+  {0xE0FA, 0x0D56, WORD_LEN, 0  },
+  {0xE0FC, 0x0340, WORD_LEN, 0  },
+  {0xE0FE, 0xF008, WORD_LEN, 0  },
+  {0xE100, 0x2650, WORD_LEN, 0  },
+  {0xE102, 0x1040, WORD_LEN, 0  },
+  {0xE104, 0x0AA2, WORD_LEN, 0  },
+  {0xE106, 0x0360, WORD_LEN, 0  },
+  {0xE108, 0xB502, WORD_LEN, 0  },
+  {0xE10A, 0xB5C2, WORD_LEN, 0  },
+  {0xE10C, 0x0B22, WORD_LEN, 0  },
+  {0xE10E, 0x0400, WORD_LEN, 0  },
+  {0xE110, 0x0CCE, WORD_LEN, 0  },
+  {0xE112, 0x0320, WORD_LEN, 0  },
+  {0xE114, 0xD800, WORD_LEN, 0  },
+  {0xE116, 0x70CF, WORD_LEN, 0  },
+  {0xE118, 0xFFFF, WORD_LEN, 0  },
+  {0xE11A, 0xC5D4, WORD_LEN, 0  },
+  {0xE11C, 0x902C, WORD_LEN, 0  },
+  {0xE11E, 0x72CF, WORD_LEN, 0  },
+  {0xE120, 0xFFFF, WORD_LEN, 0  },
+  {0xE122, 0xE218, WORD_LEN, 0  },
+  {0xE124, 0x9009, WORD_LEN, 0  },
+  {0xE126, 0xE105, WORD_LEN, 0  },
+  {0xE128, 0x73CF, WORD_LEN, 0  },
+  {0xE12A, 0xFF00, WORD_LEN, 0  },
+  {0xE12C, 0x2FD0, WORD_LEN, 0  },
+  {0xE12E, 0x7822, WORD_LEN, 0  },
+  {0xE130, 0x7910, WORD_LEN, 0  },
+  {0xE132, 0xB202, WORD_LEN, 0  },
+  {0xE134, 0x1382, WORD_LEN, 0  },
+  {0xE136, 0x0700, WORD_LEN, 0  },
+  {0xE138, 0x0815, WORD_LEN, 0  },
+  {0xE13A, 0x03DE, WORD_LEN, 0  },
+  {0xE13C, 0x1387, WORD_LEN, 0  },
+  {0xE13E, 0x0700, WORD_LEN, 0  },
+  {0xE140, 0x2102, WORD_LEN, 0  },
+  {0xE142, 0x000A, WORD_LEN, 0  },
+  {0xE144, 0x212F, WORD_LEN, 0  },
+  {0xE146, 0x0288, WORD_LEN, 0  },
+  {0xE148, 0x1A04, WORD_LEN, 0  },
+  {0xE14A, 0x0284, WORD_LEN, 0  },
+  {0xE14C, 0x13B9, WORD_LEN, 0  },
+  {0xE14E, 0x0700, WORD_LEN, 0  },
+  {0xE150, 0xB8C1, WORD_LEN, 0  },
+  {0xE152, 0x0815, WORD_LEN, 0  },
+  {0xE154, 0x0052, WORD_LEN, 0  },
+  {0xE156, 0xDB00, WORD_LEN, 0  },
+  {0xE158, 0x230F, WORD_LEN, 0  },
+  {0xE15A, 0x0003, WORD_LEN, 0  },
+  {0xE15C, 0x2102, WORD_LEN, 0  },
+  {0xE15E, 0x00C0, WORD_LEN, 0  },
+  {0xE160, 0x7910, WORD_LEN, 0  },
+  {0xE162, 0xB202, WORD_LEN, 0  },
+  {0xE164, 0x9507, WORD_LEN, 0  },
+  {0xE166, 0x7822, WORD_LEN, 0  },
+  {0xE168, 0xE080, WORD_LEN, 0  },
+  {0xE16A, 0xD900, WORD_LEN, 0  },
+  {0xE16C, 0x20CA, WORD_LEN, 0  },
+  {0xE16E, 0x004B, WORD_LEN, 0  },
+  {0xE170, 0xB805, WORD_LEN, 0  },
+  {0xE172, 0x9533, WORD_LEN, 0  },
+  {0xE174, 0x7815, WORD_LEN, 0  },
+  {0xE176, 0x6038, WORD_LEN, 0  },
+  {0xE178, 0x0FB2, WORD_LEN, 0  },
+  {0xE17A, 0x0560, WORD_LEN, 0  },
+  {0xE17C, 0xB861, WORD_LEN, 0  },
+  {0xE17E, 0xB711, WORD_LEN, 0  },
+  {0xE180, 0x0775, WORD_LEN, 0  },
+  {0xE182, 0x0540, WORD_LEN, 0  },
+  {0xE184, 0xD900, WORD_LEN, 0  },
+  {0xE186, 0xF00A, WORD_LEN, 0  },
+  {0xE188, 0x70CF, WORD_LEN, 0  },
+  {0xE18A, 0xFFFF, WORD_LEN, 0  },
+  {0xE18C, 0xE210, WORD_LEN, 0  },
+  {0xE18E, 0x7835, WORD_LEN, 0  },
+  {0xE190, 0x8041, WORD_LEN, 0  },
+  {0xE192, 0x8000, WORD_LEN, 0  },
+  {0xE194, 0xE102, WORD_LEN, 0  },
+  {0xE196, 0xA040, WORD_LEN, 0  },
+  {0xE198, 0x09F1, WORD_LEN, 0  },
+  {0xE19A, 0x8094, WORD_LEN, 0  },
+  {0xE19C, 0x7FE0, WORD_LEN, 0  },
+  {0xE19E, 0xD800, WORD_LEN, 0  },
+  {0xE1A0, 0xC0F1, WORD_LEN, 0  },
+  {0xE1A2, 0xC5E1, WORD_LEN, 0  },
+  {0xE1A4, 0x71CF, WORD_LEN, 0  },
+  {0xE1A6, 0x0000, WORD_LEN, 0  },
+  {0xE1A8, 0x45E6, WORD_LEN, 0  },
+  {0xE1AA, 0x7960, WORD_LEN, 0  },
+  {0xE1AC, 0x7508, WORD_LEN, 0  },
+  {0xE1AE, 0x70CF, WORD_LEN, 0  },
+  {0xE1B0, 0xFFFF, WORD_LEN, 0  },
+  {0xE1B2, 0xC84C, WORD_LEN, 0  },
+  {0xE1B4, 0x9002, WORD_LEN, 0  },
+  {0xE1B6, 0x083D, WORD_LEN, 0  },
+  {0xE1B8, 0x021E, WORD_LEN, 0  },
+  {0xE1BA, 0x0D39, WORD_LEN, 0  },
+  {0xE1BC, 0x10D1, WORD_LEN, 0  },
+  {0xE1BE, 0x70CF, WORD_LEN, 0  },
+  {0xE1C0, 0xFF00, WORD_LEN, 0  },
+  {0xE1C2, 0x3354, WORD_LEN, 0  },
+  {0xE1C4, 0x9055, WORD_LEN, 0  },
+  {0xE1C6, 0x71CF, WORD_LEN, 0  },
+  {0xE1C8, 0xFFFF, WORD_LEN, 0  },
+  {0xE1CA, 0xC5D4, WORD_LEN, 0  },
+  {0xE1CC, 0x116C, WORD_LEN, 0  },
+  {0xE1CE, 0x0103, WORD_LEN, 0  },
+  {0xE1D0, 0x1170, WORD_LEN, 0  },
+  {0xE1D2, 0x00C1, WORD_LEN, 0  },
+  {0xE1D4, 0xE381, WORD_LEN, 0  },
+  {0xE1D6, 0x22C6, WORD_LEN, 0  },
+  {0xE1D8, 0x0F81, WORD_LEN, 0  },
+  {0xE1DA, 0x0000, WORD_LEN, 0  },
+  {0xE1DC, 0x00FF, WORD_LEN, 0  },
+  {0xE1DE, 0x22C4, WORD_LEN, 0  },
+  {0xE1E0, 0x0F82, WORD_LEN, 0  },
+  {0xE1E2, 0xFFFF, WORD_LEN, 0  },
+  {0xE1E4, 0x00FF, WORD_LEN, 0  },
+  {0xE1E6, 0x29C0, WORD_LEN, 0  },
+  {0xE1E8, 0x0222, WORD_LEN, 0  },
+  {0xE1EA, 0x7945, WORD_LEN, 0  },
+  {0xE1EC, 0x7930, WORD_LEN, 0  },
+  {0xE1EE, 0xB035, WORD_LEN, 0  },
+  {0xE1F0, 0x0715, WORD_LEN, 0  },
+  {0xE1F2, 0x0540, WORD_LEN, 0  },
+  {0xE1F4, 0xD900, WORD_LEN, 0  },
+  {0xE1F6, 0xF00A, WORD_LEN, 0  },
+  {0xE1F8, 0x70CF, WORD_LEN, 0  },
+  {0xE1FA, 0xFFFF, WORD_LEN, 0  },
+  {0xE1FC, 0xE224, WORD_LEN, 0  },
+  {0xE1FE, 0x7835, WORD_LEN, 0  },
+  {0xE200, 0x8041, WORD_LEN, 0  },
+  {0xE202, 0x8000, WORD_LEN, 0  },
+  {0xE204, 0xE102, WORD_LEN, 0  },
+  {0xE206, 0xA040, WORD_LEN, 0  },
+  {0xE208, 0x09F1, WORD_LEN, 0  },
+  {0xE20A, 0x8094, WORD_LEN, 0  },
+  {0xE20C, 0x7FE0, WORD_LEN, 0  },
+  {0xE20E, 0xD800, WORD_LEN, 0  },
+  {0xE210, 0xFFFF, WORD_LEN, 0  },
+  {0xE212, 0xCB40, WORD_LEN, 0  },
+  {0xE214, 0xFFFF, WORD_LEN, 0  },
+  {0xE216, 0xE0BC, WORD_LEN, 0  },
+  {0xE218, 0x0000, WORD_LEN, 0  },
+  {0xE21A, 0x0000, WORD_LEN, 0  },
+  {0xE21C, 0x0000, WORD_LEN, 0  },
+  {0xE21E, 0x0000, WORD_LEN, 0  },
+  {0xE220, 0x0000, WORD_LEN, 0  },
+  {0x098E, 0x0000, WORD_LEN, 0  },      // LOGICAL_ADDRESS_ACCESS
+  //apply patch 1204
+  {0xE000, 0x1184, WORD_LEN, 0  },      // PATCHLDR_LOADER_ADDRESS
+  {0xE002, 0x1204, WORD_LEN, 0  },      // PATCHLDR_PATCH_ID
+  {0x098E, 0x6004, WORD_LEN, 0  },      // PATCHLDR_FIRMWARE_ID 
+  {0x0990, 0x4103, WORD_LEN, 0  },      // PATCHLDR_FIRMWARE_ID 
+  {0x0992, 0x0202, WORD_LEN, 0  },      // PATCHLDR_FIRMWARE_ID 
+  {0x0080, 0xFFF0, WORD_LEN, 50},      // COMMAND_REGISTER
+  {0x0080, 0xFFF1, WORD_LEN, 50},      // COMMAND_REGISTER
+  {0xA804, 0x01BF, WORD_LEN, 0  },  	  
+  {0x3640, 0x01D0, WORD_LEN, 0  }, 	// P_G1_P0Q0							
+  {0x3642, 0x78C4, WORD_LEN, 0  }, 	// P_G1_P0Q1							
+  {0x3644, 0x7B2F, WORD_LEN, 0  }, 	// P_G1_P0Q2							
+  {0x3646, 0x08AD, WORD_LEN, 0  }, 	// P_G1_P0Q3							
+  {0x3648, 0x8F6F, WORD_LEN, 0  }, 	// P_G1_P0Q4							
+  {0x364A, 0x00F0, WORD_LEN, 0  }, 	// P_R_P0Q0							  
+  {0x364C, 0x34CA, WORD_LEN, 0  }, 	// P_R_P0Q1							  
+  {0x364E, 0x1870, WORD_LEN, 0  }, 	// P_R_P0Q2							  
+  {0x3650, 0x40EC, WORD_LEN, 0  }, 	// P_R_P0Q3							  
+  {0x3652, 0xF16E, WORD_LEN, 0  }, 	// P_R_P0Q4							  
+  {0x3654, 0x0150, WORD_LEN, 0  }, 	// P_B_P0Q0							  
+  {0x3656, 0x10CC, WORD_LEN, 0  }, 	// P_B_P0Q1							  
+  {0x3658, 0x470F, WORD_LEN, 0  }, 	// P_B_P0Q2							  
+  {0x365A, 0x75E6, WORD_LEN, 0  }, 	// P_B_P0Q3							  
+  {0x365C, 0xB1CE, WORD_LEN, 0  }, 	// P_B_P0Q4							  
+  {0x365E, 0x00F0, WORD_LEN, 0  }, 	// P_G2_P0Q0							
+  {0x3660, 0x9C29, WORD_LEN, 0  }, 	// P_G2_P0Q1							
+  {0x3662, 0x0890, WORD_LEN, 0  }, 	// P_G2_P0Q2							
+  {0x3664, 0x7B6C, WORD_LEN, 0  }, 	// P_G2_P0Q3							
+  {0x3666, 0xA9CF, WORD_LEN, 0  }, 	// P_G2_P0Q4							
+  {0x3680, 0xCC2B, WORD_LEN, 0  }, 	// P_G1_P1Q0							
+  {0x3682, 0x718B, WORD_LEN, 0  }, 	// P_G1_P1Q1							
+  {0x3684, 0x274E, WORD_LEN, 0  }, 	// P_G1_P1Q2							
+  {0x3686, 0xA58A, WORD_LEN, 0  }, 	// P_G1_P1Q3							
+  {0x3688, 0x822F, WORD_LEN, 0  }, 	// P_G1_P1Q4							
+  {0x368A, 0xF76C, WORD_LEN, 0  }, 	// P_R_P1Q0							  
+  {0x368C, 0x0C69, WORD_LEN, 0  }, 	// P_R_P1Q1							  
+  {0x368E, 0x18CE, WORD_LEN, 0  }, 	// P_R_P1Q2							  
+  {0x3690, 0x6A0C, WORD_LEN, 0  }, 	// P_R_P1Q3							  
+  {0x3692, 0xCF0E, WORD_LEN, 0  }, 	// P_R_P1Q4							  
+  {0x3694, 0xBC0A, WORD_LEN, 0  }, 	// P_B_P1Q0							  
+  {0x3696, 0x9C0C, WORD_LEN, 0  }, 	// P_B_P1Q1							  
+  {0x3698, 0x5AAC, WORD_LEN, 0  }, 	// P_B_P1Q2							  
+  {0x369A, 0x0069, WORD_LEN, 0  }, 	// P_B_P1Q3							  
+  {0x369C, 0xDE4E, WORD_LEN, 0  }, 	// P_B_P1Q4							  
+  {0x369E, 0x5B29, WORD_LEN, 0  }, 	// P_G2_P1Q0							
+  {0x36A0, 0xDCAB, WORD_LEN, 0  }, 	// P_G2_P1Q1							
+  {0x36A2, 0xEAEB, WORD_LEN, 0  }, 	// P_G2_P1Q2							
+  {0x36A4, 0x55EA, WORD_LEN, 0  }, 	// P_G2_P1Q3							
+  {0x36A6, 0xE3ED, WORD_LEN, 0  }, 	// P_G2_P1Q4							
+  {0x36C0, 0x2DB0, WORD_LEN, 0  }, 	// P_G1_P2Q0							
+  {0x36C2, 0x61CC, WORD_LEN, 0  }, 	// P_G1_P2Q1							
+  {0x36C4, 0x8BD0, WORD_LEN, 0  }, 	// P_G1_P2Q2							
+  {0x36C6, 0x1B8E, WORD_LEN, 0  }, 	// P_G1_P2Q3							
+  {0x36C8, 0x674F, WORD_LEN, 0  }, 	// P_G1_P2Q4							
+  {0x36CA, 0x5610, WORD_LEN, 0  }, 	// P_R_P2Q0							  
+  {0x36CC, 0x246D, WORD_LEN, 0  }, 	// P_R_P2Q1							  
+  {0x36CE, 0xD50F, WORD_LEN, 0  }, 	// P_R_P2Q2							  
+  {0x36D0, 0xD3A8, WORD_LEN, 0  }, 	// P_R_P2Q3							  
+  {0x36D2, 0xBB4F, WORD_LEN, 0  }, 	// P_R_P2Q4							  
+  {0x36D4, 0x1B30, WORD_LEN, 0  }, 	// P_B_P2Q0							  
+  {0x36D6, 0xDC6B, WORD_LEN, 0  }, 	// P_B_P2Q1							  
+  {0x36D8, 0xDECF, WORD_LEN, 0  }, 	// P_B_P2Q2							  
+  {0x36DA, 0x654E, WORD_LEN, 0  }, 	// P_B_P2Q3							  
+  {0x36DC, 0x4F4E, WORD_LEN, 0  }, 	// P_B_P2Q4							  
+  {0x36DE, 0x2C10, WORD_LEN, 0  }, 	// P_G2_P2Q0							
+  {0x36E0, 0x1C6C, WORD_LEN, 0  }, 	// P_G2_P2Q1							
+  {0x36E2, 0xA8D0, WORD_LEN, 0  }, 	// P_G2_P2Q2							
+  {0x36E4, 0x1E0E, WORD_LEN, 0  }, 	// P_G2_P2Q3							
+  {0x36E6, 0x72AF, WORD_LEN, 0  }, 	// P_G2_P2Q4							
+  {0x3700, 0x076C, WORD_LEN, 0  }, 	// P_G1_P3Q0							
+  {0x3702, 0x1FCD, WORD_LEN, 0  }, 	// P_G1_P3Q1							
+  {0x3704, 0xBEAF, WORD_LEN, 0  }, 	// P_G1_P3Q2							
+  {0x3706, 0xAB0F, WORD_LEN, 0  }, 	// P_G1_P3Q3							
+  {0x3708, 0x48D0, WORD_LEN, 0  }, 	// P_G1_P3Q4							
+  {0x370A, 0x008E, WORD_LEN, 0  }, 	// P_R_P3Q0							  
+  {0x370C, 0x0CCE, WORD_LEN, 0  }, 	// P_R_P3Q1							  
+  {0x370E, 0x9C0C, WORD_LEN, 0  }, 	// P_R_P3Q2							  
+  {0x3710, 0xA290, WORD_LEN, 0  }, 	// P_R_P3Q3							  
+  {0x3712, 0xE66F, WORD_LEN, 0  }, 	// P_R_P3Q4							  
+  {0x3714, 0x120E, WORD_LEN, 0  }, 	// P_B_P3Q0							  
+  {0x3716, 0x398E, WORD_LEN, 0  }, 	// P_B_P3Q1							  
+  {0x3718, 0xB56E, WORD_LEN, 0  }, 	// P_B_P3Q2							  
+  {0x371A, 0x890F, WORD_LEN, 0  }, 	// P_B_P3Q3							  
+  {0x371C, 0x8A4D, WORD_LEN, 0  }, 	// P_B_P3Q4							  
+  {0x371E, 0x066D, WORD_LEN, 0  }, 	// P_G2_P3Q0							
+  {0x3720, 0x65CD, WORD_LEN, 0  }, 	// P_G2_P3Q1							
+  {0x3722, 0xBA8F, WORD_LEN, 0  }, 	// P_G2_P3Q2							
+  {0x3724, 0xB6CD, WORD_LEN, 0  }, 	// P_G2_P3Q3							
+  {0x3726, 0x5BD0, WORD_LEN, 0  }, 	// P_G2_P3Q4							
+  {0x3740, 0xA410, WORD_LEN, 0  }, 	// P_G1_P4Q0							
+  {0x3742, 0xB0AE, WORD_LEN, 0  }, 	// P_G1_P4Q1							
+  {0x3744, 0xE1CE, WORD_LEN, 0  }, 	// P_G1_P4Q2							
+  {0x3746, 0x988F, WORD_LEN, 0  }, 	// P_G1_P4Q3							
+  {0x3748, 0x20F2, WORD_LEN, 0  }, 	// P_G1_P4Q4							
+  {0x374A, 0xDAD0, WORD_LEN, 0  }, 	// P_R_P4Q0							  
+  {0x374C, 0xB34F, WORD_LEN, 0  }, 	// P_R_P4Q1							  
+  {0x374E, 0xBB30, WORD_LEN, 0  }, 	// P_R_P4Q2							  
+  {0x3750, 0x14B0, WORD_LEN, 0  }, 	// P_R_P4Q3							  
+  {0x3752, 0x25D3, WORD_LEN, 0  }, 	// P_R_P4Q4							  
+  {0x3754, 0xCE30, WORD_LEN, 0  }, 	// P_B_P4Q0							  
+  {0x3756, 0xE98E, WORD_LEN, 0  }, 	// P_B_P4Q1							  
+  {0x3758, 0x6DCB, WORD_LEN, 0  }, 	// P_B_P4Q2							  
+  {0x375A, 0x156F, WORD_LEN, 0  }, 	// P_B_P4Q3							  
+  {0x375C, 0x0993, WORD_LEN, 0  }, 	// P_B_P4Q4							  
+  {0x375E, 0xB010, WORD_LEN, 0  }, 	// P_G2_P4Q0							
+  {0x3760, 0xA22D, WORD_LEN, 0  }, 	// P_G2_P4Q1							
+  {0x3762, 0x49AE, WORD_LEN, 0  }, 	// P_G2_P4Q2							
+  {0x3764, 0xC94F, WORD_LEN, 0  }, 	// P_G2_P4Q3							
+  {0x3766, 0x0052, WORD_LEN, 0  }, 	// P_G2_P4Q4							
+  {0x3782, 0x01CC, WORD_LEN, 0  }, 	// CENTER_COLUMN					
+  {0x3784, 0x0280, WORD_LEN, 0  }, 	// CENTER_ROW						  
+  {0x37C0, 0xFFF0, WORD_LEN, 0  }, 	// P_GR_Q5								
+  {0x37C2, 0xFFF0, WORD_LEN, 0  }, 	// P_RD_Q5								
+  {0x37C4, 0xFFF0, WORD_LEN, 0  }, 	// P_BL_Q5								
+  {0x37C6, 0xFFF0, WORD_LEN, 0  }, 	// P_GB_Q5								
+  {0x098E, 0x0000, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS 
+  {0xC960, 0x0D48, WORD_LEN, 0  }, 	// CAM_PGA_L_CONFIG_COLOUR_TEMP
+  {0xC962, 0x7BA5, WORD_LEN, 0  }, 	// CAM_PGA_L_CONFIG_GREEN_RED_Q14
+  {0xC964, 0x6324, WORD_LEN, 0  }, 	// CAM_PGA_L_CONFIG_RED_Q14
+  {0xC966, 0x7B80, WORD_LEN, 0  }, 	// CAM_PGA_L_CONFIG_GREEN_BLUE_Q14
+  {0xC968, 0x7BCF, WORD_LEN, 0  }, 	// CAM_PGA_L_CONFIG_BLUE_Q14
+  {0xC96A, 0x0FA0, WORD_LEN, 0  }, 	// CAM_PGA_M_CONFIG_COLOUR_TEMP
+  {0xC96C, 0x801D, WORD_LEN, 0  }, 	// CAM_PGA_M_CONFIG_GREEN_RED_Q14
+  {0xC96E, 0x8787, WORD_LEN, 0  }, 	// CAM_PGA_M_CONFIG_RED_Q14
+  {0xC970, 0x803D, WORD_LEN, 0  }, 	// CAM_PGA_M_CONFIG_GREEN_BLUE_Q14
+  {0xC972, 0x7E66, WORD_LEN, 0  }, 	// CAM_PGA_M_CONFIG_BLUE_Q14
+  {0xC974, 0x33A1, WORD_LEN, 0  }, 	// CAM_PGA_R_CONFIG_COLOUR_TEMP
+  {0xC976, 0x7778, WORD_LEN, 0  }, 	// CAM_PGA_R_CONFIG_GREEN_RED_Q14
+  {0xC978, 0x6CAC, WORD_LEN, 0  }, 	// CAM_PGA_R_CONFIG_RED_Q14
+  {0xC97A, 0x7874, WORD_LEN, 0  }, 	// CAM_PGA_R_CONFIG_GREEN_BLUE_Q14
+  {0xC97C, 0x7510, WORD_LEN, 0  }, 	// CAM_PGA_R_CONFIG_BLUE_Q14
+  {0xC95E, 0x0003, WORD_LEN, 0  }, 	// CAM_PGA_PGA_CONTROL
+  {0x098E, 0xC87A, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3E00, WORD_LEN, 0  }, 	// CAM_AET_TARGET_AVERAGE_LUMA
+  {0x098E, 0xBC07, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0100, WORD_LEN, 0  }, 	// LL_GAMMA_SELECT 							  // boba
+  {0xC892, 0x01D2, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_0
+  {0xC894, 0xFEED, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_1
+  {0xC896, 0xFFF1, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_2
+  {0xC898, 0xFF6A, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_3
+  {0xC89A, 0x01A5, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_4
+  {0xC89C, 0xFFFB, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_5
+  {0xC89E, 0xFF91, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_6
+  {0xC8A0, 0xFED1, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_7
+  {0xC8A2, 0x02C9, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_8
+  {0xC8A4, 0x01E5, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_0
+  {0xC8A6, 0xFED7, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_1
+  {0xC8A8, 0xFFEF, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_2
+  {0xC8AA, 0xFF34, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_3
+  {0xC8AC, 0x01DD, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_4
+  {0xC8AE, 0xFFFA, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_5
+  {0xC8B0, 0xFF88, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_6
+  {0xC8B2, 0xFEBB, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_7
+  {0xC8B4, 0x02EB, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_8
+  {0xC8B6, 0x024E, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_0
+  {0xC8B8, 0xFEAF, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_1
+  {0xC8BA, 0xFFF6, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_2
+  {0xC8BC, 0xFF90, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_3
+  {0xC8BE, 0x0152, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_4
+  {0xC8C0, 0xFFEB, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_5
+  {0xC8C2, 0xFFDA, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_6
+  {0xC8C4, 0xFECD, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_7
+  {0xC8C6, 0x02C2, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_8
+  {0xC8C8, 0x0075, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_RG_GAIN
+  {0xC8CA, 0x011C, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_BG_GAIN
+  {0xC8CC, 0x009A, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_RG_GAIN
+  {0xC8CE, 0x0105, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_BG_GAIN
+  {0xC8D0, 0x00A4, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_RG_GAIN
+  {0xC8D2, 0x00AC, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_BG_GAIN
+  {0xC8D4, 0x0A8C, WORD_LEN, 0  }, 	// CAM_AWB_CCM_L_CTEMP
+  {0xC8D6, 0x0F0A, WORD_LEN, 0  }, 	// CAM_AWB_CCM_M_CTEMP
+  {0xC8D8, 0x1964, WORD_LEN, 0  }, 	// CAM_AWB_CCM_R_CTEMP
+  {0xC914, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_XSTART
+  {0xC916, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_YSTART
+  {0xC918, 0x04FF, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_XEND
+  {0xC91A, 0x03BF, WORD_LEN, 0  }, 	// CAM_STAT_AWB_CLIP_WINDOW_YEND
+  {0xC904, 0x0033, WORD_LEN, 0  }, 	// CAM_AWB_AWB_XSHIFT_PRE_ADJ
+  {0xC906, 0x0040, WORD_LEN, 0  }, 	// CAM_AWB_AWB_YSHIFT_PRE_ADJ
+  {0xC90A, 0x1838, WORD_LEN, 0  }, 	// CAM_AWB_TINTS_CTEMP_THRESHOLD
+  {0x098E, 0xC8F2, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0400, WORD_LEN, 0  }, 	// CAM_AWB_AWB_XSCALE	
+  {0x098E, 0xC8F3, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0200, WORD_LEN, 0  }, 	// CAM_AWB_AWB_XSCALE	
+  {0xC8F4, 0x0000, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_0
+  {0xC8F6, 0x0000, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_1
+  {0xC8F8, 0x0000, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_2
+  {0xC8FA, 0xE724, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_3
+  {0xC8FC, 0x1583, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_4
+  {0xC8FE, 0x2045, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_5
+  {0xC900, 0x061C, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_6
+  {0xC902, 0x007C, WORD_LEN, 0  }, 	// CAM_AWB_AWB_WEIGHTS_7
+  {0x098E, 0xC90C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x8000, WORD_LEN, 0  }, 	// CAM_AWB_K_R_L
+  {0x098E, 0xC90D, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x8000, WORD_LEN, 0  }, 	// CAM_AWB_K_G_L
+  {0x098E, 0xC90E, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x7400, WORD_LEN, 0  }, 	// CAM_AWB_K_B_L
+  {0x098E, 0xC90F, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x8000, WORD_LEN, 0  }, 	// CAM_AWB_K_R_R
+  {0x098E, 0xC910, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x8000, WORD_LEN, 0  }, 	// CAM_AWB_K_G_R
+  {0x098E, 0xC911, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x8000, WORD_LEN, 0  }, 	// CAM_AWB_K_B_R
+  {0x098E, 0xC912, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0000, WORD_LEN, 0  }, 	// CAM_STAT_LUMA_THRESH_LOW
+  {0x098E, 0xAC0C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS [AWB_B_SCENE_RATIO_LOWER]
+  {0x0990, 0x2300, WORD_LEN, 0  }, 	// AWB_B_SCENE_RATIO_LOWER
+  {0x098E, 0xAC16, WORD_LEN, 0  }, 	// AWB_PRE_AWB_RATIOS_TRACKING_SPEED   // 2011.07.04
+  {0x0990, 0x2000, WORD_LEN, 0  },
+  {0x098E, 0xAC17, WORD_LEN, 0  }, 	// AWB_STATISTICS_TRACKING_SPEED  // 2011.07.04
+  {0x0990, 0x2000, WORD_LEN, 0  },
+  {0xC926, 0x0020, WORD_LEN, 0  }, 	// CAM_LL_START_BRIGHTNESS
+  {0xC928, 0x009A, WORD_LEN, 0  }, 	// CAM_LL_STOP_BRIGHTNESS
+  {0xC946, 0x0070, WORD_LEN, 0  }, 	// CAM_LL_START_GAIN_METRIC
+  {0xC948, 0x00F3, WORD_LEN, 0  }, 	// CAM_LL_STOP_GAIN_METRIC
+  {0xC952, 0x0020, WORD_LEN, 0  }, 	// CAM_LL_START_TARGET_LUMA_BM
+  {0xC954, 0x009A, WORD_LEN, 0  }, 	// CAM_LL_STOP_TARGET_LUMA_BM
+  {0x098E, 0xC92A, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0xB000, WORD_LEN, 0  }, 	// CAM_LL_START_SATURATION   // 2011.07.04
+  {0x098E, 0xC92B, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x9000, WORD_LEN, 0  }, 	// CAM_LL_END_SATURATION    // 2011.07.04
+  {0x098E, 0xC92C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0000, WORD_LEN, 0  }, 	// CAM_LL_START_DESATURATION
+  {0x098E, 0xC92D, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x9F00, WORD_LEN, 0  }, 	// CAM_LL_END_DESATURATION
+  {0x098E, 0xC92E, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x7000, WORD_LEN, 0  }, 	// CAM_LL_START_DEMOSAIC   // 2011.07.04
+  {0x098E, 0xC95B, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS 			
+  {0x0990, 0x0000, WORD_LEN, 0  }, 	// CAM_SEQ_DARK_COLOR_KILL
+  {0x098E, 0xC95C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS  
+  {0x0990, 0x6200, WORD_LEN, 0  }, 	// CAM_SEQ_BRIGHT_COLOR_KILL       
+  {0x098E, 0x4948, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0xC948, 0x01A0, WORD_LEN, 0  }, 	// CAM_LL_STOP_GAIN_METRIC
+  {0x098E, 0xC92F, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0700, WORD_LEN, 0  }, 	// CAM_LL_START_AP_GAIN   // 2011.07.04
+  {0x098E, 0xC930, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0000, WORD_LEN, 0  }, 	// CAM_LL_START_AP_THRESH
+  {0x098E, 0xC931, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x6400, WORD_LEN, 0  }, 	// CAM_LL_STOP_DEMOSAIC
+  {0x098E, 0xC932, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0700, WORD_LEN, 0  }, 	// CAM_LL_STOP_AP_GAIN
+  {0x098E, 0xC933, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0700, WORD_LEN, 0  }, 	// CAM_LL_STOP_AP_THRESH
+  {0x098E, 0xC934, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3C00, WORD_LEN, 0  }, 	// CAM_LL_START_NR_RED
+  {0x098E, 0xC935, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3C00, WORD_LEN, 0  }, 	// CAM_LL_START_NR_GREEN
+  {0x098E, 0xC936, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3C00, WORD_LEN, 0  }, 	// CAM_LL_START_NR_BLUE
+  {0x098E, 0xC937, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x1500, WORD_LEN, 0  }, 	// CAM_LL_START_NR_THRESH 		//  boba 0406 : 08 ,(10??) 15(fix), 1F
+  {0x098E, 0xC938, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x6400, WORD_LEN, 0  }, 	// CAM_LL_STOP_NR_RED
+  {0x098E, 0xC939, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x6400, WORD_LEN, 0  }, 	// CAM_LL_STOP_NR_GREEN
+  {0x098E, 0xC93A, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x6400, WORD_LEN, 0  }, 	// CAM_LL_STOP_NR_BLUE
+  {0x098E, 0xC93B, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3200, WORD_LEN, 0  }, 	// CAM_LL_STOP_NR_THRESH
+  {0xC93C, 0x0020, WORD_LEN, 0  }, 	// CAM_LL_START_CONTRAST_BM
+  {0xC93E, 0x009A, WORD_LEN, 0  }, 	// CAM_LL_STOP_CONTRAST_BM
+  {0xC940, 0x00DC, WORD_LEN, 0  }, 	// CAM_LL_GAMMA
+  {0x098E, 0xC942, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3C00, WORD_LEN, 0  }, 	// CAM_LL_START_CONTRAST_GRADIENT
+  {0x098E, 0xC943, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x2800, WORD_LEN, 0  }, 	// CAM_LL_STOP_CONTRAST_GRADIENT
+  {0x098E, 0xC944, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x3C00, WORD_LEN, 0  }, 	// CAM_LL_START_CONTRAST_LUMA_PERCENTAGE
+  {0x098E, 0xC945, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x2000, WORD_LEN, 0  }, 	// CAM_LL_STOP_CONTRAST_LUMA_PERCENTAGE
+  {0xC94A, 0x0230, WORD_LEN, 0  }, 	// CAM_LL_START_FADE_TO_BLACK_LUMA
+  {0xC94C, 0x0010, WORD_LEN, 0  }, 	// CAM_LL_STOP_FADE_TO_BLACK_LUMA
+  {0xC94E, 0x01CD, WORD_LEN, 0  }, 	// CAM_LL_CLUSTER_DC_TH_BM
+  {0x098E, 0xC950, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0500, WORD_LEN, 0  }, 	// CAM_LL_CLUSTER_DC_GATE_PERCENTAGE
+  {0x098E, 0xC951, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x4000, WORD_LEN, 0  }, 	// CAM_LL_SUMMING_SENSITIVITY_FACTOR
+  {0x098E, 0xC87B, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x1B00, WORD_LEN, 0  }, 	// CAM_AET_TARGET_AVERAGE_LUMA_DARK
+  {0x098E, 0xC878, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0800, WORD_LEN, 0  }, 	// CAM_AET_AEMODE = 0
+  {0xC890, 0x0080, WORD_LEN, 0  }, 	// CAM_AET_TARGET_GAIN
+  {0xC882, 0x00C0, WORD_LEN, 0  }, 	// CAM_AET_AE_MAX_VIRT_DGAIN
+  {0xC886, 0x0100, WORD_LEN, 0  }, 	// CAM_AET_AE_MAX_VIRT_AGAIN
+  {0xC87C, 0x000A, WORD_LEN, 0  }, 	// CAM_AET_BLACK_CLIPPING_TARGET
+  {0x098E, 0xB00C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x2500, WORD_LEN, 0  }, 	//1A00	// BLACKLEVEL_MAX_BLACK_LEVEL     
+  {0x098E, 0xB00D, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS [BLACKLEVEL_BLACK_LEVEL_DAMPENING]
+  {0x0990, 0x1000, WORD_LEN, 0  }, 	// BLACKLEVEL_BLACK_LEVEL_DAMPENING  
+  {0x098E, 0xB42A, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x0500, WORD_LEN, 0  }, 	// CCM_DELTA_GAIN
+  {0x098E, 0xA80A, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x2000, WORD_LEN, 0  }, 	// AE_TRACK_AE_TRACKING_DAMPENING_SPEED
+  {0xC984, 0x8001, WORD_LEN, 0  }, 	// CAM_PORT_OUTPUT_CONTROL
+  {0x001E, 0x0777, WORD_LEN, 0  }, 	// PAD_SLEW
+  {0x098E, 0xB42C, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS [CCM_GREY_SATURATION]
+  {0x0990, 0x7000, WORD_LEN, 0  }, 	// CCM_GREY_SATURATION      // 2011.07.04  
+	//MIPI
+  {0xC984, 0x8041, WORD_LEN, 0  }, 	// CAM_PORT_OUTPUT_CONTROL
+  {0xC988, 0x0F00, WORD_LEN, 0  }, 	// CAM_PORT_MIPI_TIMING_T_HS_ZERO
+  {0xC98A, 0x0B07, WORD_LEN, 0  }, 	// CAM_PORT_MIPI_TIMING_T_HS_EXIT_HS_TRAIL
+  {0xC98C, 0x0D01, WORD_LEN, 0  }, 	// CAM_PORT_MIPI_TIMING_T_CLK_POST_CLK_PRE
+  {0xC98E, 0x071D, WORD_LEN, 0  }, 	// CAM_PORT_MIPI_TIMING_T_CLK_TRAIL_CLK_ZERO
+  {0xC990, 0x0006, WORD_LEN, 0  }, 	// CAM_PORT_MIPI_TIMING_T_LPX
+  {0xC992, 0x0A0C, WORD_LEN, 0  }, 	// CAM_PORT_MIPI_TIMING_INIT_TIMING	
+  {0x098E, 0xDC00, WORD_LEN, 0  }, 	// LOGICAL_ADDRESS_ACCESS
+  {0x0990, 0x2800, WORD_LEN, 0  }, 	// AE_TRACK_AE_TRACKING_DAMPENING_SPEED
+  {0x0080, 0x8002, WORD_LEN,50}, 	// COMMAND_REGISTER
+};
+
+
+struct mt9m114_reg mt9m114_regs = {
+  .regtbl = mt9m114_reg_settings_array,
+  .regtbl_size = ARRAY_SIZE(mt9m114_reg_settings_array)
+};

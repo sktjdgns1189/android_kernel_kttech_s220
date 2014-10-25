@@ -51,6 +51,7 @@
 #define VERSION "0.409"
 
 #include <asm/uaccess.h>
+#include <asm/system.h>
 #include <linux/bitops.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -72,7 +73,6 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/prefetch.h>
-#include <linux/export.h>
 #include <net/net_namespace.h>
 #include <net/ip.h>
 #include <net/protocol.h>
@@ -110,10 +110,9 @@ struct leaf {
 
 struct leaf_info {
 	struct hlist_node hlist;
-	int plen;
-	u32 mask_plen; /* ntohl(inet_make_mask(plen)) */
-	struct list_head falh;
 	struct rcu_head rcu;
+	int plen;
+	struct list_head falh;
 };
 
 struct tnode {
@@ -368,7 +367,7 @@ static void __leaf_free_rcu(struct rcu_head *head)
 
 static inline void free_leaf(struct leaf *l)
 {
-	call_rcu(&l->rcu, __leaf_free_rcu);
+	call_rcu_bh(&l->rcu, __leaf_free_rcu);
 }
 
 static inline void free_leaf_info(struct leaf_info *leaf)
@@ -452,7 +451,6 @@ static struct leaf_info *leaf_info_new(int plen)
 	struct leaf_info *li = kmalloc(sizeof(struct leaf_info),  GFP_KERNEL);
 	if (li) {
 		li->plen = plen;
-		li->mask_plen = ntohl(inet_make_mask(plen));
 		INIT_LIST_HEAD(&li->falh);
 	}
 	return li;
@@ -1169,8 +1167,9 @@ static struct list_head *fib_insert_node(struct trie *t, u32 key, int plen)
 	}
 
 	if (tp && tp->pos + tp->bits > 32)
-		pr_warn("fib_trie tp=%p pos=%d, bits=%d, key=%0x plen=%d\n",
-			tp, tp->pos, tp->bits, key, plen);
+		pr_warning("fib_trie"
+			   " tp=%p pos=%d, bits=%d, key=%0x plen=%d\n",
+			   tp, tp->pos, tp->bits, key, plen);
 
 	/* Rebalance the trie */
 
@@ -1360,8 +1359,10 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 
 	hlist_for_each_entry_rcu(li, node, hhead, hlist) {
 		struct fib_alias *fa;
+		int plen = li->plen;
+		__be32 mask = inet_make_mask(plen);
 
-		if (l->key != (key & li->mask_plen))
+		if (l->key != (key & ntohl(mask)))
 			continue;
 
 		list_for_each_entry_rcu(fa, &li->falh, fa_list) {
@@ -1369,8 +1370,6 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 			int nhsel, err;
 
 			if (fa->fa_tos && fa->fa_tos != flp->flowi4_tos)
-				continue;
-			if (fi->fib_dead)
 				continue;
 			if (fa->fa_info->fib_scope < flp->flowi4_scope)
 				continue;
@@ -1395,7 +1394,7 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 #ifdef CONFIG_IP_FIB_TRIE_STATS
 				t->stats.semantic_match_passed++;
 #endif
-				res->prefixlen = li->plen;
+				res->prefixlen = plen;
 				res->nh_sel = nhsel;
 				res->type = fa->fa_type;
 				res->scope = fa->fa_info->fib_scope;
@@ -1403,7 +1402,7 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 				res->table = tb;
 				res->fa_head = &li->falh;
 				if (!(fib_flags & FIB_LOOKUP_NOREF))
-					atomic_inc(&fi->fib_clntref);
+					atomic_inc(&res->fi->fib_clntref);
 				return 0;
 			}
 		}
@@ -1607,7 +1606,6 @@ found:
 	rcu_read_unlock();
 	return ret;
 }
-EXPORT_SYMBOL_GPL(fib_table_lookup);
 
 /*
  * Remove the leaf and return parent.
@@ -1623,7 +1621,7 @@ static void trie_leaf_remove(struct trie *t, struct leaf *l)
 		put_child(t, (struct tnode *)tp, cindex, NULL);
 		trie_rebalance(t, tp);
 	} else
-		RCU_INIT_POINTER(t->trie, NULL);
+		rcu_assign_pointer(t->trie, NULL);
 
 	free_leaf(l);
 }
@@ -2550,17 +2548,16 @@ static int fib_route_seq_show(struct seq_file *seq, void *v)
 		list_for_each_entry_rcu(fa, &li->falh, fa_list) {
 			const struct fib_info *fi = fa->fa_info;
 			unsigned int flags = fib_flag_trans(fa->fa_type, mask, fi);
+			int len;
 
 			if (fa->fa_type == RTN_BROADCAST
 			    || fa->fa_type == RTN_MULTICAST)
 				continue;
 
-			seq_setwidth(seq, 127);
-
 			if (fi)
 				seq_printf(seq,
 					 "%s\t%08X\t%08X\t%04X\t%d\t%u\t"
-					 "%d\t%08X\t%d\t%u\t%u",
+					 "%d\t%08X\t%d\t%u\t%u%n",
 					 fi->fib_dev ? fi->fib_dev->name : "*",
 					 prefix,
 					 fi->fib_nh->nh_gw, flags, 0, 0,
@@ -2569,15 +2566,15 @@ static int fib_route_seq_show(struct seq_file *seq, void *v)
 					 (fi->fib_advmss ?
 					  fi->fib_advmss + 40 : 0),
 					 fi->fib_window,
-					 fi->fib_rtt >> 3);
+					 fi->fib_rtt >> 3, &len);
 			else
 				seq_printf(seq,
 					 "*\t%08X\t%08X\t%04X\t%d\t%u\t"
-					 "%d\t%08X\t%d\t%u\t%u",
+					 "%d\t%08X\t%d\t%u\t%u%n",
 					 prefix, 0, flags, 0, 0, 0,
-					 mask, 0, 0, 0);
+					 mask, 0, 0, 0, &len);
 
-			seq_pad(seq, '\n');
+			seq_printf(seq, "%*s\n", 127 - len, "");
 		}
 	}
 

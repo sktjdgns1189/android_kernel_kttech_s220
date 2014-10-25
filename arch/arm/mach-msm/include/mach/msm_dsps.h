@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -75,8 +75,6 @@ struct dsps_regulator_info {
  * @regs_num - number of regulators.
  * @dsps_pwr_ctl_en - to enable DSPS to do power control if set 1
  *  otherwise the apps will do power control
- * @ppss_pause_reg - Offset to the PPSS_PAUSE register
- * @ppss_wdog_unmasked_int_en_reg - Offset to PPSS_WDOG_UNMASKED_INT_EN register
  * @signature - signature for validity check.
  */
 struct msm_dsps_platform_data {
@@ -89,8 +87,6 @@ struct msm_dsps_platform_data {
 	int regs_num;
 	int dsps_pwr_ctl_en;
 	void (*init)(struct msm_dsps_platform_data *data);
-	int ppss_pause_reg;
-	int ppss_wdog_unmasked_int_en_reg;
 	u32 signature;
 };
 

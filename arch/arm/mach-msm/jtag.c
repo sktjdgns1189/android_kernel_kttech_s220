@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,32 +16,20 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
-#include <linux/export.h>
 #include <linux/printk.h>
 #include <linux/ratelimit.h>
-#include <linux/coresight.h>
-#include <asm/hardware/cp14.h>
 #include <mach/scm.h>
-#include <mach/jtag.h>
 
-/* DBGv7 with baseline CP14 registers implemented */
-#define ARM_DEBUG_ARCH_V7B	(0x3)
-/* DBGv7 with all CP14 registers implemented */
-#define ARM_DEBUG_ARCH_V7	(0x4)
-#define ARM_DEBUG_ARCH_V7p1	(0x5)
+#include "qdss.h"
+#include "cp14.h"
 
-#define BM(lsb, msb)		((BIT(msb) - BIT(lsb)) + BIT(msb))
-#define BMVAL(val, lsb, msb)	((val & BM(lsb, msb)) >> lsb)
-#define BVAL(val, n)		((val & BIT(n)) >> n)
-
-/* no of dbg regs + 1 (for storing the reg count) */
+ /* no of dbg regs + 1 (for storing the reg count) */
 #define MAX_DBG_REGS		(90)
 #define MAX_DBG_STATE_SIZE	(MAX_DBG_REGS * num_possible_cpus())
-/* no of etm regs + 1 (for storing the reg count) */
+ /* no of etm regs + 1 (for storing the reg count) */
 #define MAX_ETM_REGS		(78)
 #define MAX_ETM_STATE_SIZE	(MAX_ETM_REGS * num_possible_cpus())
 
-#define OSLOCK_MAGIC		(0xC5ACCE55)
 #define DBGDSCR_MASK		(0x6C30FC3C)
 #define CPMR_ETMCLKEN		(0x8)
 #define TZ_DBG_ETM_FEAT_ID	(0x8)
@@ -368,7 +356,7 @@ static int dbg_write_wxr(uint32_t *state, int i, int j)
 static inline bool dbg_arch_supported(uint8_t arch)
 {
 	switch (arch) {
-	case ARM_DEBUG_ARCH_V7p1:
+	case ARM_DEBUG_ARCH_V7_1:
 	case ARM_DEBUG_ARCH_V7:
 	case ARM_DEBUG_ARCH_V7B:
 		break;
@@ -386,7 +374,7 @@ static inline void dbg_save_state(int cpu)
 	i = cpu * MAX_DBG_REGS;
 
 	switch (dbg.arch) {
-	case ARM_DEBUG_ARCH_V7p1:
+	case ARM_DEBUG_ARCH_V7_1:
 		/* Set OS lock to inform the debugger that the OS is in the
 		 * process of saving debug registers. It prevents accidental
 		 * modification of the debug regs by the external debugger.
@@ -445,7 +433,7 @@ static inline void dbg_restore_state(int cpu)
 	i = cpu * MAX_DBG_REGS;
 
 	switch (dbg.arch) {
-	case ARM_DEBUG_ARCH_V7p1:
+	case ARM_DEBUG_ARCH_V7_1:
 		/* Clear the OS double lock */
 		isb();
 		dbg_write(0x0, DBGOSDLR);
@@ -1016,23 +1004,16 @@ static inline void etm_restore_state(int cpu)
 	etm_clk_disable();
 }
 
-/**
- * msm_jtag_save_state - save debug and etm registers
+/* msm_jtag_save_state and msm_jtag_restore_state should be fast
  *
- * Debug and etm registers are saved before power collapse if debug
- * and etm architecture is supported respectively and TZ isn't supporting
- * the save and restore of debug and etm registers.
+ * These functions will be called either from:
+ * 1. per_cpu idle thread context for idle power collapses.
+ * 2. per_cpu idle thread context for hotplug/suspend power collapse for
+ *    nonboot cpus.
+ * 3. suspend thread context for core0.
  *
- * CONTEXT:
- * Called with preemption off and interrupts locked from:
- * 1. per_cpu idle thread context for idle power collapses
- * or
- * 2. per_cpu idle thread context for hotplug/suspend power collapse
- *    for nonboot cpus
- * or
- * 3. suspend thread context for suspend power collapse for core0
- *
- * In all cases we will run on the same cpu for the entire duration.
+ * In all cases we are guaranteed to be running on the same cpu for the
+ * entire duration.
  */
 void msm_jtag_save_state(void)
 {
@@ -1049,45 +1030,12 @@ void msm_jtag_save_state(void)
 	if (etm.save_restore_enabled)
 		etm_save_state(cpu);
 }
-EXPORT_SYMBOL(msm_jtag_save_state);
 
-/**
- * msm_jtag_restore_state - restore debug and etm registers
- *
- * Debug and etm registers are restored after power collapse if debug
- * and etm architecture is supported respectively and TZ isn't supporting
- * the save and restore of debug and etm registers.
- *
- * CONTEXT:
- * Called with preemption off and interrupts locked from:
- * 1. per_cpu idle thread context for idle power collapses
- * or
- * 2. per_cpu idle thread context for hotplug/suspend power collapse
- *    for nonboot cpus
- * or
- * 3. suspend thread context for suspend power collapse for core0
- *
- * In all cases we will run on the same cpu for the entire duration.
- */
 void msm_jtag_restore_state(void)
 {
 	int cpu;
 
 	cpu = raw_smp_processor_id();
-
-	/* Attempt restore only if save has been done. If power collapse
-	 * is disabled, hotplug off of non-boot core will result in WFI
-	 * and hence msm_jtag_save_state will not occur. Subsequently,
-	 * during hotplug on of non-boot core when msm_jtag_restore_state
-	 * is called via msm_platform_secondary_init, this check will help
-	 * bail us out without restoring.
-	 */
-	if (msm_jtag_save_cntr[cpu] == msm_jtag_restore_cntr[cpu])
-		return;
-	else if (msm_jtag_save_cntr[cpu] != msm_jtag_restore_cntr[cpu] + 1)
-		pr_err_ratelimited("jtag imbalance, save:%lu, restore:%lu\n",
-				   (unsigned long)msm_jtag_save_cntr[cpu],
-				   (unsigned long)msm_jtag_restore_cntr[cpu]);
 
 	msm_jtag_restore_cntr[cpu]++;
 	/* ensure counter is updated before moving forward */
@@ -1098,15 +1046,11 @@ void msm_jtag_restore_state(void)
 	if (etm.save_restore_enabled)
 		etm_restore_state(cpu);
 }
-EXPORT_SYMBOL(msm_jtag_restore_state);
 
 static int __init msm_jtag_dbg_init(void)
 {
 	int ret;
 	uint32_t dbgdidr;
-
-	if (msm_jtag_fuse_apps_access_disabled())
-		return -EPERM;
 
 	/* This will run on core0 so use it to populate parameters */
 
@@ -1148,9 +1092,6 @@ static int __init msm_jtag_etm_init(void)
 	int ret;
 	uint32_t etmidr;
 	uint32_t etmccr;
-
-	if (msm_jtag_fuse_apps_access_disabled())
-		return -EPERM;
 
 	/* Vote for ETM power/clock enable */
 	etm_clk_enable();
