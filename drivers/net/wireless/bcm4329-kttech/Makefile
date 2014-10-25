@@ -31,7 +31,7 @@ WLANCFLAGS = -DLINUX -DSRCBASE=\"$(SRCBASE)\" -DBCMDRIVER -DBCMDONGLEHOST     \
 	-DDHD_SCHED -DBDC -DTOE -DDHD_BCMEVENTS -DSHOW_EVENTS -DBCMSDIO       \
 	-DBCMLXSDMMC -DBCMPLATFORM_BUS -DEMBEDDED_PLATFORM                    \
 	-DARP_OFFLOAD_SUPPORT -DPKT_FILTER_SUPPORT			      \
-	-fshort-wchar -Wall -Wstrict-prototypes -Werror
+	-fshort-wchar -Wall -Wstrict-prototypes # -Werror
 	
 WLANCFLAGS += -I$(SRCBASE)/dhd/sys \
 	-I$(SRCBASE)/dongle  \
